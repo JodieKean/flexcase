@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pokemon Card Finder</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        padding: 40px 24px;
+      }
+
+      main {
+        width: 60vw;
+        margin: 0 auto;
+      }
+
+      h1 {
+        margin-top: 0;
+        letter-spacing: -0.02em;
+        font-size: clamp(2rem, 4vw, 2.8rem);
+        font-weight: 700;
+        color: #1d1d1f;
+      }
+
+      p {
+        margin-top: 6px;
+        color: #424245;
+        font-size: 1.05rem;
+      }
+
+      .windows {
+        margin-top: 20px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 16px;
+      }
+
+      .windows > * {
+        padding: 0;
+      }
+
+      .windows input {
+        width: 100%;
+        font-size: 0.92rem;
+        border-radius: 12px;
+        border: none;
+        padding: 10px 12px;
+        background: #f5f5f7;
+        color: #8e8e93;
+      }
+
+      .windows input::placeholder {
+        color: #a1a1a6;
+      }
+
+      .windows input:focus {
+        outline: none;
+        box-shadow: none;
+      }
+
+      .card {
+        margin-top: 10px;
+        text-align: center;
+        min-height: 260px;
+      }
+
+      .card-loading {
+        min-height: 260px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        color: #8e8e93;
+        font-size: 0.98rem;
+        text-align: center;
+      }
+
+      .card-message {
+        min-height: 260px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 12px;
+        color: #8e8e93;
+        font-size: 0.98rem;
+        text-align: center;
+      }
+
+      .card-message.error {
+        color: #d14c4c;
+      }
+
+      .card img {
+        width: 100%;
+        height: auto;
+        border-radius: 14px;
+        box-shadow: 0 10px 22px rgba(0, 0, 0, 0.12);
+      }
+
+      .meta {
+        margin-top: 8px;
+        font-size: 0.96rem;
+        line-height: 1.35;
+        color: #424245;
+      }
+
+      .feature-block {
+        margin-top: 44px;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        align-items: center;
+      }
+
+      .feature-content h2 {
+        margin: 0 0 10px;
+        letter-spacing: -0.01em;
+        font-size: clamp(1.35rem, 2.1vw, 2rem);
+        color: #1d1d1f;
+      }
+
+      .feature-content p {
+        margin: 0;
+        font-size: 1rem;
+        line-height: 1.55;
+        color: #6e6e73;
+      }
+
+      .feature-image-wrap {
+        display: flex;
+        justify-content: center;
+      }
+
+      .feature-image {
+        width: min(100%, 360px);
+        height: auto;
+      }
+
+      @media (max-width: 980px) {
+        .windows {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .feature-block {
+          grid-template-columns: 1fr;
+          gap: 18px;
+        }
+      }
+
+      @media (max-width: 680px) {
+        .windows {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Flex your collection in style.</h1>
+      <p>Display your personal collection with Flex Case.</p>
+
+      <section class="windows" aria-live="polite">
+        <article data-window-id="1">
+          <input
+            id="searchInput1"
+            type="text"
+            placeholder="Search card.. Rayquaza 107"
+            autocomplete="off"
+          />
+          <div id="cardResult1" class="card"></div>
+        </article>
+
+        <article data-window-id="2">
+          <input
+            id="searchInput2"
+            type="text"
+            placeholder="Search card.. Rayquaza 107"
+            autocomplete="off"
+          />
+          <div id="cardResult2" class="card"></div>
+        </article>
+
+        <article data-window-id="3">
+          <input
+            id="searchInput3"
+            type="text"
+            placeholder="Search card.. Rayquaza 107"
+            autocomplete="off"
+          />
+          <div id="cardResult3" class="card"></div>
+        </article>
+      </section>
+
+      <section class="feature-block">
+        <div class="feature-content">
+          <h2>Flexible Bezel Protection</h2>
+          <p>
+            Flex Case uses a flexible bezel that cushions card edges during handling while
+            keeping installation quick and smooth. Insert or remove your card with less force
+            and better edge protection.
+          </p>
+        </div>
+        <div class="feature-image-wrap">
+          <img
+            class="feature-image"
+            src="assets/flex-case.png"
+            alt="Flex Case angled view showing protective bezel"
+            loading="lazy"
+          />
+        </div>
+      </section>
+
+      <section class="feature-block">
+        <div class="feature-content">
+          <h2>UV Protection, Ultra Clear Display</h2>
+          <p>
+            The ultra clear front keeps your artwork visible with minimal distortion while
+            helping protect against UV exposure. Your collection remains display-ready and
+            protected for long-term presentation.
+          </p>
+        </div>
+        <div class="feature-image-wrap">
+          <img
+            class="feature-image"
+            src="assets/flex-case.png"
+            alt="Flex Case clear face for UV-protected display"
+            loading="lazy"
+          />
+        </div>
+      </section>
+
+    </main>
+
+    <script>
+      const API_URL = "https://api.pokemontcg.io/v2/cards";
+      const windowState = {
+        1: { debounceTimer: null, requestSequence: 0, controller: null },
+        2: { debounceTimer: null, requestSequence: 0, controller: null },
+        3: { debounceTimer: null, requestSequence: 0, controller: null },
+      };
+      const defaultSearches = {
+        1: "Pikachu 104",
+        2: "Charizard 100 Dragon Frontiers",
+        3: "Rayquaza 107",
+      };
+
+      function escapeValue(value) {
+        return value.replace(/(["\\\\])/g, "\\$1");
+      }
+
+      function tokenizeInput(rawInput) {
+        return rawInput
+          .trim()
+          .replace(/\s+/g, " ")
+          .split(" ")
+          .filter(Boolean);
+      }
+
+      function buildQuery(tokens) {
+        if (!tokens.length) {
+          return "";
+        }
+
+        // Order-agnostic search: every token must match at least one field.
+        return tokens
+          .map((token) => {
+            const escaped = escapeValue(token);
+            return `(name:"*${escaped}*" OR set.name:"*${escaped}*" OR number:"${escaped}")`;
+          })
+          .join(" ");
+      }
+
+      function scoreCard(card, tokens) {
+        const cardName = (card.name || "").toLowerCase();
+        const setName = (card.set?.name || "").toLowerCase();
+        const cardNumber = (card.number || "").toLowerCase();
+        let score = 0;
+
+        for (const token of tokens) {
+          const t = token.toLowerCase();
+          if (cardName === t) score += 40;
+          else if (cardName.includes(t)) score += 12;
+
+          if (setName === t) score += 30;
+          else if (setName.includes(t)) score += 9;
+
+          if (cardNumber === t) score += 45;
+          else if (cardNumber.includes(t)) score += 6;
+        }
+
+        // Boost exact phrase matches for likely intended card name/set name.
+        const phrase = tokens.join(" ").toLowerCase();
+        if (cardName.includes(phrase)) score += 25;
+        if (setName.includes(phrase)) score += 12;
+
+        return score;
+      }
+
+      const textMeasureCanvas = document.createElement("canvas");
+      const textMeasureCtx = textMeasureCanvas.getContext("2d");
+      const managedInputs = [];
+
+      function getInputFont(input) {
+        const style = window.getComputedStyle(input);
+        return `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+      }
+
+      function truncateToFitInput(input, value) {
+        if (!value) return value;
+        const safeValue = String(value);
+        const ellipsis = "...";
+        const inputStyle = window.getComputedStyle(input);
+        const horizontalPadding =
+          parseFloat(inputStyle.paddingLeft || "0") +
+          parseFloat(inputStyle.paddingRight || "0");
+        const availableWidth = Math.max(input.clientWidth - horizontalPadding, 0);
+        if (!availableWidth) return safeValue;
+
+        textMeasureCtx.font = getInputFont(input);
+        const fullWidth = textMeasureCtx.measureText(safeValue).width;
+        if (fullWidth <= availableWidth) return safeValue;
+
+        const ellipsisWidth = textMeasureCtx.measureText(ellipsis).width;
+        let low = 0;
+        let high = safeValue.length;
+        let best = "";
+
+        while (low <= high) {
+          const mid = Math.floor((low + high) / 2);
+          const candidate = safeValue.slice(0, mid).trimEnd();
+          const width = textMeasureCtx.measureText(candidate).width + ellipsisWidth;
+          if (width <= availableWidth) {
+            best = candidate;
+            low = mid + 1;
+          } else {
+            high = mid - 1;
+          }
+        }
+
+        return `${best}${ellipsis}`;
+      }
+
+      function applyPlaceholderTruncation(input) {
+        const fullPlaceholder = input.dataset.fullPlaceholder || input.placeholder;
+        input.placeholder = truncateToFitInput(input, fullPlaceholder);
+      }
+
+
+      function showCardMessage(windowId, message, isError = false) {
+        const resultEl = document.getElementById(`cardResult${windowId}`);
+        resultEl.innerHTML = `<div class="card-message${isError ? " error" : ""}">${message}</div>`;
+      }
+
+      function renderCard(windowId, card) {
+        const resultEl = document.getElementById(`cardResult${windowId}`);
+        const imageUrl = card.images?.large || card.images?.small;
+
+        if (!imageUrl) {
+          showCardMessage(windowId, "Card found, but no image is available.", true);
+          return;
+        }
+
+        resultEl.innerHTML = `
+          <img src="${imageUrl}" alt="${card.name}" loading="lazy" />
+          <div class="meta">
+            <strong>${card.name}</strong><br />
+            ${card.set?.name || "Unknown Set"} | #${card.number || "?"}
+          </div>
+        `;
+      }
+
+      async function searchCards(windowId, rawInput) {
+        const resultEl = document.getElementById(`cardResult${windowId}`);
+        const inputValue = rawInput.trim();
+        if (!inputValue) {
+          showCardMessage(windowId, "Type to search cards.");
+          return;
+        }
+
+        const tokens = tokenizeInput(inputValue);
+        const query = buildQuery(tokens);
+        if (!query) {
+          showCardMessage(windowId, "Type a Pokemon name to search.", true);
+          return;
+        }
+
+        const currentRequest = ++windowState[windowId].requestSequence;
+        resultEl.innerHTML = `<div class="card-loading">Searching card...</div>`;
+        const url = `${API_URL}?q=${encodeURIComponent(query)}&pageSize=30`;
+        const controller = new AbortController();
+        windowState[windowId].controller?.abort();
+        windowState[windowId].controller = controller;
+        const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+        try {
+          const response = await fetch(url, { signal: controller.signal });
+          if (!response.ok) {
+            throw new Error(`API request failed (${response.status})`);
+          }
+
+          const payload = await response.json();
+          clearTimeout(timeoutId);
+          if (currentRequest !== windowState[windowId].requestSequence) {
+            return;
+          }
+          const cards = payload?.data || [];
+
+          if (!cards.length) {
+            showCardMessage(windowId, "No card found. Try another name or number.", true);
+            return;
+          }
+
+          const rankedCards = [...cards].sort(
+            (a, b) => scoreCard(b, tokens) - scoreCard(a, tokens)
+          );
+          renderCard(windowId, rankedCards[0]);
+        } catch (error) {
+          clearTimeout(timeoutId);
+          if (error.name === "AbortError") {
+            showCardMessage(windowId, "Search timed out. Please refine the query.", true);
+            return;
+          }
+          showCardMessage(windowId, `Error: ${error.message}`, true);
+        }
+      }
+
+      function setupWindow(windowId) {
+        const input = document.getElementById(`searchInput${windowId}`);
+        const defaultValue = defaultSearches[windowId] || "";
+        input.dataset.fullPlaceholder = defaultValue
+          ? `Search... ${defaultValue}`
+          : "Search...";
+        input.placeholder = input.dataset.fullPlaceholder;
+        managedInputs.push(input);
+        requestAnimationFrame(() => {
+          applyPlaceholderTruncation(input);
+        });
+
+        input.addEventListener("focus", () => {
+          if (input.dataset.fullValue) {
+            input.value = input.dataset.fullValue;
+          }
+          input.select();
+        });
+
+        input.addEventListener("blur", () => {
+          const fullValue = input.dataset.fullValue || input.value;
+          const truncated = truncateToFitInput(input, fullValue);
+          input.value = truncated;
+        });
+
+        input.addEventListener("input", (event) => {
+          const value = event.target.value;
+          input.dataset.fullValue = value;
+          clearTimeout(windowState[windowId].debounceTimer);
+          windowState[windowId].debounceTimer = setTimeout(() => {
+            searchCards(windowId, value);
+          }, 280);
+        });
+
+        if (defaultValue) {
+          searchCards(windowId, defaultValue);
+        } else {
+          showCardMessage(windowId, "Type to search cards.");
+        }
+      }
+
+      setupWindow(1);
+      setupWindow(2);
+      setupWindow(3);
+
+      window.addEventListener("resize", () => {
+        managedInputs.forEach((input) => {
+          applyPlaceholderTruncation(input);
+          if (input.dataset.fullValue && document.activeElement !== input) {
+            input.value = truncateToFitInput(input, input.dataset.fullValue);
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
