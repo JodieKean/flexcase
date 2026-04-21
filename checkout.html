@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flex Case — Checkout</title>
+    <link rel="stylesheet" href="assets/navbar.css" />
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        padding: 40px 24px 56px;
+        padding-top: calc(62px + 40px);
+      }
+
+      main {
+        width: 60vw;
+        margin: 0 auto;
+      }
+
+      .back-link {
+        margin: 0 0 14px;
+      }
+
+      .back-link a {
+        color: #6e6e73;
+        text-decoration: none;
+        font-size: 0.95rem;
+      }
+
+      .back-link a:hover {
+        color: #1d1d1f;
+      }
+
+      .stepper {
+        display: flex;
+        gap: 18px;
+        margin: 8px 0 26px;
+        font-size: 0.95rem;
+        color: #8e8e93;
+      }
+
+      .step {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .step .dot {
+        width: 22px;
+        height: 22px;
+        border-radius: 999px;
+        border: 1px solid #d2d2d7;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.78rem;
+        color: #6e6e73;
+        background: #ffffff;
+      }
+
+      .step.done .dot {
+        border-color: #1d1d1f;
+        background: #1d1d1f;
+        color: #f5f5f7;
+        font-size: 0.72rem;
+      }
+
+      .step.active .dot {
+        border-color: #b08d57;
+        color: #1d1d1f;
+        box-shadow: 0 0 0 3px rgba(176, 141, 87, 0.18);
+      }
+
+      .step.active {
+        color: #1d1d1f;
+        font-weight: 600;
+      }
+
+      .step.done {
+        color: #1d1d1f;
+        font-weight: 600;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+        gap: 22px;
+        align-items: start;
+      }
+
+      .panel {
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 18px;
+        padding: 22px 22px 20px;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
+      }
+
+      .panel h1 {
+        margin: 0 0 6px;
+        font-size: 1.45rem;
+        letter-spacing: -0.02em;
+      }
+
+      .panel .lede {
+        margin: 0 0 18px;
+        color: #6e6e73;
+        font-size: 0.98rem;
+      }
+
+      .mode-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+
+      .mode-card {
+        border: 1px solid #e6e6eb;
+        border-radius: 14px;
+        padding: 12px 12px 10px;
+        cursor: pointer;
+        background: #fafafa;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+
+      .mode-card:hover {
+        border-color: #cfcfd4;
+      }
+
+      .mode-card.selected {
+        border-color: #1d1d1f;
+        background: #ffffff;
+      }
+
+      .mode-card h3 {
+        margin: 0 0 4px;
+        font-size: 0.98rem;
+      }
+
+      .mode-card p {
+        margin: 0;
+        font-size: 0.86rem;
+        color: #6e6e73;
+        line-height: 1.35;
+      }
+
+      fieldset {
+        border: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      legend {
+        font-size: 0.92rem;
+        color: #6e6e73;
+        margin-bottom: 8px;
+      }
+
+      label {
+        display: block;
+        font-size: 0.86rem;
+        color: #6e6e73;
+        margin: 10px 0 4px;
+      }
+
+      input {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid #d2d2d7;
+        padding: 10px 11px;
+        font-size: 0.95rem;
+        background: #ffffff;
+        color: #1d1d1f;
+      }
+
+      input:focus {
+        outline: none;
+        border-color: #0071e3;
+        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+      }
+
+      select {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid #d2d2d7;
+        padding: 10px 11px;
+        font-size: 0.95rem;
+        background: #ffffff;
+        color: #1d1d1f;
+      }
+
+      select:focus {
+        outline: none;
+        border-color: #0071e3;
+        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+      }
+
+      .row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .actions {
+        margin-top: 18px;
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      button:not(.icon-btn) {
+        border: none;
+        border-radius: 999px;
+        padding: 11px 18px;
+        font-size: 0.95rem;
+        cursor: pointer;
+      }
+
+      .btn-primary {
+        background: #1d1d1f;
+        color: #f5f5f7;
+        flex: 1;
+        min-width: 200px;
+      }
+
+      .btn-secondary {
+        background: #ffffff;
+        color: #1d1d1f;
+        border: 1px solid #d2d2d7;
+      }
+
+      .note {
+        margin-top: 10px;
+        font-size: 0.82rem;
+        color: #8e8e93;
+      }
+
+      .section-title {
+        margin: 18px 0 10px;
+        font-size: 1.05rem;
+        letter-spacing: -0.01em;
+        color: #1d1d1f;
+      }
+
+      .ship-method-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .ship-card {
+        border: 1px solid #e6e6eb;
+        border-radius: 14px;
+        padding: 12px;
+        cursor: pointer;
+        background: #fafafa;
+      }
+
+      .ship-card.selected {
+        border-color: #1d1d1f;
+        background: #ffffff;
+      }
+
+      .ship-card h3 {
+        margin: 0 0 6px;
+        font-size: 0.98rem;
+      }
+
+      .ship-card p {
+        margin: 0;
+        font-size: 0.86rem;
+        color: #6e6e73;
+        line-height: 1.35;
+      }
+
+      .ship-card .rowline {
+        margin-top: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 0.92rem;
+      }
+
+      .ship-card .price {
+        font-weight: 600;
+        color: #1d1d1f;
+      }
+
+      .review-stack {
+        display: grid;
+        gap: 12px;
+        margin-top: 10px;
+      }
+
+      .review-card {
+        border: 1px solid #e6e6eb;
+        border-radius: 14px;
+        padding: 14px 14px 12px;
+        background: #fafafa;
+      }
+
+      .review-card header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 8px;
+      }
+
+      .review-card h3 {
+        margin: 0;
+        font-size: 0.72rem;
+        letter-spacing: 0.12em;
+        color: #6e6e73;
+      }
+
+      .review-card .edit {
+        border: none;
+        background: transparent;
+        padding: 0;
+        font-size: 0.86rem;
+        color: #0071e3;
+        cursor: pointer;
+        border-radius: 0;
+      }
+
+      .review-card .body {
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.45;
+        color: #1d1d1f;
+        white-space: pre-line;
+      }
+
+      .pay-row {
+        display: grid;
+        grid-template-columns: 1.6fr 0.7fr 0.7fr;
+        gap: 10px;
+      }
+
+      .ssl-note {
+        margin-top: 10px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 0.82rem;
+        color: #6e6e73;
+      }
+
+      .summary {
+        position: sticky;
+        top: 18px;
+      }
+
+      .summary h2 {
+        margin: 0 0 12px;
+        font-size: 1.05rem;
+      }
+
+      .line-item {
+        display: grid;
+        grid-template-columns: 52px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+
+      .thumb {
+        width: 52px;
+        height: 52px;
+        border-radius: 10px;
+        background: linear-gradient(135deg, #ececf1, #f5f5f7);
+        border: 1px solid #e6e6eb;
+      }
+
+      .line-item .name {
+        font-size: 0.92rem;
+        color: #1d1d1f;
+      }
+
+      .line-item .meta {
+        margin-top: 2px;
+        font-size: 0.82rem;
+        color: #8e8e93;
+      }
+
+      .line-item .price {
+        font-size: 0.92rem;
+        color: #1d1d1f;
+      }
+
+      .promo {
+        display: flex;
+        gap: 8px;
+        margin: 14px 0 10px;
+      }
+
+      .promo input {
+        flex: 1;
+      }
+
+      .promo button {
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: #f5f5f7;
+        border: 1px solid #d2d2d7;
+      }
+
+      .totals {
+        border-top: 1px solid #ececf1;
+        margin-top: 10px;
+        padding-top: 10px;
+        font-size: 0.92rem;
+        color: #424245;
+      }
+
+      .totals .row-total {
+        display: flex;
+        justify-content: space-between;
+        margin: 6px 0;
+      }
+
+      .totals .grand {
+        font-weight: 700;
+        color: #1d1d1f;
+        margin-top: 8px;
+        font-size: 1rem;
+      }
+
+      .trust {
+        margin-top: 14px;
+        display: grid;
+        gap: 6px;
+        font-size: 0.82rem;
+        color: #8e8e93;
+      }
+
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .summary {
+          position: static;
+        }
+
+        .mode-row {
+          grid-template-columns: 1fr;
+        }
+
+        .row {
+          grid-template-columns: 1fr;
+        }
+
+        .ship-method-row {
+          grid-template-columns: 1fr;
+        }
+
+        .pay-row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="site-navbar" aria-label="Site">
+      <div class="site-navbar-inner">
+        <a class="site-brand" href="index.html" aria-label="Flex Case home">
+          <span class="site-brand-text">Flex Case</span>
+        </a>
+        <div class="navbar-actions" aria-label="Account and cart">
+          <a class="icon-btn" href="account.html" aria-label="Profile">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="18" height="18">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"></path>
+            </svg>
+          </a>
+          <a class="icon-btn" href="checkout.html" aria-label="Cart, 2 items">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="18" height="18">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"></path>
+            </svg>
+            <span class="cart-badge" aria-hidden="true">2</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <p class="back-link"><a href="index.html">← Back to Flex Case</a></p>
+
+      <div class="stepper" role="navigation" aria-label="Checkout steps">
+        <div class="step active" data-step-label="1">
+          <span class="dot" data-step-dot="1">1</span>
+          <span>Contact</span>
+        </div>
+        <div class="step" data-step-label="2">
+          <span class="dot" data-step-dot="2">2</span>
+          <span>Shipping</span>
+        </div>
+        <div class="step" data-step-label="3">
+          <span class="dot" data-step-dot="3">3</span>
+          <span>Review</span>
+        </div>
+      </div>
+
+      <div class="layout">
+        <section class="panel" aria-live="polite">
+          <form id="checkout-form" novalidate>
+            <!-- Step 1 -->
+            <div id="step-contact">
+              <h1>Contact</h1>
+              <p class="lede">Choose how you would like to check out.</p>
+
+              <div class="mode-row" role="radiogroup" aria-label="Checkout mode">
+                <div
+                  class="mode-card selected"
+                  id="mode-guest-card"
+                  tabindex="0"
+                  role="radio"
+                  aria-checked="true"
+                  data-mode="guest"
+                >
+                  <h3>Continue as Guest</h3>
+                  <p>No account needed. Quick checkout with just your email.</p>
+                </div>
+                <div
+                  class="mode-card"
+                  id="mode-user-card"
+                  tabindex="0"
+                  role="radio"
+                  aria-checked="false"
+                  data-mode="user"
+                >
+                  <h3>Sign In / Register</h3>
+                  <p>Save addresses, track orders, and manage your wishlist.</p>
+                </div>
+              </div>
+              <input type="hidden" id="checkoutMode" name="checkoutMode" value="guest" />
+
+              <div id="guest-fields">
+                <label for="email">Email address *</label>
+                <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+
+                <div class="row">
+                  <div>
+                    <label for="firstName">First name *</label>
+                    <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Alex" required />
+                  </div>
+                  <div>
+                    <label for="lastName">Last name</label>
+                    <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Rivera" />
+                  </div>
+                </div>
+              </div>
+
+              <div id="user-fields" class="hidden">
+                <label for="userEmail">Email *</label>
+                <input id="userEmail" name="userEmail" type="email" autocomplete="username" placeholder="you@example.com" />
+
+                <label for="password">Password *</label>
+                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+
+                <p class="note">
+                  Demo only: no accounts are created. In production this would authenticate with your store backend.
+                </p>
+              </div>
+
+              <div class="actions">
+                <button type="button" class="btn-primary" id="to-shipping">Continue to Shipping →</button>
+              </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div id="step-shipping" class="hidden">
+              <h1>Shipping</h1>
+              <p class="lede">Enter your shipping address and choose a delivery speed.</p>
+
+              <h2 class="section-title">Shipping Address</h2>
+
+              <label for="address1">Street address *</label>
+              <input
+                id="address1"
+                name="address1"
+                type="text"
+                autocomplete="address-line1"
+                placeholder="123 Collector Lane"
+              />
+
+              <div class="row">
+                <div>
+                  <label for="city">City *</label>
+                  <input id="city" name="city" type="text" autocomplete="address-level2" placeholder="San Francisco" />
+                </div>
+                <div>
+                  <label for="state">State</label>
+                  <input id="state" name="state" type="text" autocomplete="address-level1" placeholder="CA" />
+                </div>
+              </div>
+
+              <div class="row">
+                <div>
+                  <label for="postal">ZIP code</label>
+                  <input id="postal" name="postal" type="text" autocomplete="postal-code" placeholder="94102" />
+                </div>
+                <div>
+                  <label for="country">Country</label>
+                  <select id="country" name="country" autocomplete="country-name">
+                    <option value="United Kingdom" selected>United Kingdom</option>
+                    <option value="United States">United States</option>
+                    <option value="Malaysia">Malaysia</option>
+                    <option value="Singapore">Singapore</option>
+                  </select>
+                </div>
+              </div>
+
+              <h2 class="section-title">Shipping Method</h2>
+              <input type="hidden" id="shippingMethod" name="shippingMethod" value="standard" />
+
+              <div class="ship-method-row" role="radiogroup" aria-label="Shipping method">
+                <div
+                  class="ship-card selected"
+                  id="ship-standard-card"
+                  tabindex="0"
+                  role="radio"
+                  aria-checked="true"
+                  data-ship="standard"
+                >
+                  <h3>Standard Shipping</h3>
+                  <p>5–7 business days · Orders over $50 ship free</p>
+                  <div class="rowline">
+                    <span>Delivery</span>
+                    <span class="price" id="standardShipLabel">$5.99</span>
+                  </div>
+                </div>
+
+                <div
+                  class="ship-card"
+                  id="ship-express-card"
+                  tabindex="0"
+                  role="radio"
+                  aria-checked="false"
+                  data-ship="express"
+                >
+                  <h3>Express Shipping</h3>
+                  <p>2 business days · Guaranteed by Friday</p>
+                  <div class="rowline">
+                    <span>Delivery</span>
+                    <span class="price">$9.99</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="actions">
+                <button type="button" class="btn-secondary" id="back-to-contact">← Back</button>
+                <button type="button" class="btn-primary" id="to-review">Review Order →</button>
+              </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div id="step-review" class="hidden">
+              <h1>Review Order</h1>
+              <p class="lede">Confirm your contact, shipping, and payment details.</p>
+
+              <div class="review-stack">
+                <div class="review-card" id="review-contact-card">
+                  <header>
+                    <h3>Contact</h3>
+                    <button type="button" class="edit" data-edit-step="1">Edit</button>
+                  </header>
+                  <p class="body" id="review-contact-body"></p>
+                </div>
+
+                <div class="review-card" id="review-address-card">
+                  <header>
+                    <h3>Shipping address</h3>
+                    <button type="button" class="edit" data-edit-step="2">Edit</button>
+                  </header>
+                  <p class="body" id="review-address-body"></p>
+                </div>
+
+                <div class="review-card" id="review-ship-card">
+                  <header>
+                    <h3>Shipping method</h3>
+                    <button type="button" class="edit" data-edit-step="2">Edit</button>
+                  </header>
+                  <p class="body" id="review-ship-body"></p>
+                </div>
+
+                <div class="review-card" id="review-pay-card">
+                  <header>
+                    <h3>Payment</h3>
+                    <button type="button" class="edit" id="edit-payment">Edit</button>
+                  </header>
+
+                  <label for="cardNumber">Card number</label>
+                  <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="•••• •••• •••• 4242" />
+
+                  <div class="pay-row" style="margin-top: 10px">
+                    <div>
+                      <label for="cardExp">MM / YY</label>
+                      <input id="cardExp" name="cardExp" autocomplete="cc-exp" placeholder="MM / YY" />
+                    </div>
+                    <div>
+                      <label for="cardCvv">CVV</label>
+                      <input id="cardCvv" name="cardCvv" autocomplete="cc-csc" placeholder="123" />
+                    </div>
+                    <div aria-hidden="true"></div>
+                  </div>
+
+                  <div class="ssl-note" aria-hidden="true">
+                    <span>🔒</span>
+                    <span>Payments are SSL encrypted and secure</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="actions">
+                <button type="button" class="btn-secondary" id="back-to-shipping">← Back</button>
+                <button type="submit" class="btn-primary" id="place-order">🔒 Place Order</button>
+              </div>
+            </div>
+          </form>
+        </section>
+
+        <aside class="panel summary" aria-label="Order summary">
+          <h2>Order summary</h2>
+
+          <div class="line-item">
+            <div class="thumb" aria-hidden="true"></div>
+            <div>
+              <div class="name">CardVault Ultra-Pro Slab</div>
+              <div class="meta">Crystal Clear · Standard</div>
+            </div>
+            <div class="price" data-price="item1">$24.99</div>
+          </div>
+          <div class="line-item">
+            <div class="thumb" aria-hidden="true"></div>
+            <div>
+              <div class="name">TopLoader Bundle (25-Pack)</div>
+              <div class="meta">Standard Size</div>
+            </div>
+            <div class="price" data-price="item2">$18.99</div>
+          </div>
+
+          <div class="promo">
+            <input id="promoCode" type="text" placeholder="Promo code" autocomplete="off" />
+            <button type="button" id="applyPromo">Apply</button>
+          </div>
+          <p id="promoMessage" class="note"></p>
+
+          <div class="totals">
+            <div class="row-total"><span>Subtotal</span><span id="subtotalDisplay">$43.98</span></div>
+            <div class="row-total"><span>Shipping</span><span id="shippingDisplay">$5.99</span></div>
+            <div class="row-total"><span>Tax (8%)</span><span id="taxDisplay">$3.52</span></div>
+            <div class="row-total grand"><span>Total</span><span id="totalDisplay">$53.49</span></div>
+          </div>
+
+          <div class="trust">
+            <span>🔒 SSL encrypted &amp; secure</span>
+            <span>↩︎ 30-day returns</span>
+            <span>📦 Free shipping over $50</span>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <script>
+      const money = (n) =>
+        n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+
+      const prices = { item1: 24.99, item2: 18.99 };
+      const standardRate = 5.99;
+      const expressRate = 9.99;
+      const taxRate = 0.08;
+
+      let discount = 0;
+
+      const stepContact = document.getElementById("step-contact");
+      const stepShipping = document.getElementById("step-shipping");
+      const stepReview = document.getElementById("step-review");
+      const steps = document.querySelectorAll(".step");
+
+      const modeGuestCard = document.getElementById("mode-guest-card");
+      const modeUserCard = document.getElementById("mode-user-card");
+      const checkoutModeInput = document.getElementById("checkoutMode");
+      const guestFields = document.getElementById("guest-fields");
+      const userFields = document.getElementById("user-fields");
+
+      const email = document.getElementById("email");
+      const firstName = document.getElementById("firstName");
+      const lastName = document.getElementById("lastName");
+      const userEmail = document.getElementById("userEmail");
+      const password = document.getElementById("password");
+
+      const address1 = document.getElementById("address1");
+      const city = document.getElementById("city");
+      const state = document.getElementById("state");
+      const postal = document.getElementById("postal");
+      const country = document.getElementById("country");
+
+      const shippingMethodInput = document.getElementById("shippingMethod");
+      const shipStandardCard = document.getElementById("ship-standard-card");
+      const shipExpressCard = document.getElementById("ship-express-card");
+      const standardShipLabel = document.getElementById("standardShipLabel");
+
+      const reviewContactBody = document.getElementById("review-contact-body");
+      const reviewAddressBody = document.getElementById("review-address-body");
+      const reviewShipBody = document.getElementById("review-ship-body");
+
+      const cardNumber = document.getElementById("cardNumber");
+      const cardExp = document.getElementById("cardExp");
+      const cardCvv = document.getElementById("cardCvv");
+
+      const subtotalDisplay = document.getElementById("subtotalDisplay");
+      const shippingDisplay = document.getElementById("shippingDisplay");
+      const taxDisplay = document.getElementById("taxDisplay");
+      const totalDisplay = document.getElementById("totalDisplay");
+      const promoMessage = document.getElementById("promoMessage");
+
+      function setStep(step) {
+        stepContact.classList.toggle("hidden", step !== 1);
+        stepShipping.classList.toggle("hidden", step !== 2);
+        stepReview.classList.toggle("hidden", step !== 3);
+        steps.forEach((el) => {
+          const n = Number(el.dataset.stepLabel);
+          const dot = el.querySelector("[data-step-dot]");
+          el.classList.toggle("active", n === step);
+          el.classList.toggle("done", n < step);
+          if (dot) {
+            dot.textContent = n < step ? "✓" : String(n);
+          }
+        });
+      }
+
+      function selectMode(mode) {
+        const isGuest = mode === "guest";
+        checkoutModeInput.value = mode;
+        modeGuestCard.classList.toggle("selected", isGuest);
+        modeUserCard.classList.toggle("selected", !isGuest);
+        modeGuestCard.setAttribute("aria-checked", String(isGuest));
+        modeUserCard.setAttribute("aria-checked", String(!isGuest));
+        guestFields.classList.toggle("hidden", !isGuest);
+        userFields.classList.toggle("hidden", isGuest);
+
+        if (isGuest) {
+          email.setAttribute("required", "required");
+          firstName.setAttribute("required", "required");
+          userEmail.removeAttribute("required");
+          password.removeAttribute("required");
+        } else {
+          email.removeAttribute("required");
+          firstName.removeAttribute("required");
+          userEmail.setAttribute("required", "required");
+          password.setAttribute("required", "required");
+        }
+      }
+
+      function getSubtotal() {
+        return Math.max(0, prices.item1 + prices.item2 - discount);
+      }
+
+      function getStandardShippingCost(subtotal) {
+        return subtotal >= 50 ? 0 : standardRate;
+      }
+
+      function updateStandardMethodLabel() {
+        const subtotal = getSubtotal();
+        const std = getStandardShippingCost(subtotal);
+        standardShipLabel.textContent = std === 0 ? "Free" : money(std);
+      }
+
+      function getSelectedShippingCost() {
+        const subtotal = getSubtotal();
+        const method = shippingMethodInput.value;
+        if (method === "express") return expressRate;
+        return getStandardShippingCost(subtotal);
+      }
+
+      function recalcTotals() {
+        const subtotal = getSubtotal();
+        const shipping = getSelectedShippingCost();
+        const tax = subtotal * taxRate;
+        const total = subtotal + shipping + tax;
+
+        subtotalDisplay.textContent = money(subtotal);
+        shippingDisplay.textContent = shipping === 0 ? "Free" : money(shipping);
+        taxDisplay.textContent = money(tax);
+        totalDisplay.textContent = money(total);
+        updateStandardMethodLabel();
+      }
+
+      function validateContact() {
+        if (checkoutModeInput.value === "guest") {
+          if (!email.value.trim() || !firstName.value.trim()) {
+            alert("Please enter your email and first name to continue as guest.");
+            return false;
+          }
+        } else {
+          if (!userEmail.value.trim() || !password.value.trim()) {
+            alert("Please enter your email and password to sign in.");
+            return false;
+          }
+        }
+        return true;
+      }
+
+      function validateShipping() {
+        if (!address1.value.trim() || !city.value.trim()) {
+          alert("Please complete your shipping address.");
+          return false;
+        }
+        return true;
+      }
+
+      function getContactName() {
+        if (checkoutModeInput.value === "guest") {
+          const last = lastName.value.trim();
+          return `${firstName.value.trim()}${last ? ` ${last}` : ""}`.trim();
+        }
+        return "Signed-in customer";
+      }
+
+      function getContactEmail() {
+        return checkoutModeInput.value === "guest" ? email.value.trim() : userEmail.value.trim();
+      }
+
+      function buildShippingAddressText() {
+        const statePart = state.value.trim();
+        const zipPart = postal.value.trim();
+        const line2 = [city.value.trim(), statePart].filter(Boolean).join(", ");
+        const line3 = [zipPart, country.value].filter(Boolean).join(" ");
+        return `${address1.value.trim()}\n${line2}\n${line3}`.trim();
+      }
+
+      function buildShippingMethodText() {
+        const method = shippingMethodInput.value;
+        if (method === "express") {
+          return "Express Shipping (2 days)\n$9.99";
+        }
+        const subtotal = getSubtotal();
+        const std = getStandardShippingCost(subtotal);
+        return `Standard Shipping (5–7 days)\n${std === 0 ? "Free" : money(std)}`;
+      }
+
+      function populateReview() {
+        reviewContactBody.textContent = `${getContactName()}\n${getContactEmail()}`;
+        reviewAddressBody.textContent = buildShippingAddressText();
+        reviewShipBody.textContent = buildShippingMethodText();
+      }
+
+      function validatePayment() {
+        if (!cardNumber.value.trim() || !cardExp.value.trim() || !cardCvv.value.trim()) {
+          alert("Please enter your card details to place the order.");
+          return false;
+        }
+        return true;
+      }
+
+      function selectShipping(method) {
+        shippingMethodInput.value = method;
+        const isStandard = method === "standard";
+        shipStandardCard.classList.toggle("selected", isStandard);
+        shipExpressCard.classList.toggle("selected", !isStandard);
+        shipStandardCard.setAttribute("aria-checked", String(isStandard));
+        shipExpressCard.setAttribute("aria-checked", String(!isStandard));
+        recalcTotals();
+      }
+
+      modeGuestCard.addEventListener("click", () => selectMode("guest"));
+      modeUserCard.addEventListener("click", () => selectMode("user"));
+      modeGuestCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectMode("guest");
+        }
+      });
+      modeUserCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectMode("user");
+        }
+      });
+
+      document.getElementById("to-shipping").addEventListener("click", () => {
+        if (!validateContact()) return;
+        address1.setAttribute("required", "required");
+        city.setAttribute("required", "required");
+        setStep(2);
+      });
+
+      document.getElementById("back-to-contact").addEventListener("click", () => setStep(1));
+
+      document.getElementById("to-review").addEventListener("click", () => {
+        if (!validateShipping()) return;
+        populateReview();
+        setStep(3);
+      });
+
+      document.getElementById("back-to-shipping").addEventListener("click", () => setStep(2));
+
+      document.getElementById("applyPromo").addEventListener("click", () => {
+        const code = document.getElementById("promoCode").value.trim().toUpperCase();
+        promoMessage.textContent = "";
+        discount = 0;
+        if (!code) {
+          promoMessage.textContent = "Enter a promo code to apply.";
+          recalcTotals();
+          return;
+        }
+        if (code === "FLEX10") {
+          discount = 10;
+          promoMessage.textContent = "Promo applied: $10 off your subtotal.";
+        } else {
+          promoMessage.textContent = "Promo code not recognized.";
+        }
+        recalcTotals();
+      });
+
+      shipStandardCard.addEventListener("click", () => selectShipping("standard"));
+      shipExpressCard.addEventListener("click", () => selectShipping("express"));
+      shipStandardCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectShipping("standard");
+        }
+      });
+      shipExpressCard.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          selectShipping("express");
+        }
+      });
+
+      document.querySelectorAll("[data-edit-step]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const step = Number(btn.getAttribute("data-edit-step"));
+          setStep(step);
+        });
+      });
+
+      document.getElementById("edit-payment").addEventListener("click", () => {
+        cardNumber.focus();
+      });
+
+      document.getElementById("checkout-form").addEventListener("submit", (e) => {
+        e.preventDefault();
+        if (!validatePayment()) return;
+        alert("Thanks — demo order placed. Connect this form to your payment provider next.");
+      });
+
+      selectMode("guest");
+      selectShipping("standard");
+      recalcTotals();
+      setStep(1);
+    </script>
+  </body>
+</html>

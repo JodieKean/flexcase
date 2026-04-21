@@ -1,0 +1,1411 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flex Case — Account</title>
+    <link rel="stylesheet" href="assets/navbar.css" />
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        padding: 40px 24px 56px;
+        padding-top: calc(62px + 40px);
+      }
+
+      main {
+        width: 60vw;
+        margin: 0 auto;
+      }
+
+      .account-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+
+      .welcome {
+        color: #6e6e73;
+        font-size: 0.95rem;
+        margin-bottom: 4px;
+      }
+
+      .name {
+        margin: 0;
+        font-size: clamp(1.7rem, 3.2vw, 2.2rem);
+        letter-spacing: -0.02em;
+      }
+
+      .meta {
+        color: #6e6e73;
+        margin-top: 6px;
+        font-size: 0.95rem;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .pill-btn {
+        border-radius: 999px;
+        border: 1px solid #d2d2d7;
+        padding: 8px 14px;
+        background: #ffffff;
+        color: #1d1d1f;
+        font-size: 0.9rem;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .pill-btn.primary {
+        background: #1d1d1f;
+        color: #f5f5f7;
+        border-color: #1d1d1f;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 18px;
+        border-bottom: 1px solid #e6e6eb;
+        margin-bottom: 18px;
+      }
+
+      .tab {
+        padding: 10px 0;
+        font-size: 0.94rem;
+        color: #6e6e73;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+        background: transparent;
+        border-left: 0;
+        border-right: 0;
+        border-top: 0;
+        cursor: pointer;
+      }
+
+      .tab.active {
+        color: #1d1d1f;
+        border-bottom-color: #1d1d1f;
+        font-weight: 600;
+      }
+
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 8px 0 12px;
+        min-height: 48px;
+      }
+
+      .section-head h2 {
+        margin: 0;
+        font-size: 1.4rem;
+      }
+
+      .section-head span {
+        color: #6e6e73;
+        font-size: 0.92rem;
+      }
+
+      .order-card {
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 16px;
+        padding: 14px 14px 8px;
+        margin-bottom: 14px;
+      }
+
+      .order-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+
+      .order-id {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.95rem;
+        font-weight: 700;
+      }
+
+      .status,
+      .badge-default {
+        background: #dcfce7;
+        color: #166534;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        line-height: 1rem;
+        padding: 2px 8px;
+        font-weight: 600;
+      }
+
+      .order-side {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+
+      .order-side .date-total {
+        text-align: right;
+        color: #6e6e73;
+      }
+
+      .order-side .date-total .order-date {
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+
+      .order-side .date-total strong {
+        display: block;
+        color: #1d1d1f;
+        font-size: 0.9rem;
+        line-height: 1.2rem;
+      }
+
+      .tiny-btn {
+        border-radius: 999px;
+        border: 1px solid #d2d2d7;
+        padding: 6px 10px;
+        background: #ffffff;
+        color: #1d1d1f;
+        font-size: 0.75rem;
+        line-height: 1rem;
+      }
+
+      .tiny-btn.primary {
+        background: #1d1d1f;
+        color: #f5f5f7;
+        border-color: #1d1d1f;
+      }
+
+      .item {
+        display: grid;
+        grid-template-columns: 44px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 0;
+      }
+
+      .thumb {
+        width: 44px;
+        height: 44px;
+        border-radius: 10px;
+        border: 1px solid #e6e6eb;
+        background: linear-gradient(135deg, #ececf1, #f8f8fb);
+      }
+
+      .item-name {
+        font-size: 1rem;
+      }
+
+      .item-meta {
+        color: #6e6e73;
+        font-size: 0.88rem;
+        margin-top: 2px;
+      }
+
+      .item-price {
+        font-weight: 600;
+      }
+
+      .order-details.hidden {
+        display: none;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+
+      .order-footer {
+        margin-top: 4px;
+        padding: 8px 0;
+        border-top: 1px solid #f0f0f3;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        color: #6e6e73;
+        font-size: 0.92rem;
+        box-sizing: border-box;
+        /* ~ one .item row: thumb (44px) + same vertical padding as .item */
+        min-height: calc(44px + 16px);
+      }
+
+      .order-footer strong {
+        color: #1d1d1f;
+      }
+
+      .account-section.hidden {
+        display: none;
+      }
+
+      .section-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .add-address-btn {
+        border-radius: 999px;
+        border: 1px solid #1d1d1f;
+        background: #1d1d1f;
+        color: #f5f5f7;
+        padding: 10px 16px;
+        font-size: 0.92rem;
+      }
+
+      .add-address-btn.is-hidden {
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .address-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .new-address-card {
+        background: #fcfcfd;
+        border: 1px solid #e6e6eb;
+        border-radius: 16px;
+        padding: 14px;
+        margin-bottom: 14px;
+      }
+
+      .new-address-card h3 {
+        margin: 0 0 10px;
+        font-size: 1.2rem;
+      }
+
+      .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px 14px;
+      }
+
+      .form-grid .span-2 {
+        grid-column: 1 / -1;
+      }
+
+      .new-address-card label {
+        display: block;
+        font-size: 0.86rem;
+        color: #6e6e73;
+        margin: 10px 0 4px;
+      }
+
+      .new-address-card input {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid #d2d2d7;
+        padding: 10px 11px;
+        font-size: 0.95rem;
+        background: #ffffff;
+      }
+
+      .new-address-card input:focus {
+        outline: none;
+        border-color: #0071e3;
+        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+      }
+
+      .new-address-actions {
+        margin-top: 14px;
+        display: flex;
+        gap: 10px;
+      }
+
+      .new-address-actions button {
+        border-radius: 999px;
+        border: 1px solid #d2d2d7;
+        padding: 10px 16px;
+        font-size: 0.92rem;
+        cursor: pointer;
+      }
+
+      .save-address-btn {
+        background: #1d1d1f;
+        color: #f5f5f7;
+        border-color: #1d1d1f;
+      }
+
+      .cancel-address-btn {
+        background: #ffffff;
+        color: #1d1d1f;
+      }
+
+      .address-card {
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 16px;
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .address-card.default {
+        border-color: #1d1d1f;
+        box-shadow: inset 0 0 0 1px #1d1d1f;
+      }
+
+      .address-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 14px;
+      }
+
+      .address-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .address-title h3 {
+        margin: 0;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1d1d1f;
+      }
+
+      .address-actions {
+        display: flex;
+        align-items: center;
+        color: #6e6e73;
+      }
+
+      .icon-link {
+        text-decoration: none;
+        color: inherit;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        font-size: 0.95rem;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .icon-link svg {
+        display: block;
+      }
+
+      .address-body {
+        font-size: 0.88rem;
+        line-height: 1.45;
+        color: #6e6e73;
+      }
+
+      .address-body strong {
+        display: block;
+        margin-bottom: 2px;
+        font-weight: 400;
+        color: #1d1d1f;
+      }
+
+      .set-default {
+        color: #b08d57;
+        font-size: 0.92rem;
+        border: none;
+        background: transparent;
+        padding: 0;
+        cursor: pointer;
+      }
+
+      .set-default:hover {
+        text-decoration: underline;
+        text-underline-offset: 2px;
+      }
+
+      .set-default.is-hidden {
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .address-footer {
+        margin-top: 0.75rem;
+        margin-top: 1lh;
+        display: flex;
+        align-items: flex-end;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+        padding: 18px;
+      }
+
+      .modal-backdrop.open {
+        display: flex;
+      }
+
+      .modal {
+        width: min(420px, 100%);
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+      }
+
+      .modal h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+
+      .modal p {
+        margin: 0 0 14px;
+        color: #6e6e73;
+        font-size: 0.95rem;
+        line-height: 1.45;
+      }
+
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .modal-actions button {
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 0.92rem;
+        cursor: pointer;
+      }
+
+      .modal-cancel {
+        border: 1px solid #d2d2d7;
+        background: #ffffff;
+        color: #1d1d1f;
+      }
+
+      .modal-delete {
+        border: 1px solid #1d1d1f;
+        background: #1d1d1f;
+        color: #f5f5f7;
+      }
+
+      .settings-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 28px;
+      }
+
+      .settings-panel-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 0 0 12px;
+        font-size: 1.05rem;
+        font-weight: 700;
+        color: #1d1d1f;
+      }
+
+      .settings-panel-title svg {
+        flex-shrink: 0;
+        color: #1d1d1f;
+      }
+
+      .settings-panel-title--danger svg {
+        color: #dc2626;
+      }
+
+      .settings-notify-card {
+        background: #f5f0e8;
+        border: 1px solid #e8dfd2;
+        border-radius: 16px;
+        overflow: hidden;
+      }
+
+      .settings-notify-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 16px 18px;
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+      }
+
+      .settings-notify-row:last-child {
+        border-bottom: none;
+      }
+
+      .settings-notify-label {
+        font-weight: 600;
+        font-size: 0.95rem;
+        color: #1d1d1f;
+      }
+
+      .settings-notify-desc {
+        margin: 4px 0 0;
+        font-size: 0.86rem;
+        line-height: 1.4;
+        color: #6e6e73;
+      }
+
+      .settings-toggle {
+        position: relative;
+        display: inline-block;
+        width: 50px;
+        height: 30px;
+        flex-shrink: 0;
+        cursor: pointer;
+      }
+
+      .settings-toggle-input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .settings-toggle-track {
+        display: block;
+        width: 50px;
+        height: 30px;
+        border-radius: 999px;
+        background: #d2d2d7;
+        position: relative;
+        transition: background 0.2s ease;
+      }
+
+      .settings-toggle-input:focus-visible + .settings-toggle-track {
+        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.25);
+      }
+
+      .settings-toggle-input:checked + .settings-toggle-track {
+        background: #1d1d1f;
+      }
+
+      .settings-toggle-track::after {
+        content: "";
+        position: absolute;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #ffffff;
+        top: 3px;
+        left: 3px;
+        transition: transform 0.2s ease;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+      }
+
+      .settings-toggle-input:checked + .settings-toggle-track::after {
+        transform: translateX(20px);
+      }
+
+      .settings-danger-card {
+        background: #fff1f2;
+        border: 1px solid #fecdd3;
+        border-radius: 16px;
+        padding: 18px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        flex-wrap: wrap;
+      }
+
+      .settings-danger-title {
+        margin: 0;
+        font-size: 0.98rem;
+        font-weight: 700;
+        color: #b91c1c;
+      }
+
+      .settings-danger-desc {
+        margin: 6px 0 0;
+        font-size: 0.86rem;
+        line-height: 1.45;
+        color: #991b1b;
+        max-width: 42ch;
+      }
+
+      .settings-danger-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid #dc2626;
+        background: #ffffff;
+        color: #dc2626;
+        padding: 10px 16px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        cursor: pointer;
+      }
+
+      .settings-danger-btn svg {
+        flex-shrink: 0;
+      }
+
+      @media (max-width: 980px) {
+        main,
+        .site-navbar-inner {
+          width: 88vw;
+        }
+      }
+
+      @media (max-width: 700px) {
+        .account-header {
+          flex-wrap: wrap;
+        }
+
+        .order-top {
+          flex-wrap: wrap;
+        }
+
+        .address-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .form-grid {
+          grid-template-columns: 1fr;
+        }
+
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="site-navbar" aria-label="Site">
+      <div class="site-navbar-inner">
+        <a class="site-brand" href="index.html" aria-label="Flex Case home">
+          <span class="site-brand-text">Flex Case</span>
+        </a>
+        <div class="navbar-actions" aria-label="Account and cart">
+          <a class="icon-btn" href="account.html" aria-label="Profile, account page" aria-current="page">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="18" height="18">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"></path>
+            </svg>
+          </a>
+          <a class="icon-btn" href="checkout.html" aria-label="Cart, 2 items">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="18" height="18">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"></path>
+            </svg>
+            <span class="cart-badge" aria-hidden="true">2</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <header class="account-header">
+        <div>
+          <div class="welcome">Welcome back,</div>
+          <h1 class="name">Marcus Chen</h1>
+          <div class="meta">marcus.chen@example.com · Member since March 2024</div>
+        </div>
+        <div class="header-actions">
+          <a class="pill-btn" href="#"><span>🧾</span><span>12 orders</span></a>
+          <a class="pill-btn primary" href="#"><span>↩</span><span>Sign Out</span></a>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="Account sections">
+        <button type="button" class="tab active" data-tab="orders">Orders</button>
+        <button type="button" class="tab" data-tab="address">Address</button>
+        <button type="button" class="tab" data-tab="settings">Settings</button>
+      </nav>
+
+      <section id="section-orders" class="account-section">
+        <div class="section-head">
+          <h2>Order History</h2>
+          <span>3 orders</span>
+        </div>
+
+        <article class="order-card" data-order-card>
+          <div class="order-top">
+            <div class="order-id">
+              <span>CV-38291</span>
+              <span class="status">Delivered</span>
+            </div>
+            <div class="order-side">
+              <div class="date-total"><span class="order-date">04/15/2026</span><strong>$43.98</strong></div>
+              <button type="button" class="tiny-btn" data-toggle-details>Hide</button>
+              <button type="button" class="tiny-btn primary">Reorder</button>
+            </div>
+          </div>
+
+          <div class="order-details" data-order-details>
+            <div class="item">
+              <div class="thumb"></div>
+              <div>
+                <div class="item-name">CardVault Ultra-Pro Slab</div>
+                <div class="item-meta">Crystal Clear · Standard · Qty 1</div>
+              </div>
+              <div class="item-price">$24.99</div>
+            </div>
+            <div class="item">
+              <div class="thumb"></div>
+              <div>
+                <div class="item-name">TopLoader Bundle (25-Pack)</div>
+                <div class="item-meta">Standard Size · Qty 1</div>
+              </div>
+              <div class="item-price">$18.99</div>
+            </div>
+
+            <div class="order-footer">
+              <span>✍️ Write a Review</span>
+              <strong>Total: $43.98</strong>
+            </div>
+          </div>
+        </article>
+
+        <article class="order-card" data-order-card>
+          <div class="order-top">
+            <div class="order-id">
+              <span>CV-31047</span>
+              <span class="status">Delivered</span>
+            </div>
+            <div class="order-side">
+              <div class="date-total"><span class="order-date">03/02/2026</span><strong>$34.99</strong></div>
+              <button type="button" class="tiny-btn" data-toggle-details>Details</button>
+              <button type="button" class="tiny-btn primary">Reorder</button>
+            </div>
+          </div>
+
+          <div class="order-details hidden" data-order-details>
+            <div class="item">
+              <div class="thumb"></div>
+              <div>
+                <div class="item-name">Premium 9-Pocket Binder</div>
+                <div class="item-meta">Black · Qty 1</div>
+              </div>
+              <div class="item-price">$34.99</div>
+            </div>
+
+            <div class="order-footer">
+              <span>✍️ Write a Review</span>
+              <strong>Total: $34.99</strong>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="section-addresses" class="account-section hidden">
+        <div class="section-head">
+          <h2>Saved Address</h2>
+          <div class="section-actions">
+            <button type="button" class="add-address-btn" id="show-add-address">＋ Add Address</button>
+          </div>
+        </div>
+
+        <form id="new-address-form" class="new-address-card hidden">
+          <h3>New Address</h3>
+          <div class="form-grid">
+            <div>
+              <label for="addressLabel">Label (home/Office)</label>
+              <input id="addressLabel" name="addressLabel" placeholder="Home" required />
+            </div>
+            <div>
+              <label for="addressFullName">Full Name</label>
+              <input id="addressFullName" name="addressFullName" placeholder="Marcus Chen" required />
+            </div>
+            <div>
+              <label for="addressStreet">Street Address</label>
+              <input id="addressStreet" name="addressStreet" placeholder="123 Collector Lane" required />
+            </div>
+            <div>
+              <label for="addressCity">City</label>
+              <input id="addressCity" name="addressCity" placeholder="San Francisco" required />
+            </div>
+            <div>
+              <label for="addressState">State</label>
+              <input id="addressState" name="addressState" placeholder="CA" required />
+            </div>
+            <div>
+              <label for="addressZip">ZIP Code</label>
+              <input id="addressZip" name="addressZip" placeholder="94102" required />
+            </div>
+          </div>
+          <div class="new-address-actions">
+            <button type="submit" class="save-address-btn">Save Address</button>
+            <button type="button" class="cancel-address-btn" id="cancel-add-address">Cancel</button>
+          </div>
+        </form>
+
+        <div class="address-grid" id="address-list">
+          <article class="address-card default" data-address-card>
+            <div class="address-head">
+              <div class="address-title">
+                <h3>Home</h3>
+                <span class="badge-default">Default</span>
+              </div>
+              <div class="address-actions">
+                <button type="button" class="icon-link" aria-label="Delete address" data-delete-address>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="13" height="13">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="address-body">
+              <strong>Marcus Chen</strong>
+              847 Fillmore Street, Apt 3B<br />
+              San Francisco, CA 94117<br />
+              United States
+            </div>
+            <div class="address-footer">
+              <button type="button" class="set-default is-hidden" data-set-default>Set as default</button>
+            </div>
+          </article>
+
+          <article class="address-card" data-address-card>
+            <div class="address-head">
+              <div class="address-title">
+                <h3>Office</h3>
+              </div>
+              <div class="address-actions">
+                <button type="button" class="icon-link" aria-label="Delete address" data-delete-address>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="13" height="13">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="address-body">
+              <strong>Marcus Chen</strong>
+              560 Mission Street, Suite 1200<br />
+              San Francisco, CA 94105<br />
+              United States
+            </div>
+            <div class="address-footer">
+              <button type="button" class="set-default" data-set-default>Set as default</button>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="section-settings" class="account-section hidden">
+        <div class="section-head">
+          <h2>Account Settings</h2>
+        </div>
+
+        <div class="settings-stack">
+          <section class="settings-panel" aria-labelledby="settings-profile-heading">
+            <h3 class="settings-panel-title" id="settings-profile-heading">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+              Profile Information
+            </h3>
+            <form id="settings-profile-form" class="new-address-card">
+              <div class="form-grid">
+                <div>
+                  <label for="settings-full-name">Full Name</label>
+                  <input id="settings-full-name" name="fullName" type="text" value="Marcus Chen" autocomplete="name" />
+                </div>
+                <div>
+                  <label for="settings-email">Email Address</label>
+                  <input id="settings-email" name="email" type="email" value="marcus.chen@example.com" autocomplete="email" />
+                </div>
+              </div>
+              <div class="new-address-actions">
+                <button type="submit" class="save-address-btn">Save Changes</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="settings-panel" aria-labelledby="settings-password-heading">
+            <h3 class="settings-panel-title" id="settings-password-heading">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 0 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
+              </svg>
+              Change Password
+            </h3>
+            <form id="settings-password-form" class="new-address-card">
+              <div class="form-grid">
+                <div class="span-2">
+                  <label for="settings-current-password">Current Password</label>
+                  <input
+                    id="settings-current-password"
+                    type="text"
+                    data-password-peek
+                    data-sync-hidden="settings-hpw-current"
+                    autocomplete="current-password"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="Enter current password"
+                  />
+                </div>
+                <div>
+                  <label for="settings-new-password">New Password</label>
+                  <input
+                    id="settings-new-password"
+                    type="text"
+                    data-password-peek
+                    data-sync-hidden="settings-hpw-new"
+                    autocomplete="new-password"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="Enter new password"
+                  />
+                </div>
+                <div>
+                  <label for="settings-confirm-password">Confirm New Password</label>
+                  <input
+                    id="settings-confirm-password"
+                    type="text"
+                    data-password-peek
+                    data-sync-hidden="settings-hpw-confirm"
+                    autocomplete="new-password"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    placeholder="Confirm new password"
+                  />
+                </div>
+              </div>
+              <input type="hidden" name="currentPassword" id="settings-hpw-current" value="" />
+              <input type="hidden" name="newPassword" id="settings-hpw-new" value="" />
+              <input type="hidden" name="confirmPassword" id="settings-hpw-confirm" value="" />
+              <div class="new-address-actions">
+                <button type="submit" class="save-address-btn">Update Password</button>
+              </div>
+            </form>
+          </section>
+
+          <section class="settings-panel" aria-labelledby="settings-notify-heading">
+            <h3 class="settings-panel-title" id="settings-notify-heading">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M14.857 17.082a23.848 23.848 0 0 0 5.454-1.31A8.967 8.967 0 0 1 18 9.75v-.7V9A6 6 0 0 0 6 9v.75a8.967 8.967 0 0 1-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 0 1-5.714 0m5.714 0a3 3 0 1 1-5.714 0" />
+              </svg>
+              Notification Preferences
+            </h3>
+            <div class="settings-notify-card">
+              <div class="settings-notify-row">
+                <div>
+                  <div class="settings-notify-label">Email Notifications</div>
+                  <p class="settings-notify-desc">Receive order confirmations and shipping updates</p>
+                </div>
+                <label class="settings-toggle">
+                  <input type="checkbox" class="settings-toggle-input" checked aria-label="Email notifications" />
+                  <span class="settings-toggle-track"></span>
+                </label>
+              </div>
+              <div class="settings-notify-row">
+                <div>
+                  <div class="settings-notify-label">Stock Alerts</div>
+                  <p class="settings-notify-desc">Get notified when wishlisted items are back in stock</p>
+                </div>
+                <label class="settings-toggle">
+                  <input type="checkbox" class="settings-toggle-input" checked aria-label="Stock alerts" />
+                  <span class="settings-toggle-track"></span>
+                </label>
+              </div>
+              <div class="settings-notify-row">
+                <div>
+                  <div class="settings-notify-label">Order Status Updates</div>
+                  <p class="settings-notify-desc">Track your orders from dispatch to delivery</p>
+                </div>
+                <label class="settings-toggle">
+                  <input type="checkbox" class="settings-toggle-input" checked aria-label="Order status updates" />
+                  <span class="settings-toggle-track"></span>
+                </label>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-panel" aria-labelledby="settings-danger-heading">
+            <h3 class="settings-panel-title settings-panel-title--danger" id="settings-danger-heading">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+              </svg>
+              Danger Zone
+            </h3>
+            <div class="settings-danger-card">
+              <div>
+                <p class="settings-danger-title">Delete Account</p>
+                <p class="settings-danger-desc">Permanently remove your account and all associated data.</p>
+              </div>
+              <button type="button" class="settings-danger-btn" id="settings-delete-account">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="18" height="18" aria-hidden="true">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0" />
+                </svg>
+                Delete Account
+              </button>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div id="delete-address-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-address-title" aria-hidden="true">
+      <div class="modal">
+        <h3 id="delete-address-title">Delete address?</h3>
+        <p id="delete-address-body">This will remove the address from your saved list.</p>
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="delete-address-cancel">Cancel</button>
+          <button type="button" class="modal-cancel hidden" id="delete-address-dismiss-single">Got it</button>
+          <button type="button" class="modal-delete" id="delete-address-confirm">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const tabs = document.querySelectorAll("[data-tab]");
+      const sections = {
+        orders: document.getElementById("section-orders"),
+        address: document.getElementById("section-addresses"),
+        settings: document.getElementById("section-settings"),
+      };
+
+      function setActiveTab(name) {
+        tabs.forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.tab === name);
+        });
+        Object.entries(sections).forEach(([key, section]) => {
+          section.classList.toggle("hidden", key !== name);
+        });
+      }
+
+      tabs.forEach((tab) => {
+        tab.addEventListener("click", () => {
+          setActiveTab(tab.dataset.tab);
+          if (tab.dataset.tab !== "address") {
+            addAddressForm.classList.add("hidden");
+            showAddAddressBtn.classList.remove("is-hidden");
+            addAddressForm.reset();
+          }
+        });
+      });
+
+      const addressList = document.getElementById("address-list");
+      const addAddressForm = document.getElementById("new-address-form");
+      const showAddAddressBtn = document.getElementById("show-add-address");
+      const cancelAddAddressBtn = document.getElementById("cancel-add-address");
+      const deleteAddressModal = document.getElementById("delete-address-modal");
+      const deleteAddressCancel = document.getElementById("delete-address-cancel");
+      const deleteAddressConfirm = document.getElementById("delete-address-confirm");
+      const deleteAddressDismissSingle = document.getElementById("delete-address-dismiss-single");
+      const deleteAddressTitle = document.getElementById("delete-address-title");
+      const deleteAddressBody = document.getElementById("delete-address-body");
+
+      let pendingDeleteCard = null;
+      let deleteModalTrigger = null;
+
+      function openDeleteAddressModal(card, trigger) {
+        pendingDeleteCard = card;
+        deleteModalTrigger = trigger || null;
+        deleteAddressModal.classList.add("open");
+        deleteAddressModal.setAttribute("aria-hidden", "false");
+
+        const cards = addressList.querySelectorAll("[data-address-card]");
+        const onlyOne = cards.length <= 1;
+
+        if (onlyOne) {
+          deleteAddressTitle.textContent = "Can't delete this address";
+          deleteAddressBody.textContent = "You need at least one saved address on your account.";
+          deleteAddressCancel.classList.add("hidden");
+          deleteAddressConfirm.classList.add("hidden");
+          deleteAddressDismissSingle.classList.remove("hidden");
+          deleteAddressDismissSingle.focus();
+        } else {
+          deleteAddressTitle.textContent = "Delete address?";
+          deleteAddressBody.textContent = "This will remove the address from your saved list.";
+          deleteAddressCancel.classList.remove("hidden");
+          deleteAddressConfirm.classList.remove("hidden");
+          deleteAddressDismissSingle.classList.add("hidden");
+          deleteAddressConfirm.focus();
+        }
+      }
+
+      function closeDeleteAddressModal() {
+        deleteAddressModal.classList.remove("open");
+        deleteAddressModal.setAttribute("aria-hidden", "true");
+        pendingDeleteCard = null;
+        deleteAddressTitle.textContent = "Delete address?";
+        deleteAddressBody.textContent = "This will remove the address from your saved list.";
+        deleteAddressCancel.classList.remove("hidden");
+        deleteAddressConfirm.classList.remove("hidden");
+        deleteAddressDismissSingle.classList.add("hidden");
+        if (deleteModalTrigger && typeof deleteModalTrigger.focus === "function") {
+          deleteModalTrigger.focus();
+        }
+        deleteModalTrigger = null;
+      }
+
+      function confirmDeleteAddress() {
+        if (!pendingDeleteCard) return;
+        const cards = addressList.querySelectorAll("[data-address-card]");
+        if (cards.length <= 1) {
+          closeDeleteAddressModal();
+          return;
+        }
+
+        const wasDefault = pendingDeleteCard.classList.contains("default");
+        pendingDeleteCard.remove();
+
+        if (wasDefault) {
+          const next = addressList.querySelector("[data-address-card]");
+          if (next) next.classList.add("default");
+        }
+
+        syncDefaultAddressLabels();
+        closeDeleteAddressModal();
+      }
+
+      deleteAddressCancel.addEventListener("click", closeDeleteAddressModal);
+      deleteAddressConfirm.addEventListener("click", confirmDeleteAddress);
+      deleteAddressDismissSingle.addEventListener("click", closeDeleteAddressModal);
+
+      deleteAddressModal.addEventListener("click", (event) => {
+        if (event.target === deleteAddressModal) closeDeleteAddressModal();
+      });
+
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && deleteAddressModal.classList.contains("open")) {
+          closeDeleteAddressModal();
+        }
+      });
+
+      function syncDefaultAddressLabels() {
+        const cards = addressList.querySelectorAll("[data-address-card]");
+        cards.forEach((card) => {
+          const isDefault = card.classList.contains("default");
+          let badge = card.querySelector(".badge-default");
+          let footer = card.querySelector(".address-footer");
+          let setBtn = card.querySelector("[data-set-default]");
+          if (!footer) {
+            footer = document.createElement("div");
+            footer.className = "address-footer";
+            card.appendChild(footer);
+          }
+          if (!setBtn) {
+            setBtn = document.createElement("button");
+            setBtn.type = "button";
+            setBtn.className = "set-default";
+            setBtn.dataset.setDefault = "";
+            setBtn.textContent = "Set as default";
+            footer.appendChild(setBtn);
+          }
+          if (isDefault) {
+            setBtn.classList.add("is-hidden");
+            if (!badge) {
+              badge = document.createElement("span");
+              badge.className = "badge-default";
+              badge.textContent = "Default";
+              const title = card.querySelector(".address-title");
+              if (title) title.appendChild(badge);
+            }
+          } else {
+            if (badge) badge.remove();
+            setBtn.classList.remove("is-hidden");
+          }
+        });
+      }
+
+      addressList.addEventListener("click", (event) => {
+        const deleteButton = event.target.closest("[data-delete-address]");
+        if (deleteButton) {
+          const card = deleteButton.closest("[data-address-card]");
+          if (!card) return;
+          openDeleteAddressModal(card, deleteButton);
+          return;
+        }
+
+        const setDefaultButton = event.target.closest("[data-set-default]");
+        if (!setDefaultButton) return;
+        const card = setDefaultButton.closest("[data-address-card]");
+        if (!card) return;
+        addressList.querySelectorAll("[data-address-card]").forEach((c) => {
+          c.classList.remove("default");
+        });
+        card.classList.add("default");
+        syncDefaultAddressLabels();
+      });
+
+      function resetAddAddressForm() {
+        addAddressForm.reset();
+      }
+
+      showAddAddressBtn.addEventListener("click", () => {
+        addAddressForm.classList.remove("hidden");
+        showAddAddressBtn.classList.add("is-hidden");
+      });
+
+      cancelAddAddressBtn.addEventListener("click", () => {
+        addAddressForm.classList.add("hidden");
+        showAddAddressBtn.classList.remove("is-hidden");
+        resetAddAddressForm();
+      });
+
+      addAddressForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const formData = new FormData(addAddressForm);
+        const label = String(formData.get("addressLabel") || "").trim();
+        const fullName = String(formData.get("addressFullName") || "").trim();
+        const street = String(formData.get("addressStreet") || "").trim();
+        const city = String(formData.get("addressCity") || "").trim();
+        const state = String(formData.get("addressState") || "").trim();
+        const zip = String(formData.get("addressZip") || "").trim();
+
+        if (!label || !fullName || !street || !city || !state || !zip) return;
+
+        const card = document.createElement("article");
+        card.className = "address-card default";
+        card.setAttribute("data-address-card", "");
+        card.innerHTML = `
+          <div class="address-head">
+            <div class="address-title">
+              <h3>${label}</h3>
+            </div>
+            <div class="address-actions">
+              <button type="button" class="icon-link" aria-label="Delete address" data-delete-address>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="13" height="13">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="address-body">
+            <strong>${fullName}</strong>
+            ${street}<br />
+            ${city}, ${state} ${zip}<br />
+            United States
+          </div>
+          <div class="address-footer">
+            <button type="button" class="set-default is-hidden" data-set-default>Set as default</button>
+          </div>
+        `;
+        addressList.querySelectorAll("[data-address-card]").forEach((existing) => {
+          existing.classList.remove("default");
+        });
+        addressList.appendChild(card);
+        syncDefaultAddressLabels();
+
+        addAddressForm.classList.add("hidden");
+        showAddAddressBtn.classList.remove("is-hidden");
+        resetAddAddressForm();
+      });
+
+      const orderCards = document.querySelectorAll("[data-order-card]");
+
+      orderCards.forEach((card) => {
+        const toggleBtn = card.querySelector("[data-toggle-details]");
+        const details = card.querySelector("[data-order-details]");
+        if (!toggleBtn || !details) return;
+
+        toggleBtn.addEventListener("click", () => {
+          const isHidden = details.classList.toggle("hidden");
+          toggleBtn.textContent = isHidden ? "Details" : "Hide";
+        });
+      });
+
+      syncDefaultAddressLabels();
+
+      document.querySelectorAll("#section-settings form").forEach((form) => {
+        form.addEventListener("submit", (event) => {
+          event.preventDefault();
+        });
+      });
+
+      const PASSWORD_MASK = "\u2022";
+
+      function renderPasswordPeekField(input, real) {
+        const n = real.length;
+        input.value = n === 0 ? "" : PASSWORD_MASK.repeat(n - 1) + real.charAt(n - 1);
+        const hiddenId = input.dataset.syncHidden;
+        if (hiddenId) {
+          const hidden = document.getElementById(hiddenId);
+          if (hidden) hidden.value = real;
+        }
+      }
+
+      function wirePasswordLastCharVisible(input) {
+        let real = "";
+        const hiddenId = input.dataset.syncHidden;
+        const hidden = hiddenId ? document.getElementById(hiddenId) : null;
+
+        function syncHidden() {
+          if (hidden) hidden.value = real;
+        }
+
+        renderPasswordPeekField(input, real);
+        syncHidden();
+
+        input.addEventListener("beforeinput", (e) => {
+          const el = input;
+          const start = el.selectionStart ?? real.length;
+          const end = el.selectionEnd ?? real.length;
+
+          if (e.inputType === "insertText" && e.data != null) {
+            e.preventDefault();
+            real = real.slice(0, start) + e.data + real.slice(end);
+            const pos = start + e.data.length;
+            renderPasswordPeekField(el, real);
+            queueMicrotask(() => el.setSelectionRange(pos, pos));
+            return;
+          }
+
+          if (e.inputType === "insertFromPaste") {
+            e.preventDefault();
+            const text = e.clipboardData?.getData("text/plain") ?? "";
+            real = real.slice(0, start) + text + real.slice(end);
+            const pos = start + text.length;
+            renderPasswordPeekField(el, real);
+            queueMicrotask(() => el.setSelectionRange(pos, pos));
+            return;
+          }
+
+          if (e.inputType === "deleteContentBackward") {
+            e.preventDefault();
+            if (start === 0 && end === 0) return;
+            const delStart = end > start ? start : Math.max(0, start - 1);
+            const delEnd = end > start ? end : start;
+            real = real.slice(0, delStart) + real.slice(delEnd);
+            renderPasswordPeekField(el, real);
+            queueMicrotask(() => el.setSelectionRange(delStart, delStart));
+            return;
+          }
+
+          if (e.inputType === "deleteContentForward") {
+            e.preventDefault();
+            const delStart = start;
+            const delEnd = end > start ? end : Math.min(real.length, start + 1);
+            if (delStart >= real.length && delEnd === delStart) return;
+            real = real.slice(0, delStart) + real.slice(delEnd);
+            renderPasswordPeekField(el, real);
+            queueMicrotask(() => el.setSelectionRange(delStart, delStart));
+          }
+        });
+
+        const form = input.closest("form");
+        if (form) {
+          form.addEventListener("reset", () => {
+            queueMicrotask(() => {
+              real = "";
+              renderPasswordPeekField(input, real);
+            });
+          });
+        }
+      }
+
+      document.querySelectorAll("#settings-password-form [data-password-peek]").forEach(wirePasswordLastCharVisible);
+
+      setActiveTab("orders");
+    </script>
+  </body>
+</html>
