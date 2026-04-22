@@ -1162,8 +1162,18 @@
                   <div id="settings-email-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div>
-                  <label for="settings-phone">Contact Number</label>
-                  <input id="settings-phone" name="phone" type="tel" value="" autocomplete="tel" placeholder="+60123456789" />
+                  <label for="settings-phone-national">Contact Number</label>
+                  <div class="phone-row">
+                    <select id="settings-phone-country" aria-label="Phone country code"></select>
+                    <input
+                      id="settings-phone-national"
+                      name="phoneNational"
+                      type="tel"
+                      value=""
+                      autocomplete="tel-national"
+                      placeholder="123456789"
+                    />
+                  </div>
                   <div id="settings-phone-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
               </div>
@@ -1548,7 +1558,8 @@
       const settingsFirstName = document.getElementById("settings-first-name");
       const settingsLastName = document.getElementById("settings-last-name");
       const settingsEmailInput = document.getElementById("settings-email");
-      const settingsPhone = document.getElementById("settings-phone");
+      const settingsPhoneCountry = document.getElementById("settings-phone-country");
+      const settingsPhoneNational = document.getElementById("settings-phone-national");
       const settingsFirstNameError = document.getElementById("settings-first-name-error");
       const settingsLastNameError = document.getElementById("settings-last-name-error");
       const settingsEmailError = document.getElementById("settings-email-error");
@@ -1577,12 +1588,15 @@
         }
       }
 
-      function setCountryOptionDisplay(mode) {
-        const options = Array.from(authSignUpPhoneCountry.options);
+      const wiredPhoneCountrySelects = new WeakSet();
+
+      function setCountryOptionDisplay(selectEl, mode) {
+        if (!selectEl) return;
+        const options = Array.from(selectEl.options);
         options.forEach((opt, idx) => {
           const fullLabel = opt.dataset.fullLabel || opt.textContent || "";
           const shortLabel = opt.dataset.shortLabel || fullLabel;
-          const isSelected = idx === authSignUpPhoneCountry.selectedIndex;
+          const isSelected = idx === selectEl.selectedIndex;
           if (mode === "full") {
             opt.textContent = fullLabel;
             return;
@@ -1591,7 +1605,20 @@
         });
       }
 
-      async function populatePhoneCountryOptions() {
+      function wirePhoneCountrySelect(selectEl) {
+        if (!selectEl || wiredPhoneCountrySelects.has(selectEl)) return;
+        wiredPhoneCountrySelects.add(selectEl);
+        setCountryOptionDisplay(selectEl, "short");
+        selectEl.addEventListener("focus", () => setCountryOptionDisplay(selectEl, "full"));
+        selectEl.addEventListener("change", () => {
+          setCountryOptionDisplay(selectEl, "full");
+          requestAnimationFrame(() => setCountryOptionDisplay(selectEl, "short"));
+        });
+        selectEl.addEventListener("blur", () => setCountryOptionDisplay(selectEl, "short"));
+      }
+
+      async function populatePhoneCountryOptionsForSelect(selectEl) {
+        if (!selectEl) return;
         const fallback = [
           { name: "Australia", iso2: "AU", dial: "+61" },
           { name: "China", iso2: "CN", dial: "+86" },
@@ -1627,7 +1654,7 @@
               idx === arr.findIndex((x) => x.iso2 === item.iso2 && x.dial === item.dial)
           );
 
-          authSignUpPhoneCountry.innerHTML = deduped
+          selectEl.innerHTML = deduped
             .map((country) => {
               const selected = country.iso2 === "MY" ? " selected" : "";
               const fullLabel = `${country.name} (${country.dial})`;
@@ -1636,7 +1663,7 @@
             })
             .join("");
         } catch (_) {
-          authSignUpPhoneCountry.innerHTML = fallback
+          selectEl.innerHTML = fallback
             .map((country) => {
               const selected = country.iso2 === "MY" ? " selected" : "";
               const fullLabel = `${country.name} (${country.dial})`;
@@ -1646,13 +1673,59 @@
             .join("");
         }
 
-        setCountryOptionDisplay("short");
-        authSignUpPhoneCountry.addEventListener("focus", () => setCountryOptionDisplay("full"));
-        authSignUpPhoneCountry.addEventListener("change", () => {
-          setCountryOptionDisplay("full");
-          requestAnimationFrame(() => setCountryOptionDisplay("short"));
-        });
-        authSignUpPhoneCountry.addEventListener("blur", () => setCountryOptionDisplay("short"));
+        wirePhoneCountrySelect(selectEl);
+      }
+
+      async function populatePhoneCountryOptions() {
+        await populatePhoneCountryOptionsForSelect(authSignUpPhoneCountry);
+        await populatePhoneCountryOptionsForSelect(settingsPhoneCountry);
+      }
+
+      function applyPhoneToSettingsFields(fullPhone) {
+        if (!settingsPhoneCountry || !settingsPhoneNational) return;
+        const raw = String(fullPhone || "").trim();
+        settingsPhoneNational.value = "";
+
+        if (!raw) {
+          const preferred = Array.from(settingsPhoneCountry.options).find((opt) => opt.value === "+60");
+          settingsPhoneCountry.value = preferred?.value || settingsPhoneCountry.options?.[0]?.value || "+60";
+          setCountryOptionDisplay(settingsPhoneCountry, "short");
+          return;
+        }
+
+        const digitsOnly = raw.replace(/\D/g, "");
+        const dialCodes = Array.from(settingsPhoneCountry.options)
+          .map((opt) => String(opt.value || "").trim())
+          .filter((d) => d.startsWith("+"))
+          .sort((a, b) => b.replace("+", "").length - a.replace("+", "").length);
+
+        let matchedDial = "";
+        for (const dial of dialCodes) {
+          const dialDigits = dial.replace("+", "");
+          if (dialDigits && digitsOnly.startsWith(dialDigits)) {
+            matchedDial = dial;
+            break;
+          }
+        }
+
+        if (matchedDial) {
+          settingsPhoneCountry.value = matchedDial;
+          const dialDigits = matchedDial.replace("+", "");
+          settingsPhoneNational.value = digitsOnly.slice(dialDigits.length);
+        } else {
+          const preferred = Array.from(settingsPhoneCountry.options).find((opt) => opt.value === "+60");
+          settingsPhoneCountry.value = preferred?.value || settingsPhoneCountry.options?.[0]?.value || "+60";
+          settingsPhoneNational.value = digitsOnly;
+        }
+
+        setCountryOptionDisplay(settingsPhoneCountry, "short");
+      }
+
+      function composeSettingsPhoneE164() {
+        const dial = String(settingsPhoneCountry?.value || "").trim();
+        const nationalDigits = String(settingsPhoneNational?.value || "").replace(/\D/g, "");
+        if (!dial || !nationalDigits) return "";
+        return `${dial}${nationalDigits}`;
       }
 
       function setGateMessage(message, isError = false) {
@@ -1721,7 +1794,7 @@
         if (settingsFirstName) settingsFirstName.value = firstName || displayName;
         if (settingsLastName) settingsLastName.value = String(user?.lastName || "").trim();
         if (settingsEmail) settingsEmail.value = user?.email || "";
-        if (settingsPhone) settingsPhone.value = user?.phone || "";
+        applyPhoneToSettingsFields(user?.phone || "");
         authGate.classList.add("auth-hidden");
         accountApp.classList.remove("auth-hidden");
       }
@@ -1988,7 +2061,8 @@
         const firstName = authSignUpFirstName.value.trim();
         const lastName = authSignUpLastName.value.trim();
         const email = authSignUpEmail.value.trim().toLowerCase();
-        const phone = `${authSignUpPhoneCountry.value} ${authSignUpPhone.value.trim()}`.trim();
+        const nationalDigits = authSignUpPhone.value.replace(/\D/g, "");
+        const phone = `${String(authSignUpPhoneCountry.value || "").trim()}${nationalDigits}`;
         const acceptsMarketingEmail = !!authSignUpEmailConsent.checked;
         const keepLoggedIn = !!authSignUpKeep.checked;
         if (!firstName || !lastName || !email) {
@@ -2042,12 +2116,13 @@
         const firstName = settingsFirstName?.value.trim() || "";
         const lastName = settingsLastName?.value.trim() || "";
         const email = settingsEmailInput?.value.trim() || "";
-        const phone = settingsPhone?.value.trim() || "";
+        const nationalDigits = String(settingsPhoneNational?.value || "").replace(/\D/g, "");
+        const phone = composeSettingsPhoneE164();
         const localFieldErrors = {};
         if (!firstName) localFieldErrors.firstName = "First name is required.";
         if (!lastName) localFieldErrors.lastName = "Last name is required.";
         if (!email) localFieldErrors.email = "Email address is required.";
-        if (!phone) localFieldErrors.phone = "Contact number is required.";
+        if (!nationalDigits) localFieldErrors.phone = "Contact number is required.";
         if (Object.keys(localFieldErrors).length) {
           applyProfileFieldErrors(localFieldErrors);
           setGateMessage("Please complete all profile fields.", true);
@@ -2109,7 +2184,9 @@
       }
 
       setLoggedOutUI(pendingGateMessage, pendingGateError);
-      syncServerCustomerSession().then((ok) => {
+      void (async () => {
+        await populatePhoneCountryOptions();
+        const ok = await syncServerCustomerSession();
         if (!ok) {
           if (authStatus === "success") {
             const existingMessage = String(authGateMessage?.textContent || "").trim();
@@ -2127,9 +2204,7 @@
           }
           setLoggedOutUI(pendingGateMessage, pendingGateError);
         }
-      });
-
-      populatePhoneCountryOptions();
+      })();
 
       setActiveTab("orders");
     </script>
