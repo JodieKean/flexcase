@@ -917,7 +917,7 @@
           <div class="meta">marcus.chen@example.com · Member since March 2024</div>
         </div>
         <div class="header-actions">
-          <a class="pill-btn" href="#"><span>🧾</span><span>12 orders</span></a>
+          <a class="pill-btn" href="#"><span>🧾</span><span id="header-order-count">0 orders</span></a>
           <a class="pill-btn primary" href="#" id="header-signout"><span>↩</span><span>Sign Out</span></a>
         </div>
       </header>
@@ -1572,6 +1572,7 @@
       const authSignUpPhone = document.getElementById("auth-signup-phone");
       const authSignUpEmailConsent = document.getElementById("auth-signup-email-consent");
       const authSignUpKeep = document.getElementById("auth-signup-keep");
+      const headerOrderCountEl = document.getElementById("header-order-count");
       const authMessageEl = document.getElementById("shopify-auth-message");
       const authFirstName = document.getElementById("shopify-auth-first-name");
       const authLastName = document.getElementById("shopify-auth-last-name");
@@ -1733,6 +1734,7 @@
         accountApp.classList.add("auth-hidden");
         authGate.classList.remove("auth-hidden");
         switchAuthTab("signin");
+        if (headerOrderCountEl) headerOrderCountEl.textContent = "0 orders";
         setGateMessage("You are currently signed out.");
       }
 
@@ -1783,6 +1785,7 @@
         if (!section) return;
         const countEl = section.querySelector(".section-head span");
         if (countEl) countEl.textContent = `${orders.length} orders`;
+        if (headerOrderCountEl) headerOrderCountEl.textContent = `${orders.length} orders`;
 
         section.querySelectorAll("[data-order-card]").forEach((node) => node.remove());
         if (!orders.length) {
