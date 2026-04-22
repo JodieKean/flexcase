@@ -818,6 +818,12 @@ async function handleCustomerAccountData(req, res) {
                 currencyCode
               }
             }
+            currentTotalTaxSet {
+              shopMoney {
+                amount
+                currencyCode
+              }
+            }
             lineItems(first: 25) {
               edges {
                 node {
@@ -926,6 +932,7 @@ async function handleCustomerAccountData(req, res) {
         financialStatus: o.displayFinancialStatus || "",
         fulfillmentStatus: o.displayFulfillmentStatus || "",
         total: o.currentTotalPriceSet?.shopMoney || null,
+        tax: o.currentTotalTaxSet?.shopMoney || null,
         items:
           o.lineItems?.edges?.map((itemEdge) => itemEdge?.node).filter(Boolean).map((item) => ({
             title: item.title || "",

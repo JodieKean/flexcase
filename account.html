@@ -1862,6 +1862,11 @@
 
         orders.forEach((order, idx) => {
           const total = order.total ? money(order.total.amount, order.total.currencyCode) : "-";
+          const taxAmount = order.tax ? Number(order.tax.amount || 0) : 0;
+          const taxLabel =
+            order.tax && taxAmount > 0
+              ? ` (includes ${money(order.tax.amount, order.tax.currencyCode || order.total?.currencyCode)} tax)`
+              : "";
           const date = order.processedAt
             ? new Date(order.processedAt).toLocaleDateString("en-US")
             : "-";
@@ -1923,7 +1928,7 @@
                   </svg>
                   Write a Review
                 </button>
-                <strong>Total: ${total}</strong>
+                <strong>Total: ${total}${taxLabel}</strong>
               </div>
             </div>
           `;
