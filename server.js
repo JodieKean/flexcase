@@ -933,9 +933,17 @@ async function handleCustomerProfileUpdate(req, res) {
       .trim()
       .toLowerCase();
     const phoneRaw = String(body.phone || "").trim();
-    const phone = phoneRaw ? phoneRaw.replace(/\s+/g, "") : "";
-    if (!firstName || !email) {
-      json(res, 400, { error: "First name and email are required." });
+    const phone = normalizePhone(phoneRaw);
+    const fieldErrors = {};
+    if (!firstName) fieldErrors.firstName = "First name is required.";
+    if (!lastName) fieldErrors.lastName = "Last name is required.";
+    if (!email) fieldErrors.email = "Email address is required.";
+    if (!phone) fieldErrors.phone = "Contact number is required.";
+    if (Object.keys(fieldErrors).length) {
+      json(res, 400, {
+        error: "Unable to save profile changes.",
+        fieldErrors,
+      });
       return;
     }
 
@@ -948,7 +956,6 @@ async function handleCustomerProfileUpdate(req, res) {
       return;
     }
 
-    const fieldErrors = {};
     if (email !== currentEmail) {
       const conflict = await findCustomerByEmail(email);
       if (conflict?.id && conflict.id !== customer.id) {
@@ -966,7 +973,7 @@ async function handleCustomerProfileUpdate(req, res) {
         fieldErrors.phone = "This contact number has already been claimed.";
       }
     }
-    if (fieldErrors.email || fieldErrors.phone) {
+    if (Object.keys(fieldErrors).length) {
       json(res, 400, {
         error: "Unable to save profile changes.",
         fieldErrors,

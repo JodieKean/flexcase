@@ -1123,10 +1123,12 @@
                 <div>
                   <label for="settings-first-name">First Name</label>
                   <input id="settings-first-name" name="firstName" type="text" value="Marcus" autocomplete="given-name" />
+                  <div id="settings-first-name-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div>
                   <label for="settings-last-name">Last Name</label>
                   <input id="settings-last-name" name="lastName" type="text" value="Chen" autocomplete="family-name" />
+                  <div id="settings-last-name-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div>
                   <label for="settings-email">Email Address</label>
@@ -1247,6 +1249,9 @@
             addAddressForm.classList.add("hidden");
             showAddAddressBtn.classList.remove("is-hidden");
             addAddressForm.reset();
+          }
+          if (isSignedInForAccountApp()) {
+            loadCustomerAccountData().catch(() => {});
           }
         });
       });
@@ -1482,6 +1487,9 @@
       const headerMetaEl = document.querySelector(".meta");
       const authGate = document.getElementById("auth-gate");
       const accountApp = document.getElementById("account-app");
+      function isSignedInForAccountApp() {
+        return Boolean(accountApp && !accountApp.classList.contains("auth-hidden"));
+      }
       const headerSignout = document.getElementById("header-signout");
       const authGateMessage = document.getElementById("auth-gate-message");
       const authTabSignIn = document.getElementById("auth-tab-signin");
@@ -1503,6 +1511,8 @@
       const settingsLastName = document.getElementById("settings-last-name");
       const settingsEmailInput = document.getElementById("settings-email");
       const settingsPhone = document.getElementById("settings-phone");
+      const settingsFirstNameError = document.getElementById("settings-first-name-error");
+      const settingsLastNameError = document.getElementById("settings-last-name-error");
       const settingsEmailError = document.getElementById("settings-email-error");
       const settingsPhoneError = document.getElementById("settings-phone-error");
 
@@ -1602,11 +1612,15 @@
       }
 
       function clearProfileFieldErrors() {
+        if (settingsFirstNameError) settingsFirstNameError.textContent = "";
+        if (settingsLastNameError) settingsLastNameError.textContent = "";
         if (settingsEmailError) settingsEmailError.textContent = "";
         if (settingsPhoneError) settingsPhoneError.textContent = "";
       }
 
       function applyProfileFieldErrors(fieldErrors = {}) {
+        if (settingsFirstNameError) settingsFirstNameError.textContent = fieldErrors.firstName || "";
+        if (settingsLastNameError) settingsLastNameError.textContent = fieldErrors.lastName || "";
         if (settingsEmailError) settingsEmailError.textContent = fieldErrors.email || "";
         if (settingsPhoneError) settingsPhoneError.textContent = fieldErrors.phone || "";
       }
@@ -1954,8 +1968,14 @@
         const lastName = settingsLastName?.value.trim() || "";
         const email = settingsEmailInput?.value.trim() || "";
         const phone = settingsPhone?.value.trim() || "";
-        if (!firstName || !email) {
-          setGateMessage("First name and email are required.", true);
+        const localFieldErrors = {};
+        if (!firstName) localFieldErrors.firstName = "First name is required.";
+        if (!lastName) localFieldErrors.lastName = "Last name is required.";
+        if (!email) localFieldErrors.email = "Email address is required.";
+        if (!phone) localFieldErrors.phone = "Contact number is required.";
+        if (Object.keys(localFieldErrors).length) {
+          applyProfileFieldErrors(localFieldErrors);
+          setGateMessage("Please complete all profile fields.", true);
           return;
         }
         try {
@@ -1976,6 +1996,7 @@
             if (payload?.fieldErrors) applyProfileFieldErrors(payload.fieldErrors);
             throw new Error(payload.error || "Unable to save profile changes.");
           }
+          clearProfileFieldErrors();
           const customer = payload.customer || {};
           const updatedUser = {
             firstName: customer.firstName || firstName,
