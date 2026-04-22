@@ -593,22 +593,236 @@ async function handleCustomerEmailExists(req, res) {
       return;
     }
 
+    const customer = await findCustomerByEmail(email);
+    json(res, 200, {
+      exists: Boolean(customer?.id),
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function findCustomerByEmail(email) {
+  const normalized = String(email || "").trim().toLowerCase();
+  if (!normalized) return null;
+  const query = `
+    query CustomerByEmail($query: String!) {
+      customers(first: 1, query: $query) {
+        edges {
+          node {
+            id
+            firstName
+            lastName
+            email
+            phone
+          }
+        }
+      }
+    }
+  `;
+  const data = await adminGraphql(query, { query: `email:${normalized}` });
+  return data?.customers?.edges?.[0]?.node || null;
+}
+
+async function handleCustomerPreRegister(req, res) {
+  try {
+    const body = await readJsonBody(req);
+    const firstName = String(body.firstName || "").trim();
+    const lastName = String(body.lastName || "").trim();
+    const email = String(body.email || "")
+      .trim()
+      .toLowerCase();
+    const phone = String(body.phone || "").trim();
+    const acceptsMarketingEmail = Boolean(body.acceptsMarketingEmail);
+
+    if (!firstName || !lastName || !email) {
+      json(res, 400, { error: "First name, last name, and email are required." });
+      return;
+    }
+
+    const existing = await findCustomerByEmail(email);
+    if (existing?.id) {
+      json(res, 200, { exists: true, created: false, customer: existing });
+      return;
+    }
+
+    const mutation = `
+      mutation CustomerCreate($input: CustomerInput!) {
+        customerCreate(input: $input) {
+          customer {
+            id
+            firstName
+            lastName
+            email
+            phone
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    const data = await adminGraphql(mutation, {
+      input: {
+        firstName,
+        lastName,
+        email,
+        phone: phone || null,
+        acceptsMarketing: acceptsMarketingEmail,
+      },
+    });
+    const payload = data?.customerCreate;
+    if (payload?.userErrors?.length) {
+      json(res, 400, {
+        error: payload.userErrors.map((e) => e.message).join(", "),
+      });
+      return;
+    }
+    if (!payload?.customer?.id) {
+      json(res, 500, { error: "Unable to create customer profile." });
+      return;
+    }
+
+    json(res, 200, {
+      exists: false,
+      created: true,
+      customer: payload.customer,
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCustomerAccountData(req, res) {
+  try {
+    const current = getCustomerSession(req);
+    if (!current?.session?.customer?.email) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const email = String(current.session.customer.email || "")
+      .trim()
+      .toLowerCase();
+    if (!email) {
+      json(res, 400, { error: "Authenticated customer email is missing." });
+      return;
+    }
+
     const query = `
-      query CustomerByEmail($query: String!) {
+      query CustomerAccountData($query: String!) {
         customers(first: 1, query: $query) {
           edges {
             node {
               id
+              firstName
+              lastName
               email
+              phone
+              defaultAddress {
+                id
+                firstName
+                lastName
+                address1
+                address2
+                city
+                province
+                zip
+                country
+              }
+              addresses(first: 20) {
+                edges {
+                  node {
+                    id
+                    firstName
+                    lastName
+                    address1
+                    address2
+                    city
+                    province
+                    zip
+                    country
+                  }
+                }
+              }
+              orders(first: 20, sortKey: PROCESSED_AT, reverse: true) {
+                edges {
+                  node {
+                    id
+                    name
+                    processedAt
+                    displayFinancialStatus
+                    displayFulfillmentStatus
+                    currentTotalPriceSet {
+                      shopMoney {
+                        amount
+                        currencyCode
+                      }
+                    }
+                    lineItems(first: 5) {
+                      edges {
+                        node {
+                          title
+                          quantity
+                          variantTitle
+                        }
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
         }
       }
     `;
     const data = await adminGraphql(query, { query: `email:${email}` });
-    const customer = data?.customers?.edges?.[0]?.node;
+    const customerNode = data?.customers?.edges?.[0]?.node;
+    if (!customerNode) {
+      json(res, 404, { error: "Customer record not found." });
+      return;
+    }
+
+    const addresses =
+      customerNode.addresses?.edges?.map((edge) => edge?.node).filter(Boolean) || [];
+    const defaultAddressId = customerNode.defaultAddress?.id || "";
+    const orders =
+      customerNode.orders?.edges?.map((edge) => edge?.node).filter(Boolean) || [];
+
     json(res, 200, {
-      exists: Boolean(customer?.id),
+      customer: {
+        id: customerNode.id,
+        firstName: customerNode.firstName || "",
+        lastName: customerNode.lastName || "",
+        email: customerNode.email || email,
+        phone: customerNode.phone || "",
+      },
+      addresses: addresses.map((a) => ({
+        id: a.id,
+        firstName: a.firstName || "",
+        lastName: a.lastName || "",
+        address1: a.address1 || "",
+        address2: a.address2 || "",
+        city: a.city || "",
+        province: a.province || "",
+        zip: a.zip || "",
+        country: a.country || "",
+        isDefault: a.id === defaultAddressId,
+      })),
+      orders: orders.map((o) => ({
+        id: o.id,
+        name: o.name || "",
+        processedAt: o.processedAt || "",
+        financialStatus: o.displayFinancialStatus || "",
+        fulfillmentStatus: o.displayFulfillmentStatus || "",
+        total: o.currentTotalPriceSet?.shopMoney || null,
+        items:
+          o.lineItems?.edges?.map((itemEdge) => itemEdge?.node).filter(Boolean).map((item) => ({
+            title: item.title || "",
+            quantity: Number(item.quantity || 0),
+            variantTitle: item.variantTitle || "",
+          })) || [],
+      })),
     });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -739,6 +953,10 @@ const server = http.createServer(async (req, res) => {
     handleCustomerLogoutApi(req, res);
     return;
   }
+  if (req.method === "POST" && reqUrl.pathname === "/api/customer/pre-register") {
+    await handleCustomerPreRegister(req, res);
+    return;
+  }
 
   if (req.method !== "GET") {
     res.writeHead(405);
@@ -774,6 +992,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/customer/check-email") {
     await handleCustomerEmailExists(req, res);
+    return;
+  }
+  if (reqUrl.pathname === "/api/customer/account-data") {
+    await handleCustomerAccountData(req, res);
     return;
   }
   if (reqUrl.pathname === "/api/customer/logout") {

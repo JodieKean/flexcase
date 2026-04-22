@@ -1535,17 +1535,14 @@
         resetAddAddressForm();
       });
 
-      const orderCards = document.querySelectorAll("[data-order-card]");
-
-      orderCards.forEach((card) => {
-        const toggleBtn = card.querySelector("[data-toggle-details]");
-        const details = card.querySelector("[data-order-details]");
-        if (!toggleBtn || !details) return;
-
-        toggleBtn.addEventListener("click", () => {
-          const isHidden = details.classList.toggle("hidden");
-          toggleBtn.textContent = isHidden ? "Details" : "Hide";
-        });
+      document.getElementById("section-orders")?.addEventListener("click", (event) => {
+        const toggleBtn = event.target.closest("[data-toggle-details]");
+        if (!toggleBtn) return;
+        const card = toggleBtn.closest("[data-order-card]");
+        const details = card?.querySelector("[data-order-details]");
+        if (!details) return;
+        const isHidden = details.classList.toggle("hidden");
+        toggleBtn.textContent = isHidden ? "Details" : "Hide";
       });
 
       syncDefaultAddressLabels();
@@ -1721,6 +1718,13 @@
         if (headerMetaEl) {
           headerMetaEl.textContent = `${user?.email || "no-email"} · Member`;
         }
+        const settingsFullName = document.getElementById("settings-full-name");
+        const settingsEmail = document.getElementById("settings-email");
+        if (settingsFullName) settingsFullName.value = displayName;
+        if (settingsEmail) settingsEmail.value = user?.email || "";
+        if (authFirstName) authFirstName.value = user?.name?.split(" ")[0] || "";
+        if (authLastName) authLastName.value = user?.name?.split(" ").slice(1).join(" ") || "";
+        if (authEmail) authEmail.value = user?.email || "";
         authGate.classList.add("auth-hidden");
         accountApp.classList.remove("auth-hidden");
       }
@@ -1757,12 +1761,140 @@
             };
             persistAuthSession(user, true);
             setAuthenticatedUI(user);
+            await loadCustomerAccountData();
             return true;
           }
           clearAuthSession();
           return false;
         } catch (_) {
           return false;
+        }
+      }
+
+      function money(amount, currencyCode = "USD") {
+        return new Intl.NumberFormat("en-US", {
+          style: "currency",
+          currency: currencyCode || "USD",
+        }).format(Number(amount || 0));
+      }
+
+      function renderOrders(orders = []) {
+        const section = document.getElementById("section-orders");
+        if (!section) return;
+        const countEl = section.querySelector(".section-head span");
+        if (countEl) countEl.textContent = `${orders.length} orders`;
+
+        section.querySelectorAll("[data-order-card]").forEach((node) => node.remove());
+        if (!orders.length) {
+          const emptyCard = document.createElement("article");
+          emptyCard.className = "order-card";
+          emptyCard.setAttribute("data-order-card", "");
+          emptyCard.innerHTML = `<div class="order-top"><div class="order-id"><span>No orders yet</span></div></div>`;
+          section.appendChild(emptyCard);
+          return;
+        }
+
+        orders.forEach((order, idx) => {
+          const total = order.total ? money(order.total.amount, order.total.currencyCode) : "-";
+          const date = order.processedAt
+            ? new Date(order.processedAt).toLocaleDateString("en-US")
+            : "-";
+          const status = order.fulfillmentStatus || order.financialStatus || "Processing";
+          const itemsMarkup = (order.items || [])
+            .map(
+              (item) => `
+                <div class="item">
+                  <div class="thumb"></div>
+                  <div>
+                    <div class="item-name">${item.title || "Item"}</div>
+                    <div class="item-meta">${item.variantTitle || "Default"} · Qty ${item.quantity || 1}</div>
+                  </div>
+                </div>
+              `
+            )
+            .join("");
+
+          const card = document.createElement("article");
+          card.className = "order-card";
+          card.setAttribute("data-order-card", "");
+          card.innerHTML = `
+            <div class="order-top">
+              <div class="order-id">
+                <span>${order.name || "Order"}</span>
+                <span class="status">${status}</span>
+              </div>
+              <div class="order-side">
+                <div class="date-total"><span class="order-date">${date}</span><strong>${total}</strong></div>
+                <button type="button" class="tiny-btn" data-toggle-details>${idx === 0 ? "Hide" : "Details"}</button>
+              </div>
+            </div>
+            <div class="order-details ${idx === 0 ? "" : "hidden"}" data-order-details>
+              ${itemsMarkup || '<div class="item"><div><div class="item-name">No line items</div></div></div>'}
+              <div class="order-footer"><strong>Total: ${total}</strong></div>
+            </div>
+          `;
+          section.appendChild(card);
+        });
+      }
+
+      function renderAddresses(addresses = []) {
+        if (!addressList) return;
+        addressList.innerHTML = "";
+        if (!addresses.length) {
+          addressList.innerHTML =
+            '<article class="address-card" data-address-card><div class="address-body"><strong>No saved addresses</strong></div></article>';
+          return;
+        }
+
+        addresses.forEach((address, idx) => {
+          const fullName = `${address.firstName || ""} ${address.lastName || ""}`.trim() || "Customer";
+          const lines = [
+            address.address1 || "",
+            address.address2 || "",
+            [address.city, address.province, address.zip].filter(Boolean).join(", "),
+            address.country || "",
+          ].filter(Boolean);
+          const label = idx === 0 ? "Address" : `Address ${idx + 1}`;
+          const card = document.createElement("article");
+          card.className = address.isDefault ? "address-card default" : "address-card";
+          card.setAttribute("data-address-card", "");
+          card.innerHTML = `
+            <div class="address-head">
+              <div class="address-title">
+                <h3>${label}</h3>
+                ${address.isDefault ? '<span class="badge-default">Default</span>' : ""}
+              </div>
+            </div>
+            <div class="address-body">
+              <strong>${fullName}</strong>
+              ${lines.join("<br />")}
+            </div>
+            <div class="address-footer">
+              <button type="button" class="set-default ${address.isDefault ? "is-hidden" : ""}" data-set-default>Set as default</button>
+            </div>
+          `;
+          addressList.appendChild(card);
+        });
+      }
+
+      async function loadCustomerAccountData() {
+        try {
+          const response = await fetchApiWithFallback("/api/customer/account-data", {
+            credentials: "include",
+          });
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || "Unable to load account data.");
+          }
+          const customer = payload.customer || {};
+          setAuthenticatedUI({
+            name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
+            email: customer.email || "",
+          });
+          renderOrders(payload.orders || []);
+          renderAddresses(payload.addresses || []);
+        } catch (error) {
+          setGateMessage(error.message || "Unable to load account data.", true);
         }
       }
 
@@ -1829,7 +1961,49 @@
 
       authSignUpForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const firstName = authSignUpFirstName.value.trim();
+        const lastName = authSignUpLastName.value.trim();
+        const email = authSignUpEmail.value.trim().toLowerCase();
+        const phone = `${authSignUpPhoneCountry.value} ${authSignUpPhone.value.trim()}`.trim();
+        const acceptsMarketingEmail = !!authSignUpEmailConsent.checked;
         const keepLoggedIn = !!authSignUpKeep.checked;
+        if (!firstName || !lastName || !email) {
+          setGateMessage("Enter first name, last name, and email to continue.", true);
+          return;
+        }
+
+        try {
+          const response = await fetchApiWithFallback("/api/customer/pre-register", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              firstName,
+              lastName,
+              email,
+              phone,
+              acceptsMarketingEmail,
+            }),
+          });
+          const raw = await response.text();
+          let payload = {};
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch (_) {
+            payload = {};
+          }
+          if (!response.ok) {
+            throw new Error(payload.error || "Unable to set up customer account.");
+          }
+          if (payload.exists) {
+            setGateMessage("This email is already registered. Please use Sign In.", true);
+            return;
+          }
+        } catch (error) {
+          setGateMessage(error.message || "Unable to set up customer account.", true);
+          return;
+        }
+
         beginCustomerOauth("signup", keepLoggedIn);
       });
 
@@ -1935,11 +2109,9 @@
         window.history.replaceState({}, "", authUrl.pathname + authUrl.search + authUrl.hash);
       }
 
-      const existingSession = getPersistedAuthSession();
-      if (existingSession) setAuthenticatedUI(existingSession);
-      else setLoggedOutUI();
+      setLoggedOutUI();
       syncServerCustomerSession().then((ok) => {
-        if (!ok && !getPersistedAuthSession()) setLoggedOutUI();
+        if (!ok) setLoggedOutUI();
       });
 
       populatePhoneCountryOptions();
