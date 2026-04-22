@@ -1103,41 +1103,6 @@
         </div>
 
         <div class="settings-stack">
-          <section class="settings-panel" aria-labelledby="settings-shopify-auth-heading">
-            <h3 class="settings-panel-title" id="settings-shopify-auth-heading">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
-              </svg>
-              Shopify Account
-            </h3>
-            <div class="new-address-card">
-              <div class="form-grid">
-                <div>
-                  <label for="shopify-auth-first-name">First Name</label>
-                  <input id="shopify-auth-first-name" type="text" placeholder="Marcus" autocomplete="given-name" />
-                </div>
-                <div>
-                  <label for="shopify-auth-last-name">Last Name</label>
-                  <input id="shopify-auth-last-name" type="text" placeholder="Chen" autocomplete="family-name" />
-                </div>
-                <div class="span-2">
-                  <label for="shopify-auth-email">Email</label>
-                  <input id="shopify-auth-email" type="email" placeholder="you@example.com" autocomplete="email" />
-                </div>
-                <div class="span-2">
-                  <label for="shopify-auth-password">Password</label>
-                  <input id="shopify-auth-password" type="password" placeholder="At least 5 characters" autocomplete="current-password" />
-                </div>
-              </div>
-              <div class="new-address-actions">
-                <button type="button" class="save-address-btn" id="shopify-login-btn">Sign In</button>
-                <button type="button" class="cancel-address-btn" id="shopify-register-btn">Create Account</button>
-                <button type="button" class="cancel-address-btn" id="shopify-logout-btn">Sign Out</button>
-              </div>
-              <div class="shopify-auth-message" id="shopify-auth-message">Not signed in.</div>
-            </div>
-          </section>
-
           <section class="settings-panel" aria-labelledby="settings-profile-heading">
             <h3 class="settings-panel-title" id="settings-profile-heading">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
@@ -1148,8 +1113,12 @@
             <form id="settings-profile-form" class="new-address-card">
               <div class="form-grid">
                 <div>
-                  <label for="settings-full-name">Full Name</label>
-                  <input id="settings-full-name" name="fullName" type="text" value="Marcus Chen" autocomplete="name" />
+                  <label for="settings-first-name">First Name</label>
+                  <input id="settings-first-name" name="firstName" type="text" value="Marcus" autocomplete="given-name" />
+                </div>
+                <div>
+                  <label for="settings-last-name">Last Name</label>
+                  <input id="settings-last-name" name="lastName" type="text" value="Chen" autocomplete="family-name" />
                 </div>
                 <div>
                   <label for="settings-email">Email Address</label>
@@ -1573,14 +1542,9 @@
       const authSignUpEmailConsent = document.getElementById("auth-signup-email-consent");
       const authSignUpKeep = document.getElementById("auth-signup-keep");
       const headerOrderCountEl = document.getElementById("header-order-count");
-      const authMessageEl = document.getElementById("shopify-auth-message");
-      const authFirstName = document.getElementById("shopify-auth-first-name");
-      const authLastName = document.getElementById("shopify-auth-last-name");
-      const authEmail = document.getElementById("shopify-auth-email");
-      const authPassword = document.getElementById("shopify-auth-password");
-      const loginBtn = document.getElementById("shopify-login-btn");
-      const registerBtn = document.getElementById("shopify-register-btn");
-      const logoutBtn = document.getElementById("shopify-logout-btn");
+      const settingsProfileForm = document.getElementById("settings-profile-form");
+      const settingsFirstName = document.getElementById("settings-first-name");
+      const settingsLastName = document.getElementById("settings-last-name");
 
       const authStorageKey = "flexcase.auth.user";
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -1712,20 +1676,18 @@
       }
 
       function setAuthenticatedUI(user) {
+        const firstName = String(user?.firstName || "").trim();
         const fullName = String(user?.name || "").trim();
         const fallbackName = String(user?.email || "Flexcase Customer").split("@")[0];
-        const displayName = fullName || fallbackName;
+        const displayName = firstName || fullName || fallbackName;
         if (headerNameEl) headerNameEl.textContent = displayName;
         if (headerMetaEl) {
           headerMetaEl.textContent = `${user?.email || "no-email"} · Member`;
         }
-        const settingsFullName = document.getElementById("settings-full-name");
         const settingsEmail = document.getElementById("settings-email");
-        if (settingsFullName) settingsFullName.value = displayName;
+        if (settingsFirstName) settingsFirstName.value = firstName || displayName;
+        if (settingsLastName) settingsLastName.value = String(user?.lastName || "").trim();
         if (settingsEmail) settingsEmail.value = user?.email || "";
-        if (authFirstName) authFirstName.value = user?.name?.split(" ")[0] || "";
-        if (authLastName) authLastName.value = user?.name?.split(" ").slice(1).join(" ") || "";
-        if (authEmail) authEmail.value = user?.email || "";
         authGate.classList.add("auth-hidden");
         accountApp.classList.remove("auth-hidden");
       }
@@ -1736,11 +1698,6 @@
         switchAuthTab("signin");
         if (headerOrderCountEl) headerOrderCountEl.textContent = "0 orders";
         setGateMessage("You are currently signed out.");
-      }
-
-      function setAuthMessage(message, isError = false) {
-        authMessageEl.textContent = message;
-        authMessageEl.classList.toggle("error", isError);
       }
 
       function beginCustomerOauth(mode, keepLoggedIn) {
@@ -1757,6 +1714,8 @@
           if (payload?.authenticated && payload?.customer) {
             const customer = payload.customer;
             const user = {
+              firstName: customer.firstName || "",
+              lastName: customer.lastName || "",
               name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
               email: customer.email || "",
               keepLoggedIn: true,
@@ -1891,6 +1850,8 @@
           }
           const customer = payload.customer || {};
           setAuthenticatedUI({
+            firstName: customer.firstName || "",
+            lastName: customer.lastName || "",
             name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
             email: customer.email || "",
           });
@@ -1912,10 +1873,6 @@
         setLoggedOutUI();
         return true;
       }
-
-      logoutBtn?.addEventListener("click", () => {
-        confirmAndSignOut();
-      });
 
       authTabSignIn?.addEventListener("click", () => switchAuthTab("signin"));
       authTabSignUp?.addEventListener("click", () => switchAuthTab("signup"));
@@ -2013,6 +1970,22 @@
       headerSignout?.addEventListener("click", (event) => {
         event.preventDefault();
         confirmAndSignOut();
+      });
+
+      settingsProfileForm?.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const firstName = settingsFirstName?.value.trim() || "";
+        const lastName = settingsLastName?.value.trim() || "";
+        const email = document.getElementById("settings-email")?.value.trim() || "";
+        const updatedUser = {
+          firstName,
+          lastName,
+          name: `${firstName} ${lastName}`.trim(),
+          email,
+        };
+        setAuthenticatedUI(updatedUser);
+        const existing = getPersistedAuthSession();
+        persistAuthSession(updatedUser, existing?.keepLoggedIn !== false);
       });
 
       const PASSWORD_MASK = "\u2022";
