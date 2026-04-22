@@ -582,6 +582,39 @@ function handleCustomerSession(req, res) {
   json(res, 200, { authenticated: true, customer: current.session.customer });
 }
 
+async function handleCustomerEmailExists(req, res) {
+  try {
+    const reqUrl = new URL(req.url, "http://localhost");
+    const email = String(reqUrl.searchParams.get("email") || "")
+      .trim()
+      .toLowerCase();
+    if (!email) {
+      json(res, 400, { error: "Email is required." });
+      return;
+    }
+
+    const query = `
+      query CustomerByEmail($query: String!) {
+        customers(first: 1, query: $query) {
+          edges {
+            node {
+              id
+              email
+            }
+          }
+        }
+      }
+    `;
+    const data = await adminGraphql(query, { query: `email:${email}` });
+    const customer = data?.customers?.edges?.[0]?.node;
+    json(res, 200, {
+      exists: Boolean(customer?.id),
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
 function handleCustomerLogout(req, res) {
   const current = getCustomerSession(req);
   if (current?.sid) customerSessions.delete(current.sid);
@@ -737,6 +770,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/customer/session") {
     handleCustomerSession(req, res);
+    return;
+  }
+  if (reqUrl.pathname === "/api/customer/check-email") {
+    await handleCustomerEmailExists(req, res);
     return;
   }
   if (reqUrl.pathname === "/api/customer/logout") {

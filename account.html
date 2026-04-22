@@ -862,10 +862,6 @@
                 <label for="auth-signin-email">Email</label>
                 <input id="auth-signin-email" type="email" autocomplete="email" placeholder="Enter email" />
               </div>
-              <div>
-                <label for="auth-signin-password">Password</label>
-                <input id="auth-signin-password" type="password" autocomplete="current-password" placeholder="Enter password" />
-              </div>
             </div>
             <label class="keep-row">
               <input id="auth-signin-keep" type="checkbox" />
@@ -896,10 +892,6 @@
                   </select>
                   <input id="auth-signup-phone" type="text" autocomplete="tel" placeholder="Enter phone number" />
                 </div>
-              </div>
-              <div>
-                <label for="auth-signup-password">Password</label>
-                <input id="auth-signup-password" type="password" autocomplete="new-password" placeholder="Create password" />
               </div>
             </div>
             <label class="keep-row">
@@ -1575,14 +1567,12 @@
       const authSignInForm = document.getElementById("auth-signin-form");
       const authSignUpForm = document.getElementById("auth-signup-form");
       const authSignInEmail = document.getElementById("auth-signin-email");
-      const authSignInPassword = document.getElementById("auth-signin-password");
       const authSignInKeep = document.getElementById("auth-signin-keep");
       const authSignUpFirstName = document.getElementById("auth-signup-first-name");
       const authSignUpLastName = document.getElementById("auth-signup-last-name");
       const authSignUpEmail = document.getElementById("auth-signup-email");
       const authSignUpPhoneCountry = document.getElementById("auth-signup-phone-country");
       const authSignUpPhone = document.getElementById("auth-signup-phone");
-      const authSignUpPassword = document.getElementById("auth-signup-password");
       const authSignUpEmailConsent = document.getElementById("auth-signup-email-consent");
       const authSignUpKeep = document.getElementById("auth-signup-keep");
       const authMessageEl = document.getElementById("shopify-auth-message");
@@ -1597,6 +1587,14 @@
       const authStorageKey = "flexcase.auth.user";
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
       const apiUrl = (pathname) => `${API_BASE}${pathname}`;
+      const localApiUrl = (pathname) => pathname;
+      async function fetchApiWithFallback(pathname, options = {}) {
+        try {
+          return await fetch(apiUrl(pathname), options);
+        } catch (_) {
+          return fetch(localApiUrl(pathname), options);
+        }
+      }
 
       function setCountryOptionDisplay(mode) {
         const options = Array.from(authSignUpPhoneCountry.options);
@@ -1746,7 +1744,7 @@
 
       async function syncServerCustomerSession() {
         try {
-          const response = await fetch(apiUrl("/api/customer/session"), {
+          const response = await fetchApiWithFallback("/api/customer/session", {
             credentials: "include",
           });
           const payload = await response.json();
@@ -1771,7 +1769,7 @@
       function confirmAndSignOut() {
         const shouldSignOut = window.confirm("Are you sure you want to sign out?");
         if (!shouldSignOut) return false;
-        fetch(apiUrl("/api/customer/logout"), {
+        fetchApiWithFallback("/api/customer/logout", {
           method: "POST",
           credentials: "include",
         }).catch(() => {});
@@ -1789,7 +1787,43 @@
 
       authSignInForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
+        const email = authSignInEmail.value.trim().toLowerCase();
         const keepLoggedIn = !!authSignInKeep.checked;
+        if (!email) {
+          setGateMessage("Enter email to continue.", true);
+          return;
+        }
+
+        try {
+          const response = await fetchApiWithFallback(
+            `/api/customer/check-email?email=${encodeURIComponent(email)}`,
+            {
+            credentials: "include",
+            }
+          );
+          const raw = await response.text();
+          let payload = {};
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch (_) {
+            payload = {};
+          }
+          if (!response.ok) {
+            throw new Error(payload.error || "Unable to verify email right now.");
+          }
+          if (!payload.exists) {
+            setGateMessage("This email has not been registered", true);
+            return;
+          }
+        } catch (error) {
+          const message =
+            error?.message === "Failed to fetch"
+              ? "Unable to reach authentication server. Please try again in a moment."
+              : error.message || "Unable to verify email.";
+          setGateMessage(message, true);
+          return;
+        }
+
         beginCustomerOauth("signin", keepLoggedIn);
       });
 
