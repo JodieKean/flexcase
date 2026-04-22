@@ -824,6 +824,27 @@ async function handleCustomerAccountData(req, res) {
                   title
                   quantity
                   variantTitle
+                  discountedTotalSet {
+                    shopMoney {
+                      amount
+                      currencyCode
+                    }
+                  }
+                  originalTotalSet {
+                    shopMoney {
+                      amount
+                      currencyCode
+                    }
+                  }
+                  product {
+                    id
+                    handle
+                    onlineStoreUrl
+                  }
+                  variant {
+                    id
+                    title
+                  }
                 }
               }
             }
@@ -909,7 +930,13 @@ async function handleCustomerAccountData(req, res) {
           o.lineItems?.edges?.map((itemEdge) => itemEdge?.node).filter(Boolean).map((item) => ({
             title: item.title || "",
             quantity: Number(item.quantity || 0),
-            variantTitle: item.variantTitle || "",
+            variantTitle: item.variantTitle || item.variant?.title || "",
+            lineTotal:
+              item.discountedTotalSet?.shopMoney ||
+              item.originalTotalSet?.shopMoney ||
+              null,
+            productHandle: item.product?.handle || "",
+            productUrl: item.product?.onlineStoreUrl || "",
           })) || [],
       })),
     });

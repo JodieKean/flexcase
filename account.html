@@ -374,6 +374,25 @@
         color: #1d1d1f;
       }
 
+      .review-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 0;
+        background: transparent;
+        padding: 0;
+        cursor: pointer;
+        color: #b45309;
+        font-size: 0.92rem;
+        font-weight: 600;
+      }
+
+      .review-link svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+      }
+
       .account-section.hidden {
         display: none;
       }
@@ -1466,6 +1485,16 @@
       });
 
       document.getElementById("section-orders")?.addEventListener("click", (event) => {
+        const reviewBtn = event.target.closest("[data-write-review]");
+        if (reviewBtn) {
+          const url = String(reviewBtn.dataset.reviewUrl || "").trim();
+          if (url) {
+            window.open(url, "_blank", "noopener,noreferrer");
+          } else {
+            window.alert("Reviews are not available for this order yet.");
+          }
+          return;
+        }
         const toggleBtn = event.target.closest("[data-toggle-details]");
         if (!toggleBtn) return;
         const card = toggleBtn.closest("[data-order-card]");
@@ -1518,6 +1547,7 @@
 
       const authStorageKey = "flexcase.auth.user";
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
+      const FRONTEND_BASE = (window.FLEXCASE_SITE_ORIGIN || window.location.origin || "").replace(/\/$/, "");
       const apiUrl = (pathname) => `${API_BASE}${pathname}`;
       const localApiUrl = (pathname) => pathname;
       async function fetchApiWithFallback(pathname, options = {}) {
@@ -1745,17 +1775,36 @@
             : "-";
           const status = mapFulfillmentStatus(order.fulfillmentStatus);
           const orderNumber = String(order.name || "").trim() || "Order";
+          const resolveItemReviewUrl = (item) => {
+            if (!item) return "";
+            if (item.productUrl) return String(item.productUrl);
+            if (item.productHandle && FRONTEND_BASE) {
+              return `${FRONTEND_BASE}/Product.html?handle=${encodeURIComponent(item.productHandle)}`;
+            }
+            return "";
+          };
+          const reviewUrl =
+            (order.items || []).map(resolveItemReviewUrl).find((url) => String(url || "").trim()) || "";
+          const safeReviewAttr = reviewUrl
+            ? ` data-review-url="${String(reviewUrl).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"`
+            : "";
           const itemsMarkup = (order.items || [])
             .map(
-              (item) => `
+              (item) => {
+                const lineTotal = item.lineTotal
+                  ? money(item.lineTotal.amount, item.lineTotal.currencyCode)
+                  : "-";
+                return `
                 <div class="item">
                   <div class="thumb"></div>
                   <div>
                     <div class="item-name">${item.title || "Item"}</div>
                     <div class="item-meta">${item.variantTitle || "Default"} · Qty ${item.quantity || 1}</div>
                   </div>
+                  <div class="item-price">${lineTotal}</div>
                 </div>
-              `
+              `;
+              }
             )
             .join("");
 
@@ -1775,7 +1824,15 @@
             </div>
             <div class="order-details ${idx === 0 ? "" : "hidden"}" data-order-details>
               ${itemsMarkup || '<div class="item"><div><div class="item-name">No line items</div></div></div>'}
-              <div class="order-footer"><strong>Total: ${total}</strong></div>
+              <div class="order-footer">
+                <button type="button" class="review-link" data-write-review${safeReviewAttr}>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.75.75 0 0 1 1.04 0l2.431 2.25c.181.167.418.26.664.26h3.285a.75.75 0 0 1 .548 1.26l-2.5 2.5a.75.75 0 0 0-.22.53v3.285a.75.75 0 0 1-1.26.548l-2.5-2.5a.75.75 0 0 0-.53-.22H9.75a.75.75 0 0 1-.548-1.26l2.5-2.5a.75.75 0 0 0 .22-.53V6.509a.75.75 0 0 1 .548-.76Z" />
+                  </svg>
+                  Write a Review
+                </button>
+                <strong>Total: ${total}</strong>
+              </div>
             </div>
           `;
           section.appendChild(card);
