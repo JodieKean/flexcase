@@ -345,8 +345,15 @@
       }
 
       .item-price {
-        font-size: 0.9rem;
-        font-weight: 600;
+        font-size: 0.8rem;
+        font-weight: 500;
+        color: #6e6e73;
+      }
+
+      .order-total-tax {
+        color: #6e6e73;
+        font-size: 0.75rem;
+        font-weight: 400;
       }
 
       .order-details.hidden {
@@ -1864,9 +1871,9 @@
         orders.forEach((order, idx) => {
           const total = order.total ? money(order.total.amount, order.total.currencyCode) : "-";
           const taxAmount = order.tax ? Number(order.tax.amount || 0) : 0;
-          const taxLabel =
+          const taxLabelHtml =
             order.tax && taxAmount > 0
-              ? ` (includes ${money(order.tax.amount, order.tax.currencyCode || order.total?.currencyCode)} tax)`
+              ? ` <span class="order-total-tax">(includes ${money(order.tax.amount, order.tax.currencyCode || order.total?.currencyCode)} tax)</span>`
               : "";
           const date = order.processedAt
             ? new Date(order.processedAt).toLocaleDateString("en-US")
@@ -1929,7 +1936,7 @@
                   </svg>
                   Write a Review
                 </button>
-                <strong>Total: ${total}${taxLabel}</strong>
+                <strong>Total: ${total}</strong>${taxLabelHtml}
               </div>
             </div>
           `;
