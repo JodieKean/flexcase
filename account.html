@@ -944,7 +944,7 @@
           <div class="meta">marcus.chen@example.com · Member since March 2024</div>
         </div>
         <div class="header-actions">
-          <a class="pill-btn" href="#"><span>🧾</span><span id="header-order-count">0 orders</span></a>
+          <a class="pill-btn" href="#" id="header-orders-pill" aria-label="View orders"><span>🧾</span><span id="header-order-count">0 orders</span></a>
           <a class="pill-btn primary" href="#" id="header-signout"><span>↩</span><span>Sign Out</span></a>
         </div>
       </header>
@@ -1535,6 +1535,7 @@
       const authSignUpEmailConsent = document.getElementById("auth-signup-email-consent");
       const authSignUpKeep = document.getElementById("auth-signup-keep");
       const headerOrderCountEl = document.getElementById("header-order-count");
+      const headerOrdersPill = document.getElementById("header-orders-pill");
       const settingsProfileForm = document.getElementById("settings-profile-form");
       const settingsFirstName = document.getElementById("settings-first-name");
       const settingsLastName = document.getElementById("settings-last-name");
@@ -1544,6 +1545,16 @@
       const settingsLastNameError = document.getElementById("settings-last-name-error");
       const settingsEmailError = document.getElementById("settings-email-error");
       const settingsPhoneError = document.getElementById("settings-phone-error");
+
+      headerOrdersPill?.addEventListener("click", (event) => {
+        event.preventDefault();
+        if (!isSignedInForAccountApp()) return;
+        setActiveTab("orders");
+        if (isSignedInForAccountApp()) {
+          loadCustomerAccountData().catch(() => {});
+        }
+        sections.orders?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
 
       const authStorageKey = "flexcase.auth.user";
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
