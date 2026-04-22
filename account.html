@@ -383,11 +383,10 @@
       }
 
       .order-footer-totals {
-        display: inline-flex;
-        align-items: baseline;
-        justify-content: flex-end;
-        gap: 0.45rem;
-        flex-wrap: wrap;
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 2px;
         text-align: right;
       }
 
@@ -2041,7 +2040,7 @@
                   </svg>
                   Write a Review
                 </button>
-                <div class="order-footer-totals">${taxLabelHtml}<strong>Total: ${total}</strong></div>
+                <div class="order-footer-totals"><strong>Total: ${total}</strong>${taxLabelHtml}</div>
               </div>
             </div>
           `;
