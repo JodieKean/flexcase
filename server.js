@@ -62,6 +62,18 @@ const SESSION_SIGNING_SECRET =
   CUSTOMER_ACCOUNT_CLIENT_SECRET ||
   CLIENT_SECRET_FROM_ENV ||
   "flexcase-dev-session-secret";
+const DEPLOY_COMMIT_SHA =
+  process.env.RAILWAY_GIT_COMMIT_SHA ||
+  process.env.VERCEL_GIT_COMMIT_SHA ||
+  process.env.GITHUB_SHA ||
+  process.env.COMMIT_SHA ||
+  "";
+const DEPLOY_BRANCH =
+  process.env.RAILWAY_GIT_BRANCH ||
+  process.env.VERCEL_GIT_COMMIT_REF ||
+  process.env.GITHUB_REF_NAME ||
+  process.env.BRANCH ||
+  "";
 
 if (!SHOP_FROM_ENV || !CLIENT_ID_FROM_ENV || !CLIENT_SECRET_FROM_ENV) {
   console.error(
@@ -1142,6 +1154,17 @@ const server = http.createServer(async (req, res) => {
           CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT &&
           CUSTOMER_ACCOUNT_TOKEN_ENDPOINT
       ),
+    });
+    return;
+  }
+  if (reqUrl.pathname === "/api/version") {
+    json(res, 200, {
+      ok: true,
+      service: "flexcase-api",
+      commit: DEPLOY_COMMIT_SHA || "unknown",
+      shortCommit: DEPLOY_COMMIT_SHA ? DEPLOY_COMMIT_SHA.slice(0, 7) : "unknown",
+      branch: DEPLOY_BRANCH || "unknown",
+      now: new Date().toISOString(),
     });
     return;
   }
