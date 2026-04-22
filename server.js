@@ -806,19 +806,23 @@ async function handleCustomerAccountData(req, res) {
     `;
 
     let customerNode = null;
+    let lookupEmail = email;
     if (customerId && customerId.startsWith("gid://shopify/Customer/")) {
       const byIdQuery = `
         query CustomerAccountDataById($id: ID!) {
           customer(id: $id) {
-            ${customerFields}
+            id
+            email
           }
         }
       `;
       const byIdData = await adminGraphql(byIdQuery, { id: customerId });
-      customerNode = byIdData?.customer || null;
+      lookupEmail = String(byIdData?.customer?.email || lookupEmail || "")
+        .trim()
+        .toLowerCase();
     }
 
-    if (!customerNode && email) {
+    if (!customerNode && lookupEmail) {
       const byEmailQuery = `
         query CustomerAccountDataByEmail($query: String!) {
           customers(first: 1, query: $query) {
@@ -830,7 +834,7 @@ async function handleCustomerAccountData(req, res) {
           }
         }
       `;
-      const byEmailData = await adminGraphql(byEmailQuery, { query: `email:${email}` });
+      const byEmailData = await adminGraphql(byEmailQuery, { query: `email:${lookupEmail}` });
       customerNode = byEmailData?.customers?.edges?.[0]?.node;
     }
 
