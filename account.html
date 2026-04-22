@@ -25,6 +25,130 @@
         margin: 0 auto;
       }
 
+      .auth-gate {
+        max-width: 520px;
+        margin: 0 auto 24px;
+      }
+
+      .auth-card {
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 18px;
+        padding: 20px;
+      }
+
+      .auth-card h2 {
+        margin: 0 0 6px;
+        font-size: 1.35rem;
+        letter-spacing: -0.01em;
+      }
+
+      .auth-card p {
+        margin: 0 0 14px;
+        color: #6e6e73;
+        font-size: 0.92rem;
+      }
+
+      .auth-tabs {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 12px;
+      }
+
+      .auth-tab {
+        border: 1px solid #d2d2d7;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #1d1d1f;
+        padding: 8px 12px;
+        font-size: 0.86rem;
+        cursor: pointer;
+      }
+
+      .auth-tab.active {
+        background: #1d1d1f;
+        color: #f5f5f7;
+        border-color: #1d1d1f;
+      }
+
+      .auth-form .row {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+      }
+
+      .phone-row {
+        display: grid;
+        grid-template-columns: 140px 1fr;
+        gap: 8px;
+      }
+
+      .auth-form label {
+        display: block;
+        font-size: 0.86rem;
+        color: #6e6e73;
+        margin: 8px 0 4px;
+      }
+
+      .auth-form input[type="text"],
+      .auth-form input[type="email"],
+      .auth-form input[type="password"],
+      .auth-form select {
+        width: 100%;
+        box-sizing: border-box;
+        border-radius: 10px;
+        border: 1px solid #d2d2d7;
+        padding: 10px 11px;
+        font-size: 0.95rem;
+        background: #ffffff;
+      }
+
+      .auth-form input:focus {
+        outline: none;
+        border-color: #0071e3;
+        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+      }
+
+      .auth-form select:hover {
+        border-color: #d2d2d7;
+        box-shadow: none;
+        background: #ffffff;
+      }
+
+      .keep-row {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: #6e6e73;
+        font-size: 0.86rem;
+      }
+
+      .auth-submit {
+        margin-top: 12px;
+        border: 1px solid #1d1d1f;
+        border-radius: 999px;
+        background: #1d1d1f;
+        color: #f5f5f7;
+        padding: 10px 14px;
+        font-size: 0.92rem;
+        cursor: pointer;
+      }
+
+      .auth-message {
+        margin-top: 10px;
+        font-size: 0.86rem;
+        color: #6e6e73;
+      }
+
+      .auth-message.error {
+        color: #b42318;
+      }
+
+      .auth-hidden {
+        display: none !important;
+      }
+
       .account-header {
         display: flex;
         justify-content: space-between;
@@ -514,6 +638,16 @@
         gap: 28px;
       }
 
+      .shopify-auth-message {
+        margin-top: 10px;
+        font-size: 0.86rem;
+        color: #6e6e73;
+      }
+
+      .shopify-auth-message.error {
+        color: #b42318;
+      }
+
       .settings-panel-title {
         display: flex;
         align-items: center;
@@ -712,6 +846,78 @@
     </nav>
 
     <main>
+      <section id="auth-gate" class="auth-gate auth-hidden" aria-label="Sign in or sign up">
+        <div class="auth-card">
+          <h2>Welcome to Flex Case</h2>
+          <p>Sign in or create an account to view orders, addresses, and settings.</p>
+
+          <div class="auth-tabs" role="tablist" aria-label="Auth mode">
+            <button type="button" class="auth-tab active" id="auth-tab-signin">Sign In</button>
+            <button type="button" class="auth-tab" id="auth-tab-signup">Sign Up</button>
+          </div>
+
+          <form id="auth-signin-form" class="auth-form">
+            <div class="row">
+              <div>
+                <label for="auth-signin-email">Email</label>
+                <input id="auth-signin-email" type="email" autocomplete="email" placeholder="Enter email" />
+              </div>
+              <div>
+                <label for="auth-signin-password">Password</label>
+                <input id="auth-signin-password" type="password" autocomplete="current-password" placeholder="Enter password" />
+              </div>
+            </div>
+            <label class="keep-row">
+              <input id="auth-signin-keep" type="checkbox" />
+              <span>Keep me logged in</span>
+            </label>
+            <button type="submit" class="auth-submit">Sign In</button>
+          </form>
+
+          <form id="auth-signup-form" class="auth-form auth-hidden">
+            <div class="row">
+              <div>
+                <label for="auth-signup-first-name">First name</label>
+                <input id="auth-signup-first-name" type="text" autocomplete="given-name" placeholder="Enter first name" />
+              </div>
+              <div>
+                <label for="auth-signup-last-name">Last name</label>
+                <input id="auth-signup-last-name" type="text" autocomplete="family-name" placeholder="Enter last name" />
+              </div>
+              <div>
+                <label for="auth-signup-email">Email</label>
+                <input id="auth-signup-email" type="email" autocomplete="email" placeholder="Enter email" />
+              </div>
+              <div>
+                <label for="auth-signup-phone">Phone number</label>
+                <div class="phone-row">
+                  <select id="auth-signup-phone-country" aria-label="Phone country code">
+                    <option value="+60" selected data-full-label="Malaysia (+60)" data-short-label="MY (+60)">MY (+60)</option>
+                  </select>
+                  <input id="auth-signup-phone" type="text" autocomplete="tel" placeholder="Enter phone number" />
+                </div>
+              </div>
+              <div>
+                <label for="auth-signup-password">Password</label>
+                <input id="auth-signup-password" type="password" autocomplete="new-password" placeholder="Create password" />
+              </div>
+            </div>
+            <label class="keep-row">
+              <input id="auth-signup-email-consent" type="checkbox" />
+              <span>Customer agreed to receive marketing emails</span>
+            </label>
+            <label class="keep-row">
+              <input id="auth-signup-keep" type="checkbox" />
+              <span>Keep me logged in</span>
+            </label>
+            <button type="submit" class="auth-submit">Create Account</button>
+          </form>
+
+          <div id="auth-gate-message" class="auth-message">You are currently signed out.</div>
+        </div>
+      </section>
+
+      <div id="account-app">
       <header class="account-header">
         <div>
           <div class="welcome">Welcome back,</div>
@@ -720,7 +926,7 @@
         </div>
         <div class="header-actions">
           <a class="pill-btn" href="#"><span>🧾</span><span>12 orders</span></a>
-          <a class="pill-btn primary" href="#"><span>↩</span><span>Sign Out</span></a>
+          <a class="pill-btn primary" href="#" id="header-signout"><span>↩</span><span>Sign Out</span></a>
         </div>
       </header>
 
@@ -905,6 +1111,41 @@
         </div>
 
         <div class="settings-stack">
+          <section class="settings-panel" aria-labelledby="settings-shopify-auth-heading">
+            <h3 class="settings-panel-title" id="settings-shopify-auth-heading">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z" />
+              </svg>
+              Shopify Account
+            </h3>
+            <div class="new-address-card">
+              <div class="form-grid">
+                <div>
+                  <label for="shopify-auth-first-name">First Name</label>
+                  <input id="shopify-auth-first-name" type="text" placeholder="Marcus" autocomplete="given-name" />
+                </div>
+                <div>
+                  <label for="shopify-auth-last-name">Last Name</label>
+                  <input id="shopify-auth-last-name" type="text" placeholder="Chen" autocomplete="family-name" />
+                </div>
+                <div class="span-2">
+                  <label for="shopify-auth-email">Email</label>
+                  <input id="shopify-auth-email" type="email" placeholder="you@example.com" autocomplete="email" />
+                </div>
+                <div class="span-2">
+                  <label for="shopify-auth-password">Password</label>
+                  <input id="shopify-auth-password" type="password" placeholder="At least 5 characters" autocomplete="current-password" />
+                </div>
+              </div>
+              <div class="new-address-actions">
+                <button type="button" class="save-address-btn" id="shopify-login-btn">Sign In</button>
+                <button type="button" class="cancel-address-btn" id="shopify-register-btn">Create Account</button>
+                <button type="button" class="cancel-address-btn" id="shopify-logout-btn">Sign Out</button>
+              </div>
+              <div class="shopify-auth-message" id="shopify-auth-message">Not signed in.</div>
+            </div>
+          </section>
+
           <section class="settings-panel" aria-labelledby="settings-profile-heading">
             <h3 class="settings-panel-title" id="settings-profile-heading">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
@@ -1050,6 +1291,7 @@
           </section>
         </div>
       </section>
+      </div>
     </main>
 
     <div id="delete-address-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="delete-address-title" aria-hidden="true">
@@ -1322,6 +1564,246 @@
         });
       });
 
+      const headerNameEl = document.querySelector(".name");
+      const headerMetaEl = document.querySelector(".meta");
+      const authGate = document.getElementById("auth-gate");
+      const accountApp = document.getElementById("account-app");
+      const headerSignout = document.getElementById("header-signout");
+      const authGateMessage = document.getElementById("auth-gate-message");
+      const authTabSignIn = document.getElementById("auth-tab-signin");
+      const authTabSignUp = document.getElementById("auth-tab-signup");
+      const authSignInForm = document.getElementById("auth-signin-form");
+      const authSignUpForm = document.getElementById("auth-signup-form");
+      const authSignInEmail = document.getElementById("auth-signin-email");
+      const authSignInPassword = document.getElementById("auth-signin-password");
+      const authSignInKeep = document.getElementById("auth-signin-keep");
+      const authSignUpFirstName = document.getElementById("auth-signup-first-name");
+      const authSignUpLastName = document.getElementById("auth-signup-last-name");
+      const authSignUpEmail = document.getElementById("auth-signup-email");
+      const authSignUpPhoneCountry = document.getElementById("auth-signup-phone-country");
+      const authSignUpPhone = document.getElementById("auth-signup-phone");
+      const authSignUpPassword = document.getElementById("auth-signup-password");
+      const authSignUpEmailConsent = document.getElementById("auth-signup-email-consent");
+      const authSignUpKeep = document.getElementById("auth-signup-keep");
+      const authMessageEl = document.getElementById("shopify-auth-message");
+      const authFirstName = document.getElementById("shopify-auth-first-name");
+      const authLastName = document.getElementById("shopify-auth-last-name");
+      const authEmail = document.getElementById("shopify-auth-email");
+      const authPassword = document.getElementById("shopify-auth-password");
+      const loginBtn = document.getElementById("shopify-login-btn");
+      const registerBtn = document.getElementById("shopify-register-btn");
+      const logoutBtn = document.getElementById("shopify-logout-btn");
+
+      const authStorageKey = "flexcase.auth.user";
+      const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
+      const apiUrl = (pathname) => `${API_BASE}${pathname}`;
+
+      function setCountryOptionDisplay(mode) {
+        const options = Array.from(authSignUpPhoneCountry.options);
+        options.forEach((opt, idx) => {
+          const fullLabel = opt.dataset.fullLabel || opt.textContent || "";
+          const shortLabel = opt.dataset.shortLabel || fullLabel;
+          const isSelected = idx === authSignUpPhoneCountry.selectedIndex;
+          if (mode === "full") {
+            opt.textContent = fullLabel;
+            return;
+          }
+          opt.textContent = isSelected ? shortLabel : fullLabel;
+        });
+      }
+
+      async function populatePhoneCountryOptions() {
+        const fallback = [
+          { name: "Australia", iso2: "AU", dial: "+61" },
+          { name: "China", iso2: "CN", dial: "+86" },
+          { name: "Japan", iso2: "JP", dial: "+81" },
+          { name: "Malaysia", iso2: "MY", dial: "+60" },
+          { name: "Singapore", iso2: "SG", dial: "+65" },
+          { name: "South Korea", iso2: "KR", dial: "+82" },
+          { name: "United Kingdom", iso2: "GB", dial: "+44" },
+          { name: "United States", iso2: "US", dial: "+1" },
+        ];
+
+        try {
+          const response = await fetch("https://restcountries.com/v3.1/all?fields=name,idd,cca2");
+          if (!response.ok) throw new Error("Failed to load country list.");
+          const data = await response.json();
+          const mapped = data
+            .map((country) => {
+              const name = country?.name?.common;
+              const iso2 = String(country?.cca2 || "").toUpperCase();
+              const root = country?.idd?.root || "";
+              const suffix = Array.isArray(country?.idd?.suffixes)
+                ? country.idd.suffixes[0] || ""
+                : "";
+              const dial = `${root}${suffix}`;
+              if (!name || !iso2 || !dial || !dial.startsWith("+")) return null;
+              return { name, iso2, dial };
+            })
+            .filter(Boolean)
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+          const deduped = mapped.filter(
+            (item, idx, arr) =>
+              idx === arr.findIndex((x) => x.iso2 === item.iso2 && x.dial === item.dial)
+          );
+
+          authSignUpPhoneCountry.innerHTML = deduped
+            .map((country) => {
+              const selected = country.iso2 === "MY" ? " selected" : "";
+              const fullLabel = `${country.name} (${country.dial})`;
+              const shortLabel = `${country.iso2} (${country.dial})`;
+              return `<option value="${country.dial}" data-full-label="${fullLabel}" data-short-label="${shortLabel}"${selected}>${fullLabel}</option>`;
+            })
+            .join("");
+        } catch (_) {
+          authSignUpPhoneCountry.innerHTML = fallback
+            .map((country) => {
+              const selected = country.iso2 === "MY" ? " selected" : "";
+              const fullLabel = `${country.name} (${country.dial})`;
+              const shortLabel = `${country.iso2} (${country.dial})`;
+              return `<option value="${country.dial}" data-full-label="${fullLabel}" data-short-label="${shortLabel}"${selected}>${fullLabel}</option>`;
+            })
+            .join("");
+        }
+
+        setCountryOptionDisplay("short");
+        authSignUpPhoneCountry.addEventListener("focus", () => setCountryOptionDisplay("full"));
+        authSignUpPhoneCountry.addEventListener("change", () => {
+          setCountryOptionDisplay("full");
+          requestAnimationFrame(() => setCountryOptionDisplay("short"));
+        });
+        authSignUpPhoneCountry.addEventListener("blur", () => setCountryOptionDisplay("short"));
+      }
+
+      function setGateMessage(message, isError = false) {
+        authGateMessage.textContent = message;
+        authGateMessage.classList.toggle("error", isError);
+      }
+
+      function switchAuthTab(mode) {
+        const signIn = mode === "signin";
+        authTabSignIn.classList.toggle("active", signIn);
+        authTabSignUp.classList.toggle("active", !signIn);
+        authSignInForm.classList.toggle("auth-hidden", !signIn);
+        authSignUpForm.classList.toggle("auth-hidden", signIn);
+      }
+
+      function persistAuthSession(user, keepLoggedIn) {
+        const payload = JSON.stringify(user);
+        if (keepLoggedIn) {
+          localStorage.setItem(authStorageKey, payload);
+          sessionStorage.removeItem(authStorageKey);
+        } else {
+          sessionStorage.setItem(authStorageKey, payload);
+          localStorage.removeItem(authStorageKey);
+        }
+      }
+
+      function getPersistedAuthSession() {
+        const raw = localStorage.getItem(authStorageKey) || sessionStorage.getItem(authStorageKey);
+        if (!raw) return null;
+        try {
+          return JSON.parse(raw);
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function clearAuthSession() {
+        localStorage.removeItem(authStorageKey);
+        sessionStorage.removeItem(authStorageKey);
+      }
+
+      function setAuthenticatedUI(user) {
+        const fullName = String(user?.name || "").trim();
+        const fallbackName = String(user?.email || "Flexcase Customer").split("@")[0];
+        const displayName = fullName || fallbackName;
+        if (headerNameEl) headerNameEl.textContent = displayName;
+        if (headerMetaEl) {
+          headerMetaEl.textContent = `${user?.email || "no-email"} · Member`;
+        }
+        authGate.classList.add("auth-hidden");
+        accountApp.classList.remove("auth-hidden");
+      }
+
+      function setLoggedOutUI() {
+        accountApp.classList.add("auth-hidden");
+        authGate.classList.remove("auth-hidden");
+        switchAuthTab("signin");
+        setGateMessage("You are currently signed out.");
+      }
+
+      function setAuthMessage(message, isError = false) {
+        authMessageEl.textContent = message;
+        authMessageEl.classList.toggle("error", isError);
+      }
+
+      function beginCustomerOauth(mode, keepLoggedIn) {
+        const target = apiUrl(`/api/customer/oauth/start?mode=${mode}&keep=${keepLoggedIn ? "1" : "0"}`);
+        window.location.assign(target);
+      }
+
+      async function syncServerCustomerSession() {
+        try {
+          const response = await fetch(apiUrl("/api/customer/session"), {
+            credentials: "include",
+          });
+          const payload = await response.json();
+          if (payload?.authenticated && payload?.customer) {
+            const customer = payload.customer;
+            const user = {
+              name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
+              email: customer.email || "",
+              keepLoggedIn: true,
+            };
+            persistAuthSession(user, true);
+            setAuthenticatedUI(user);
+            return true;
+          }
+          clearAuthSession();
+          return false;
+        } catch (_) {
+          return false;
+        }
+      }
+
+      function confirmAndSignOut() {
+        const shouldSignOut = window.confirm("Are you sure you want to sign out?");
+        if (!shouldSignOut) return false;
+        fetch(apiUrl("/api/customer/logout"), {
+          method: "POST",
+          credentials: "include",
+        }).catch(() => {});
+        clearAuthSession();
+        setLoggedOutUI();
+        return true;
+      }
+
+      logoutBtn?.addEventListener("click", () => {
+        confirmAndSignOut();
+      });
+
+      authTabSignIn?.addEventListener("click", () => switchAuthTab("signin"));
+      authTabSignUp?.addEventListener("click", () => switchAuthTab("signup"));
+
+      authSignInForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const keepLoggedIn = !!authSignInKeep.checked;
+        beginCustomerOauth("signin", keepLoggedIn);
+      });
+
+      authSignUpForm?.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const keepLoggedIn = !!authSignUpKeep.checked;
+        beginCustomerOauth("signup", keepLoggedIn);
+      });
+
+      headerSignout?.addEventListener("click", (event) => {
+        event.preventDefault();
+        confirmAndSignOut();
+      });
+
       const PASSWORD_MASK = "\u2022";
 
       function renderPasswordPeekField(input, real) {
@@ -1404,6 +1886,29 @@
       }
 
       document.querySelectorAll("#settings-password-form [data-password-peek]").forEach(wirePasswordLastCharVisible);
+
+      const authUrl = new URL(window.location.href);
+      const authStatus = authUrl.searchParams.get("auth");
+      const authMessage = authUrl.searchParams.get("message");
+      if (authStatus === "error" && authMessage) {
+        setGateMessage(decodeURIComponent(authMessage), true);
+      } else if (authStatus === "success") {
+        setGateMessage("Signed in with Shopify customer account.");
+      }
+      if (authStatus) {
+        authUrl.searchParams.delete("auth");
+        authUrl.searchParams.delete("message");
+        window.history.replaceState({}, "", authUrl.pathname + authUrl.search + authUrl.hash);
+      }
+
+      const existingSession = getPersistedAuthSession();
+      if (existingSession) setAuthenticatedUI(existingSession);
+      else setLoggedOutUI();
+      syncServerCustomerSession().then((ok) => {
+        if (!ok && !getPersistedAuthSession()) setLoggedOutUI();
+      });
+
+      populatePhoneCountryOptions();
 
       setActiveTab("orders");
     </script>

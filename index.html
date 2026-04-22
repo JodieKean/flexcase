@@ -147,6 +147,181 @@
         height: auto;
       }
 
+      .catalog-section {
+        margin-top: 54px;
+      }
+
+      .catalog-toolbar {
+        position: sticky;
+        top: 68px;
+        z-index: 35;
+        background: rgba(245, 245, 247, 0.95);
+        backdrop-filter: saturate(180%) blur(8px);
+        -webkit-backdrop-filter: saturate(180%) blur(8px);
+        border: 1px solid #e6e6eb;
+        border-radius: 16px;
+        padding: 12px;
+      }
+
+      .catalog-categories {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+
+      .catalog-chip {
+        border: 1px solid #e6e6eb;
+        background: #ffffff;
+        color: #6e6e73;
+        border-radius: 999px;
+        padding: 7px 12px;
+        font-size: 0.82rem;
+      }
+
+      .catalog-chip.active {
+        background: #1d1d1f;
+        color: #f5f5f7;
+        border-color: #1d1d1f;
+      }
+
+      .catalog-controls {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: minmax(240px, 1fr) auto;
+        gap: 10px;
+        align-items: center;
+      }
+
+      .catalog-search {
+        border: 1px solid #e6e6eb;
+        border-radius: 999px;
+        background: #ffffff;
+        padding: 10px 14px;
+        font-size: 0.9rem;
+        color: #6e6e73;
+      }
+
+      .catalog-controls-right {
+        display: flex;
+        gap: 8px;
+      }
+
+      .catalog-btn {
+        border: 1px solid #e6e6eb;
+        border-radius: 999px;
+        background: #ffffff;
+        padding: 10px 12px;
+        font-size: 0.86rem;
+        color: #424245;
+      }
+
+      .catalog-meta {
+        margin-top: 12px;
+        color: #6e6e73;
+        font-size: 0.86rem;
+      }
+
+      .catalog-grid {
+        margin-top: 12px;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+
+      .catalog-card {
+        border: 1px solid #e6e6eb;
+        border-radius: 16px;
+        background: #ffffff;
+        overflow: hidden;
+      }
+
+      .catalog-card.catalog-link {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+      }
+
+      .catalog-image {
+        position: relative;
+        aspect-ratio: 4 / 5;
+        background: linear-gradient(145deg, #e6e7eb, #d7d8de);
+      }
+
+      .catalog-badge {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        border-radius: 999px;
+        background: #d9be83;
+        color: #4d3b19;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 3px 8px;
+      }
+
+      .catalog-card-body {
+        padding: 10px 12px 12px;
+      }
+
+      .catalog-kind {
+        color: #8e8e93;
+        font-size: 0.75rem;
+      }
+
+      .catalog-title {
+        margin: 2px 0 4px;
+        font-size: 0.98rem;
+        font-weight: 600;
+      }
+
+      .catalog-rating {
+        color: #8e8e93;
+        font-size: 0.8rem;
+      }
+
+      .catalog-swatches {
+        margin-top: 8px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+
+      .catalog-swatch {
+        background: #f0f0f3;
+        color: #7a7a80;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        padding: 4px 8px;
+      }
+
+      .catalog-footer {
+        margin-top: 8px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .catalog-price {
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+
+      .catalog-old {
+        margin-left: 6px;
+        color: #9a9aa0;
+        text-decoration: line-through;
+        font-size: 0.76rem;
+      }
+
+      .catalog-view {
+        border: none;
+        border-radius: 999px;
+        background: #1d1d1f;
+        color: #f5f5f7;
+        font-size: 0.74rem;
+        padding: 7px 12px;
+      }
+
       @media (max-width: 980px) {
         .windows {
           grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -156,10 +331,26 @@
           grid-template-columns: 1fr;
           gap: 18px;
         }
+
+        .catalog-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
       }
 
       @media (max-width: 680px) {
         .windows {
+          grid-template-columns: 1fr;
+        }
+
+        .catalog-controls {
+          grid-template-columns: 1fr;
+        }
+
+        .catalog-controls-right {
+          justify-content: flex-start;
+        }
+
+        .catalog-grid {
           grid-template-columns: 1fr;
         }
       }
@@ -263,7 +454,242 @@
         </div>
       </section>
 
+      <section class="catalog-section" aria-label="Product catalog">
+        <div class="catalog-toolbar">
+          <div class="catalog-categories">
+            <button type="button" class="catalog-chip active">All</button>
+            <button type="button" class="catalog-chip">Display Cases</button>
+            <button type="button" class="catalog-chip">Graded Cases</button>
+            <button type="button" class="catalog-chip">Card Cases</button>
+            <button type="button" class="catalog-chip">Box Protectors</button>
+          </div>
+          <div class="catalog-controls">
+            <input
+              class="catalog-search"
+              type="text"
+              placeholder="Search cases, display stands..."
+              aria-label="Search catalog"
+            />
+            <div class="catalog-controls-right">
+              <button type="button" class="catalog-btn">Filters</button>
+              <button type="button" class="catalog-btn">Featured</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="catalog-meta">12 products found</div>
+        <div class="catalog-grid" id="catalogGrid">
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Ultra Premium Display Case">
+            <div class="catalog-image"><span class="catalog-badge">Best Seller</span></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Display Cases</div>
+              <div class="catalog-title">Ultra Premium Display Case</div>
+              <div class="catalog-rating">★★★★★ (312)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span><span class="catalog-swatch">Black</span><span class="catalog-swatch">White</span></div>
+              <div class="catalog-footer"><div><span class="catalog-price">$89.99</span><span class="catalog-old">$109.99</span></div><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Graded Card Slab Case">
+            <div class="catalog-image"><span class="catalog-badge">New</span></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Graded Cases</div>
+              <div class="catalog-title">Graded Card Slab Case</div>
+              <div class="catalog-rating">★★★★★ (198)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span><span class="catalog-swatch">Black</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$34.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Elite Trainer Box Protector">
+            <div class="catalog-image"></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Box Protectors</div>
+              <div class="catalog-title">Elite Trainer Box Protector</div>
+              <div class="catalog-rating">★★★★★ (445)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$24.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Magnetic One-Touch Case">
+            <div class="catalog-image"><span class="catalog-badge">Top Rated</span></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Card Cases</div>
+              <div class="catalog-title">Magnetic One-Touch Case</div>
+              <div class="catalog-rating">★★★★★ (876)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span></div>
+              <div class="catalog-footer"><div><span class="catalog-price">$12.99</span><span class="catalog-old">$15.99</span></div><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Booster Box Display Stand">
+            <div class="catalog-image"></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Display Cases</div>
+              <div class="catalog-title">Booster Box Display Stand</div>
+              <div class="catalog-rating">★★★★★ (87)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span><span class="catalog-swatch">Black</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$149.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Vintage Card Vault Case">
+            <div class="catalog-image"><span class="catalog-badge">Limited</span></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Card Cases</div>
+              <div class="catalog-title">Vintage Card Vault Case</div>
+              <div class="catalog-rating">★★★★★ (134)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Black</span><span class="catalog-swatch">Brown</span><span class="catalog-swatch">Navy</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$59.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Sealed Pack Protector">
+            <div class="catalog-image"><span class="catalog-badge">Out of Stock</span></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Box Protectors</div>
+              <div class="catalog-title">Sealed Pack Protector</div>
+              <div class="catalog-rating">★★★★★ (223)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$8.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Wall Mount Display Frame">
+            <div class="catalog-image"></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Display Cases</div>
+              <div class="catalog-title">Wall Mount Display Frame</div>
+              <div class="catalog-rating">★★★★★ (156)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Black</span><span class="catalog-swatch">White</span><span class="catalog-swatch">Gold</span></div>
+              <div class="catalog-footer"><div><span class="catalog-price">$44.99</span><span class="catalog-old">$54.99</span></div><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View PSA Graded Multi-Slab Stand">
+            <div class="catalog-image"><span class="catalog-badge">New</span></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Graded Cases</div>
+              <div class="catalog-title">PSA Graded Multi-Slab Stand</div>
+              <div class="catalog-rating">★★★★★ (64)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span><span class="catalog-swatch">Black</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$79.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Deck Box Protector Bundle">
+            <div class="catalog-image"></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Card Cases</div>
+              <div class="catalog-title">Deck Box Protector Bundle</div>
+              <div class="catalog-rating">★★★★★ (389)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$19.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Special Edition Tin Case">
+            <div class="catalog-image"></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Box Protectors</div>
+              <div class="catalog-title">Special Edition Tin Case</div>
+              <div class="catalog-rating">★★★★★ (112)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Clear</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$18.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+
+          <a class="catalog-card catalog-link" href="Product.html" aria-label="View Collector's Showcase Cabinet">
+            <div class="catalog-image"><span class="catalog-badge">Premium</span></div>
+            <div class="catalog-card-body">
+              <div class="catalog-kind">Display Cases</div>
+              <div class="catalog-title">Collector's Showcase Cabinet</div>
+              <div class="catalog-rating">★★★★★ (28)</div>
+              <div class="catalog-swatches"><span class="catalog-swatch">Black</span><span class="catalog-swatch">White</span></div>
+              <div class="catalog-footer"><span class="catalog-price">$299.99</span><button type="button" class="catalog-view">View</button></div>
+            </div>
+          </a>
+        </div>
+      </section>
+
     </main>
+
+    <script>
+      (async function initShopifyCatalog() {
+        const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
+        const apiUrl = (pathname) => `${API_BASE}${pathname}`;
+        const grid = document.getElementById("catalogGrid");
+        if (!grid) return;
+
+        const money = (amount, currencyCode = "USD") =>
+          new Intl.NumberFormat("en-US", {
+            style: "currency",
+            currency: currencyCode,
+          }).format(Number(amount || 0));
+
+        function renderCatalogCards(products) {
+          if (!products.length) {
+            grid.innerHTML =
+              '<div class="catalog-card" style="grid-column:1/-1;padding:18px;">No Shopify products yet. Add products in your Shopify admin, then refresh.</div>';
+            return;
+          }
+
+          grid.innerHTML = products
+            .map((product, index) => {
+              const firstVariant = product.variants?.nodes?.[0];
+              const minPrice = product.priceRange?.minVariantPrice;
+              const comparePrice = product.compareAtPriceRange?.minVariantPrice;
+              const price = minPrice ? money(minPrice.amount, minPrice.currencyCode) : "-";
+              const oldPrice =
+                comparePrice && Number(comparePrice.amount) > Number(minPrice?.amount || 0)
+                  ? `<span class="catalog-old">${money(comparePrice.amount, comparePrice.currencyCode)}</span>`
+                  : "";
+
+              const badge =
+                index === 0
+                  ? '<span class="catalog-badge">Best Seller</span>'
+                  : index === 1
+                    ? '<span class="catalog-badge">New</span>'
+                    : "";
+
+              const image = product.featuredImage?.url
+                ? `style="background-image:url('${product.featuredImage.url}');background-size:cover;background-position:center;"`
+                : "";
+
+              return `
+                <a class="catalog-card catalog-link" href="Product.html?handle=${encodeURIComponent(product.handle)}" aria-label="View ${product.title}">
+                  <div class="catalog-image" ${image}>${badge}</div>
+                  <div class="catalog-card-body">
+                    <div class="catalog-kind">${product.vendor || "Product"}</div>
+                    <div class="catalog-title">${product.title}</div>
+                    <div class="catalog-rating">${firstVariant?.availableForSale ? "In stock" : "Out of stock"}</div>
+                    <div class="catalog-footer">
+                      <div><span class="catalog-price">${price}</span>${oldPrice}</div>
+                      <button type="button" class="catalog-view">View</button>
+                    </div>
+                  </div>
+                </a>
+              `;
+            })
+            .join("");
+        }
+
+        try {
+          const response = await fetch(apiUrl("/api/catalog?first=24"));
+          const payload = await response.json();
+          if (!response.ok) {
+            throw new Error(payload.error || "Catalog request failed.");
+          }
+          const products = payload.products || [];
+          renderCatalogCards(products);
+          const countEl = document.querySelector(".catalog-meta");
+          if (countEl) countEl.textContent = `${products.length} products found`;
+        } catch (error) {
+          grid.innerHTML = `<div class="catalog-card" style="grid-column:1/-1;padding:18px;">Failed to load catalog: ${error.message}</div>`;
+        }
+      })();
+    </script>
 
     <script>
       const API_URL = "https://api.pokemontcg.io/v2/cards";

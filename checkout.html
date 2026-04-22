@@ -554,26 +554,26 @@
 
               <div id="guest-fields">
                 <label for="email">Email address *</label>
-                <input id="email" name="email" type="email" autocomplete="email" placeholder="you@example.com" required />
+                <input id="email" name="email" type="email" autocomplete="email" placeholder="Enter email address" required />
 
                 <div class="row">
                   <div>
                     <label for="firstName">First name *</label>
-                    <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Alex" required />
+                    <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Enter first name" required />
                   </div>
                   <div>
                     <label for="lastName">Last name</label>
-                    <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Rivera" />
+                    <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Enter last name" />
                   </div>
                 </div>
               </div>
 
               <div id="user-fields" class="hidden">
                 <label for="userEmail">Email *</label>
-                <input id="userEmail" name="userEmail" type="email" autocomplete="username" placeholder="you@example.com" />
+                <input id="userEmail" name="userEmail" type="email" autocomplete="username" placeholder="Enter account email" />
 
                 <label for="password">Password *</label>
-                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter password" />
 
                 <p class="note">
                   Demo only: no accounts are created. In production this would authenticate with your store backend.
@@ -598,24 +598,24 @@
                 name="address1"
                 type="text"
                 autocomplete="address-line1"
-                placeholder="123 Collector Lane"
+                placeholder="Enter street address"
               />
 
               <div class="row">
                 <div>
                   <label for="city">City *</label>
-                  <input id="city" name="city" type="text" autocomplete="address-level2" placeholder="San Francisco" />
+                  <input id="city" name="city" type="text" autocomplete="address-level2" placeholder="Enter city" />
                 </div>
                 <div>
                   <label for="state">State</label>
-                  <input id="state" name="state" type="text" autocomplete="address-level1" placeholder="CA" />
+                  <input id="state" name="state" type="text" autocomplete="address-level1" placeholder="Enter state" />
                 </div>
               </div>
 
               <div class="row">
                 <div>
                   <label for="postal">ZIP code</label>
-                  <input id="postal" name="postal" type="text" autocomplete="postal-code" placeholder="94102" />
+                  <input id="postal" name="postal" type="text" autocomplete="postal-code" placeholder="Enter ZIP/postal code" />
                 </div>
                 <div>
                   <label for="country">Country</label>
@@ -708,16 +708,16 @@
                   </header>
 
                   <label for="cardNumber">Card number</label>
-                  <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="•••• •••• •••• 4242" />
+                  <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Enter card number" />
 
                   <div class="pay-row" style="margin-top: 10px">
                     <div>
                       <label for="cardExp">MM / YY</label>
-                      <input id="cardExp" name="cardExp" autocomplete="cc-exp" placeholder="MM / YY" />
+                      <input id="cardExp" name="cardExp" autocomplete="cc-exp" placeholder="MM/YY" />
                     </div>
                     <div>
                       <label for="cardCvv">CVV</label>
-                      <input id="cardCvv" name="cardCvv" autocomplete="cc-csc" placeholder="123" />
+                      <input id="cardCvv" name="cardCvv" autocomplete="cc-csc" placeholder="CVV" />
                     </div>
                     <div aria-hidden="true"></div>
                   </div>
@@ -740,25 +740,10 @@
         <aside class="panel summary" aria-label="Order summary">
           <h2>Order summary</h2>
 
-          <div class="line-item">
-            <div class="thumb" aria-hidden="true"></div>
-            <div>
-              <div class="name">CardVault Ultra-Pro Slab</div>
-              <div class="meta">Crystal Clear · Standard</div>
-            </div>
-            <div class="price" data-price="item1">$24.99</div>
-          </div>
-          <div class="line-item">
-            <div class="thumb" aria-hidden="true"></div>
-            <div>
-              <div class="name">TopLoader Bundle (25-Pack)</div>
-              <div class="meta">Standard Size</div>
-            </div>
-            <div class="price" data-price="item2">$18.99</div>
-          </div>
+          <div id="order-line-items"></div>
 
           <div class="promo">
-            <input id="promoCode" type="text" placeholder="Promo code" autocomplete="off" />
+            <input id="promoCode" type="text" placeholder="Enter promo code" autocomplete="off" />
             <button type="button" id="applyPromo">Apply</button>
           </div>
           <p id="promoMessage" class="note"></p>
@@ -780,10 +765,10 @@
     </main>
 
     <script>
-      const money = (n) =>
-        n.toLocaleString(undefined, { style: "currency", currency: "USD" });
+      const money = (n, currency = "USD") =>
+        Number(n || 0).toLocaleString(undefined, { style: "currency", currency });
 
-      const prices = { item1: 24.99, item2: 18.99 };
+      const cartStorageKey = "flexcase.local.cart";
       const standardRate = 5.99;
       const expressRate = 9.99;
       const taxRate = 0.08;
@@ -831,6 +816,61 @@
       const taxDisplay = document.getElementById("taxDisplay");
       const totalDisplay = document.getElementById("totalDisplay");
       const promoMessage = document.getElementById("promoMessage");
+      const orderLineItems = document.getElementById("order-line-items");
+
+      function readCartItems() {
+        try {
+          const raw = localStorage.getItem(cartStorageKey) || "[]";
+          const parsed = JSON.parse(raw);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (_) {
+          return [];
+        }
+      }
+
+      function lineSubtotal(line) {
+        const unit = Number(line?.price || 0);
+        const qty = Number(line?.quantity || 1);
+        return unit * qty;
+      }
+
+      function renderOrderLines(items) {
+        if (!items.length) {
+          orderLineItems.innerHTML = `
+            <div class="line-item">
+              <div class="thumb" aria-hidden="true"></div>
+              <div>
+                <div class="name">Your cart is empty</div>
+                <div class="meta">Add a product from the Product page.</div>
+              </div>
+              <div class="price">$0.00</div>
+            </div>
+          `;
+          return;
+        }
+
+        orderLineItems.innerHTML = items
+          .map((line) => {
+            const lineTotal = lineSubtotal(line);
+            const currency = line.currencyCode || "USD";
+            const imageStyle = line.image
+              ? `style="background-image:url('${line.image}');background-size:cover;background-position:center;"`
+              : "";
+            return `
+              <div class="line-item">
+                <div class="thumb" aria-hidden="true" ${imageStyle}></div>
+                <div>
+                  <div class="name">${line.productTitle || "Product"}</div>
+                  <div class="meta">${line.variantTitle || "Default"} · Qty ${Number(
+                    line.quantity || 1
+                  )}</div>
+                </div>
+                <div class="price">${money(lineTotal, currency)}</div>
+              </div>
+            `;
+          })
+          .join("");
+      }
 
       function setStep(step) {
         stepContact.classList.toggle("hidden", step !== 1);
@@ -871,7 +911,9 @@
       }
 
       function getSubtotal() {
-        return Math.max(0, prices.item1 + prices.item2 - discount);
+        const items = readCartItems();
+        const baseSubtotal = items.reduce((sum, line) => sum + lineSubtotal(line), 0);
+        return Math.max(0, baseSubtotal - discount);
       }
 
       function getStandardShippingCost(subtotal) {
@@ -1061,8 +1103,10 @@
         e.preventDefault();
         if (!validatePayment()) return;
         alert("Thanks — demo order placed. Connect this form to your payment provider next.");
+        localStorage.removeItem(cartStorageKey);
       });
 
+      renderOrderLines(readCartItems());
       selectMode("guest");
       selectShipping("standard");
       recalcTotals();
