@@ -57,6 +57,11 @@ const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || "")
   .map((item) => item.trim())
   .filter(Boolean);
 const ALLOWED_ORIGINS = new Set([FRONTEND_ORIGIN, ...CORS_ALLOWED_ORIGINS]);
+const SESSION_SIGNING_SECRET =
+  process.env.FLEXCASE_SESSION_SECRET ||
+  CUSTOMER_ACCOUNT_CLIENT_SECRET ||
+  CLIENT_SECRET_FROM_ENV ||
+  "flexcase-dev-session-secret";
 
 if (!SHOP_FROM_ENV || !CLIENT_ID_FROM_ENV || !CLIENT_SECRET_FROM_ENV) {
   console.error(
@@ -67,8 +72,6 @@ if (!SHOP_FROM_ENV || !CLIENT_ID_FROM_ENV || !CLIENT_SECRET_FROM_ENV) {
 let cachedToken = "";
 let tokenExpiresAt = 0;
 const STOREFRONT_ACCESS_TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
-const oauthStateStore = new Map();
-const customerSessions = new Map();
 
 async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiresAt - 60_000) return cachedToken;
@@ -253,10 +256,36 @@ function parseCookies(req) {
   return out;
 }
 
-function createSessionCookie(sessionId, maxAgeSeconds = 60 * 60 * 24 * 30) {
+function signValue(value) {
+  return crypto.createHmac("sha256", SESSION_SIGNING_SECRET).update(value).digest("base64url");
+}
+
+function encodeSignedPayload(payload) {
+  const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = signValue(body);
+  return `${body}.${signature}`;
+}
+
+function decodeSignedPayload(token) {
+  if (!token || typeof token !== "string") return null;
+  const splitIdx = token.lastIndexOf(".");
+  if (splitIdx <= 0) return null;
+  const body = token.slice(0, splitIdx);
+  const signature = token.slice(splitIdx + 1);
+  if (signValue(body) !== signature) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+function createSessionCookie(sessionPayload, maxAgeSeconds = 60 * 60 * 24 * 30) {
   const secureSuffix = FRONTEND_ORIGIN.startsWith("https://") ? "; Secure" : "";
+  const token = encodeSignedPayload(sessionPayload);
   return `flexcase_customer_session=${encodeURIComponent(
-    sessionId
+    token
   )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secureSuffix}`;
 }
 
@@ -279,23 +308,35 @@ function parseJwtPayload(idToken) {
   }
 }
 
-function cleanExpiredAuthState() {
-  const now = Date.now();
-  for (const [key, value] of oauthStateStore.entries()) {
-    if (value.expiresAt <= now) oauthStateStore.delete(key);
-  }
-}
-
 function getCustomerSession(req) {
-  const sid = parseCookies(req).flexcase_customer_session;
-  if (!sid) return null;
-  const session = customerSessions.get(sid);
+  const token = parseCookies(req).flexcase_customer_session;
+  if (!token) return null;
+  const session = decodeSignedPayload(token);
   if (!session) return null;
   if (session.expiresAt && session.expiresAt <= Date.now()) {
-    customerSessions.delete(sid);
     return null;
   }
-  return { sid, session };
+  return { session };
+}
+
+function createOAuthState(mode, keep) {
+  return encodeSignedPayload({
+    mode,
+    keep,
+    expiresAt: Date.now() + 10 * 60_000,
+    nonce: crypto.randomBytes(8).toString("hex"),
+  });
+}
+
+function parseOAuthState(state) {
+  const payload = decodeSignedPayload(state);
+  if (!payload || payload.expiresAt <= Date.now()) return null;
+  const mode = payload.mode === "signup" ? "signup" : "signin";
+  return {
+    mode,
+    keep: payload.keep === true,
+    expiresAt: Number(payload.expiresAt) || 0,
+  };
 }
 
 function applyCors(req, res) {
@@ -457,13 +498,7 @@ function handleCustomerOauthStart(req, res) {
   const reqUrl = new URL(req.url, "http://localhost");
   const mode = reqUrl.searchParams.get("mode") === "signup" ? "signup" : "signin";
   const keep = reqUrl.searchParams.get("keep") === "1";
-  const state = crypto.randomBytes(24).toString("hex");
-  cleanExpiredAuthState();
-  oauthStateStore.set(state, {
-    mode,
-    keep,
-    expiresAt: Date.now() + 10 * 60_000,
-  });
+  const state = createOAuthState(mode, keep);
 
   const authorizeUrl = new URL(CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT);
   authorizeUrl.searchParams.set("client_id", CUSTOMER_ACCOUNT_CLIENT_ID);
@@ -490,9 +525,8 @@ async function handleCustomerOauthCallback(req, res) {
       return;
     }
 
-    const stateValue = oauthStateStore.get(state);
-    oauthStateStore.delete(state);
-    if (!stateValue || stateValue.expiresAt <= Date.now()) {
+    const stateValue = parseOAuthState(state);
+    if (!stateValue) {
       res.writeHead(302, {
         Location: `${FRONTEND_ORIGIN}/account.html?auth=error&message=Invalid%20OAuth%20state.`,
       });
@@ -544,26 +578,22 @@ async function handleCustomerOauthCallback(req, res) {
       lastName: idPayload?.family_name || "",
       email: idPayload?.email || "",
     };
-    const sessionId = crypto.randomBytes(24).toString("hex");
     const expiresAtMs = payload.expires_in
       ? Date.now() + Number(payload.expires_in) * 1000
       : Date.now() + 12 * 60 * 60 * 1000;
-    customerSessions.set(sessionId, {
+    const sessionPayload = {
       customer,
       mode: stateValue.mode,
       createdAt: Date.now(),
       expiresAt: expiresAtMs,
-      token: {
-        accessToken: payload.access_token || "",
-        refreshToken: payload.refresh_token || "",
-        idToken: payload.id_token || "",
-        tokenType: payload.token_type || "",
-      },
-    });
+    };
 
     res.writeHead(302, {
       Location: `${FRONTEND_ORIGIN}/account.html?auth=success`,
-      "Set-Cookie": createSessionCookie(sessionId, stateValue.keep ? 60 * 60 * 24 * 30 : 60 * 60 * 12),
+      "Set-Cookie": createSessionCookie(
+        sessionPayload,
+        stateValue.keep ? 60 * 60 * 24 * 30 : 60 * 60 * 12
+      ),
     });
     res.end();
   } catch (error) {
@@ -914,14 +944,18 @@ async function handleCustomerProfileUpdate(req, res) {
       return;
     }
 
-    current.session.customer = {
-      ...current.session.customer,
-      firstName: payload.customer.firstName || firstName,
-      lastName: payload.customer.lastName || lastName,
-      email: payload.customer.email || email,
+    const updatedSession = {
+      ...current.session,
+      customer: {
+        ...current.session.customer,
+        firstName: payload.customer.firstName || firstName,
+        lastName: payload.customer.lastName || lastName,
+        email: payload.customer.email || email,
+        phone: payload.customer.phone || phone || "",
+      },
     };
 
-    json(res, 200, {
+    const responseBody = JSON.stringify({
       customer: {
         id: payload.customer.id,
         firstName: payload.customer.firstName || "",
@@ -930,14 +964,18 @@ async function handleCustomerProfileUpdate(req, res) {
         phone: payload.customer.phone || "",
       },
     });
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Length": Buffer.byteLength(responseBody),
+      "Set-Cookie": createSessionCookie(updatedSession, 60 * 60 * 24 * 30),
+    });
+    res.end(responseBody);
   } catch (error) {
     json(res, 500, { error: error.message });
   }
 }
 
 function handleCustomerLogout(req, res) {
-  const current = getCustomerSession(req);
-  if (current?.sid) customerSessions.delete(current.sid);
   const returnTo = `${FRONTEND_ORIGIN}/account.html`;
   const location = CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT
     ? `${CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT}${
@@ -952,8 +990,6 @@ function handleCustomerLogout(req, res) {
 }
 
 function handleCustomerLogoutApi(req, res) {
-  const current = getCustomerSession(req);
-  if (current?.sid) customerSessions.delete(current.sid);
   res.writeHead(200, {
     "Set-Cookie": clearSessionCookie(),
     "Content-Type": "application/json; charset=utf-8",
