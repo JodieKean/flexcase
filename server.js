@@ -768,7 +768,7 @@ async function handleCustomerAccountData(req, res) {
                         currencyCode
                       }
                     }
-                    lineItems(first: 5) {
+                    lineItems(first: 25) {
                       edges {
                         node {
                           title
@@ -832,6 +832,92 @@ async function handleCustomerAccountData(req, res) {
             variantTitle: item.variantTitle || "",
           })) || [],
       })),
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCustomerProfileUpdate(req, res) {
+  try {
+    const current = getCustomerSession(req);
+    if (!current?.session?.customer?.email) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+
+    const body = await readJsonBody(req);
+    const firstName = String(body.firstName || "").trim();
+    const lastName = String(body.lastName || "").trim();
+    const email = String(body.email || "")
+      .trim()
+      .toLowerCase();
+    if (!firstName || !email) {
+      json(res, 400, { error: "First name and email are required." });
+      return;
+    }
+
+    const currentEmail = String(current.session.customer.email || "")
+      .trim()
+      .toLowerCase();
+    const customer = await findCustomerByEmail(currentEmail);
+    if (!customer?.id) {
+      json(res, 404, { error: "Customer record not found." });
+      return;
+    }
+
+    const mutation = `
+      mutation CustomerUpdate($input: CustomerInput!) {
+        customerUpdate(input: $input) {
+          customer {
+            id
+            firstName
+            lastName
+            email
+            phone
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    const data = await adminGraphql(mutation, {
+      input: {
+        id: customer.id,
+        firstName,
+        lastName: lastName || null,
+        email,
+      },
+    });
+    const payload = data?.customerUpdate;
+    if (payload?.userErrors?.length) {
+      json(res, 400, {
+        error: payload.userErrors.map((e) => e.message).join(", "),
+      });
+      return;
+    }
+    if (!payload?.customer?.id) {
+      json(res, 500, { error: "Unable to update customer profile." });
+      return;
+    }
+
+    current.session.customer = {
+      ...current.session.customer,
+      firstName: payload.customer.firstName || firstName,
+      lastName: payload.customer.lastName || lastName,
+      email: payload.customer.email || email,
+    };
+
+    json(res, 200, {
+      customer: {
+        id: payload.customer.id,
+        firstName: payload.customer.firstName || "",
+        lastName: payload.customer.lastName || "",
+        email: payload.customer.email || email,
+        phone: payload.customer.phone || "",
+      },
     });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -964,6 +1050,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && reqUrl.pathname === "/api/customer/pre-register") {
     await handleCustomerPreRegister(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/customer/profile") {
+    await handleCustomerProfileUpdate(req, res);
     return;
   }
 

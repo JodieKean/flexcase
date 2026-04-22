@@ -1739,6 +1739,13 @@
         }).format(Number(amount || 0));
       }
 
+      function mapFulfillmentStatus(status) {
+        const raw = String(status || "").toUpperCase();
+        if (raw === "FULFILLED") return "Fulfilled";
+        if (raw === "UNFULFILLED") return "Unfulfilled";
+        return "Shipping/In Progress";
+      }
+
       function renderOrders(orders = []) {
         const section = document.getElementById("section-orders");
         if (!section) return;
@@ -1761,7 +1768,8 @@
           const date = order.processedAt
             ? new Date(order.processedAt).toLocaleDateString("en-US")
             : "-";
-          const status = order.fulfillmentStatus || order.financialStatus || "Processing";
+          const status = mapFulfillmentStatus(order.fulfillmentStatus);
+          const orderNumber = String(order.name || "").trim() || "Order";
           const itemsMarkup = (order.items || [])
             .map(
               (item) => `
@@ -1782,7 +1790,7 @@
           card.innerHTML = `
             <div class="order-top">
               <div class="order-id">
-                <span>${order.name || "Order"}</span>
+                <span>${orderNumber}</span>
                 <span class="status">${status}</span>
               </div>
               <div class="order-side">
@@ -1972,20 +1980,47 @@
         confirmAndSignOut();
       });
 
-      settingsProfileForm?.addEventListener("submit", (event) => {
+      settingsProfileForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const firstName = settingsFirstName?.value.trim() || "";
         const lastName = settingsLastName?.value.trim() || "";
         const email = document.getElementById("settings-email")?.value.trim() || "";
-        const updatedUser = {
-          firstName,
-          lastName,
-          name: `${firstName} ${lastName}`.trim(),
-          email,
-        };
-        setAuthenticatedUI(updatedUser);
-        const existing = getPersistedAuthSession();
-        persistAuthSession(updatedUser, existing?.keepLoggedIn !== false);
+        if (!firstName || !email) {
+          setGateMessage("First name and email are required.", true);
+          return;
+        }
+        try {
+          const response = await fetchApiWithFallback("/api/customer/profile", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ firstName, lastName, email }),
+          });
+          const raw = await response.text();
+          let payload = {};
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch (_) {
+            payload = {};
+          }
+          if (!response.ok) {
+            throw new Error(payload.error || "Unable to save profile changes.");
+          }
+          const customer = payload.customer || {};
+          const updatedUser = {
+            firstName: customer.firstName || firstName,
+            lastName: customer.lastName || lastName,
+            name: `${customer.firstName || firstName} ${customer.lastName || lastName}`.trim(),
+            email: customer.email || email,
+          };
+          setAuthenticatedUI(updatedUser);
+          const existing = getPersistedAuthSession();
+          persistAuthSession(updatedUser, existing?.keepLoggedIn !== false);
+          setGateMessage("Profile updated.");
+          await loadCustomerAccountData();
+        } catch (error) {
+          setGateMessage(error.message || "Unable to save profile changes.", true);
+        }
       });
 
       const PASSWORD_MASK = "\u2022";
