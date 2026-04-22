@@ -1991,8 +1991,15 @@
       syncServerCustomerSession().then((ok) => {
         if (!ok) {
           if (authStatus === "success") {
+            const existingMessage = String(authGateMessage?.textContent || "").trim();
+            const hasSpecificError =
+              existingMessage &&
+              existingMessage !== "Completing sign in..." &&
+              existingMessage !== "You are currently signed out.";
             setLoggedOutUI(
-              "Sign in could not be completed. Please try again. If this persists, check Customer Account API credentials and callback settings.",
+              hasSpecificError
+                ? existingMessage
+                : "Sign in completed, but your account session was not detected. Check FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS and cookie settings, then try again.",
               true
             );
             return;
