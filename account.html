@@ -1480,6 +1480,7 @@
             <button type="button" class="set-default is-hidden" data-set-default>Set as default</button>
           </div>
         `;
+        addressList.querySelector(".address-empty")?.remove();
         addressList.querySelectorAll("[data-address-card]").forEach((existing) => {
           existing.classList.remove("default");
         });
