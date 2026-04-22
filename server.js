@@ -666,6 +666,36 @@ async function findCustomerByEmail(email) {
   return data?.customers?.edges?.[0]?.node || null;
 }
 
+function normalizePhone(phone) {
+  return String(phone || "").trim().replace(/\s+/g, "");
+}
+
+function comparablePhone(phone) {
+  return normalizePhone(phone).replace(/[^\d]/g, "");
+}
+
+async function findCustomerByPhone(phone) {
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+  const query = `
+    query CustomerByPhone($query: String!) {
+      customers(first: 1, query: $query) {
+        edges {
+          node {
+            id
+            firstName
+            lastName
+            email
+            phone
+          }
+        }
+      }
+    }
+  `;
+  const data = await adminGraphql(query, { query: `phone:${normalized}` });
+  return data?.customers?.edges?.[0]?.node || null;
+}
+
 async function handleCustomerPreRegister(req, res) {
   try {
     const body = await readJsonBody(req);
@@ -675,7 +705,7 @@ async function handleCustomerPreRegister(req, res) {
       .trim()
       .toLowerCase();
     const phoneRaw = String(body.phone || "").trim();
-    const phone = phoneRaw ? phoneRaw.replace(/\s+/g, "") : "";
+    const phone = normalizePhone(phoneRaw);
     const acceptsMarketingEmail = Boolean(body.acceptsMarketingEmail);
 
     if (!firstName || !lastName || !email) {
@@ -918,12 +948,30 @@ async function handleCustomerProfileUpdate(req, res) {
       return;
     }
 
+    const fieldErrors = {};
     if (email !== currentEmail) {
       const conflict = await findCustomerByEmail(email);
       if (conflict?.id && conflict.id !== customer.id) {
-        json(res, 400, { error: "This email is already registered. Please try another one." });
-        return;
+        fieldErrors.email = "This email is already registered. Please try another one.";
       }
+    }
+    const currentPhoneComparable = comparablePhone(customer.phone || "");
+    const nextPhoneComparable = comparablePhone(phone || "");
+    if (
+      nextPhoneComparable &&
+      nextPhoneComparable !== currentPhoneComparable
+    ) {
+      const phoneConflict = await findCustomerByPhone(phone);
+      if (phoneConflict?.id && phoneConflict.id !== customer.id) {
+        fieldErrors.phone = "This contact number has already been claimed.";
+      }
+    }
+    if (fieldErrors.email || fieldErrors.phone) {
+      json(res, 400, {
+        error: "Unable to save profile changes.",
+        fieldErrors,
+      });
+      return;
     }
 
     const mutation = `

@@ -796,6 +796,14 @@
         flex-shrink: 0;
       }
 
+      .field-error-text {
+        margin-top: 8px;
+        color: #c12f2f;
+        font-size: 13px;
+        line-height: 1.35;
+        min-height: 18px;
+      }
+
       @media (max-width: 980px) {
         main,
         .site-navbar-inner {
@@ -1123,10 +1131,12 @@
                 <div>
                   <label for="settings-email">Email Address</label>
                   <input id="settings-email" name="email" type="email" value="marcus.chen@example.com" autocomplete="email" />
+                  <div id="settings-email-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div>
                   <label for="settings-phone">Contact Number</label>
                   <input id="settings-phone" name="phone" type="tel" value="" autocomplete="tel" placeholder="+60123456789" />
+                  <div id="settings-phone-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
               </div>
               <div class="new-address-actions">
@@ -1491,7 +1501,10 @@
       const settingsProfileForm = document.getElementById("settings-profile-form");
       const settingsFirstName = document.getElementById("settings-first-name");
       const settingsLastName = document.getElementById("settings-last-name");
+      const settingsEmailInput = document.getElementById("settings-email");
       const settingsPhone = document.getElementById("settings-phone");
+      const settingsEmailError = document.getElementById("settings-email-error");
+      const settingsPhoneError = document.getElementById("settings-phone-error");
 
       const authStorageKey = "flexcase.auth.user";
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -1586,6 +1599,16 @@
       function setGateMessage(message, isError = false) {
         authGateMessage.textContent = message;
         authGateMessage.classList.toggle("error", isError);
+      }
+
+      function clearProfileFieldErrors() {
+        if (settingsEmailError) settingsEmailError.textContent = "";
+        if (settingsPhoneError) settingsPhoneError.textContent = "";
+      }
+
+      function applyProfileFieldErrors(fieldErrors = {}) {
+        if (settingsEmailError) settingsEmailError.textContent = fieldErrors.email || "";
+        if (settingsPhoneError) settingsPhoneError.textContent = fieldErrors.phone || "";
       }
 
       function switchAuthTab(mode) {
@@ -1926,9 +1949,10 @@
 
       settingsProfileForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
+        clearProfileFieldErrors();
         const firstName = settingsFirstName?.value.trim() || "";
         const lastName = settingsLastName?.value.trim() || "";
-        const email = document.getElementById("settings-email")?.value.trim() || "";
+        const email = settingsEmailInput?.value.trim() || "";
         const phone = settingsPhone?.value.trim() || "";
         if (!firstName || !email) {
           setGateMessage("First name and email are required.", true);
@@ -1949,6 +1973,7 @@
             payload = {};
           }
           if (!response.ok) {
+            if (payload?.fieldErrors) applyProfileFieldErrors(payload.fieldErrors);
             throw new Error(payload.error || "Unable to save profile changes.");
           }
           const customer = payload.customer || {};
