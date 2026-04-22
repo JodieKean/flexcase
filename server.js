@@ -632,7 +632,8 @@ async function handleCustomerPreRegister(req, res) {
     const email = String(body.email || "")
       .trim()
       .toLowerCase();
-    const phone = String(body.phone || "").trim();
+    const phoneRaw = String(body.phone || "").trim();
+    const phone = phoneRaw ? phoneRaw.replace(/\s+/g, "") : "";
     const acceptsMarketingEmail = Boolean(body.acceptsMarketingEmail);
 
     if (!firstName || !lastName || !email) {
@@ -669,7 +670,15 @@ async function handleCustomerPreRegister(req, res) {
         lastName,
         email,
         phone: phone || null,
-        acceptsMarketing: acceptsMarketingEmail,
+        emailMarketingConsent: acceptsMarketingEmail
+          ? {
+              marketingState: "SUBSCRIBED",
+              marketingOptInLevel: "SINGLE_OPT_IN",
+            }
+          : {
+              marketingState: "NOT_SUBSCRIBED",
+              marketingOptInLevel: "SINGLE_OPT_IN",
+            },
       },
     });
     const payload = data?.customerCreate;
