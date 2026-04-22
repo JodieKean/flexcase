@@ -1124,67 +1124,13 @@
                   <label for="settings-email">Email Address</label>
                   <input id="settings-email" name="email" type="email" value="marcus.chen@example.com" autocomplete="email" />
                 </div>
+                <div>
+                  <label for="settings-phone">Contact Number</label>
+                  <input id="settings-phone" name="phone" type="tel" value="" autocomplete="tel" placeholder="+60123456789" />
+                </div>
               </div>
               <div class="new-address-actions">
                 <button type="submit" class="save-address-btn">Save Changes</button>
-              </div>
-            </form>
-          </section>
-
-          <section class="settings-panel" aria-labelledby="settings-password-heading">
-            <h3 class="settings-panel-title" id="settings-password-heading">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" width="22" height="22" aria-hidden="true">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 0 0-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 0 0 2.25-2.25v-6.75a2.25 2.25 0 0 0-2.25-2.25H6.75a2.25 2.25 0 0 0-2.25 2.25v6.75a2.25 2.25 0 0 0 2.25 2.25Z" />
-              </svg>
-              Change Password
-            </h3>
-            <form id="settings-password-form" class="new-address-card">
-              <div class="form-grid">
-                <div class="span-2">
-                  <label for="settings-current-password">Current Password</label>
-                  <input
-                    id="settings-current-password"
-                    type="text"
-                    data-password-peek
-                    data-sync-hidden="settings-hpw-current"
-                    autocomplete="current-password"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    placeholder="Enter current password"
-                  />
-                </div>
-                <div>
-                  <label for="settings-new-password">New Password</label>
-                  <input
-                    id="settings-new-password"
-                    type="text"
-                    data-password-peek
-                    data-sync-hidden="settings-hpw-new"
-                    autocomplete="new-password"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    placeholder="Enter new password"
-                  />
-                </div>
-                <div>
-                  <label for="settings-confirm-password">Confirm New Password</label>
-                  <input
-                    id="settings-confirm-password"
-                    type="text"
-                    data-password-peek
-                    data-sync-hidden="settings-hpw-confirm"
-                    autocomplete="new-password"
-                    autocapitalize="off"
-                    spellcheck="false"
-                    placeholder="Confirm new password"
-                  />
-                </div>
-              </div>
-              <input type="hidden" name="currentPassword" id="settings-hpw-current" value="" />
-              <input type="hidden" name="newPassword" id="settings-hpw-new" value="" />
-              <input type="hidden" name="confirmPassword" id="settings-hpw-confirm" value="" />
-              <div class="new-address-actions">
-                <button type="submit" class="save-address-btn">Update Password</button>
               </div>
             </form>
           </section>
@@ -1545,6 +1491,7 @@
       const settingsProfileForm = document.getElementById("settings-profile-form");
       const settingsFirstName = document.getElementById("settings-first-name");
       const settingsLastName = document.getElementById("settings-last-name");
+      const settingsPhone = document.getElementById("settings-phone");
 
       const authStorageKey = "flexcase.auth.user";
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -1688,6 +1635,7 @@
         if (settingsFirstName) settingsFirstName.value = firstName || displayName;
         if (settingsLastName) settingsLastName.value = String(user?.lastName || "").trim();
         if (settingsEmail) settingsEmail.value = user?.email || "";
+        if (settingsPhone) settingsPhone.value = user?.phone || "";
         authGate.classList.add("auth-hidden");
         accountApp.classList.remove("auth-hidden");
       }
@@ -1712,18 +1660,8 @@
           });
           const payload = await response.json();
           if (payload?.authenticated && payload?.customer) {
-            const customer = payload.customer;
-            const user = {
-              firstName: customer.firstName || "",
-              lastName: customer.lastName || "",
-              name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
-              email: customer.email || "",
-              keepLoggedIn: true,
-            };
-            persistAuthSession(user, true);
-            setAuthenticatedUI(user);
-            await loadCustomerAccountData();
-            return true;
+            const ok = await loadCustomerAccountData();
+            return ok;
           }
           clearAuthSession();
           return false;
@@ -1857,16 +1795,22 @@
             throw new Error(payload.error || "Unable to load account data.");
           }
           const customer = payload.customer || {};
-          setAuthenticatedUI({
+          const user = {
             firstName: customer.firstName || "",
             lastName: customer.lastName || "",
             name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
             email: customer.email || "",
-          });
+            phone: customer.phone || "",
+            keepLoggedIn: true,
+          };
+          setAuthenticatedUI(user);
+          persistAuthSession(user, true);
           renderOrders(payload.orders || []);
           renderAddresses(payload.addresses || []);
+          return true;
         } catch (error) {
           setGateMessage(error.message || "Unable to load account data.", true);
+          return false;
         }
       }
 
@@ -1985,6 +1929,7 @@
         const firstName = settingsFirstName?.value.trim() || "";
         const lastName = settingsLastName?.value.trim() || "";
         const email = document.getElementById("settings-email")?.value.trim() || "";
+        const phone = settingsPhone?.value.trim() || "";
         if (!firstName || !email) {
           setGateMessage("First name and email are required.", true);
           return;
@@ -1994,7 +1939,7 @@
             method: "POST",
             credentials: "include",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ firstName, lastName, email }),
+            body: JSON.stringify({ firstName, lastName, email, phone }),
           });
           const raw = await response.text();
           let payload = {};
@@ -2012,6 +1957,7 @@
             lastName: customer.lastName || lastName,
             name: `${customer.firstName || firstName} ${customer.lastName || lastName}`.trim(),
             email: customer.email || email,
+            phone: customer.phone || phone,
           };
           setAuthenticatedUI(updatedUser);
           const existing = getPersistedAuthSession();
@@ -2022,89 +1968,6 @@
           setGateMessage(error.message || "Unable to save profile changes.", true);
         }
       });
-
-      const PASSWORD_MASK = "\u2022";
-
-      function renderPasswordPeekField(input, real) {
-        const n = real.length;
-        input.value = n === 0 ? "" : PASSWORD_MASK.repeat(n - 1) + real.charAt(n - 1);
-        const hiddenId = input.dataset.syncHidden;
-        if (hiddenId) {
-          const hidden = document.getElementById(hiddenId);
-          if (hidden) hidden.value = real;
-        }
-      }
-
-      function wirePasswordLastCharVisible(input) {
-        let real = "";
-        const hiddenId = input.dataset.syncHidden;
-        const hidden = hiddenId ? document.getElementById(hiddenId) : null;
-
-        function syncHidden() {
-          if (hidden) hidden.value = real;
-        }
-
-        renderPasswordPeekField(input, real);
-        syncHidden();
-
-        input.addEventListener("beforeinput", (e) => {
-          const el = input;
-          const start = el.selectionStart ?? real.length;
-          const end = el.selectionEnd ?? real.length;
-
-          if (e.inputType === "insertText" && e.data != null) {
-            e.preventDefault();
-            real = real.slice(0, start) + e.data + real.slice(end);
-            const pos = start + e.data.length;
-            renderPasswordPeekField(el, real);
-            queueMicrotask(() => el.setSelectionRange(pos, pos));
-            return;
-          }
-
-          if (e.inputType === "insertFromPaste") {
-            e.preventDefault();
-            const text = e.clipboardData?.getData("text/plain") ?? "";
-            real = real.slice(0, start) + text + real.slice(end);
-            const pos = start + text.length;
-            renderPasswordPeekField(el, real);
-            queueMicrotask(() => el.setSelectionRange(pos, pos));
-            return;
-          }
-
-          if (e.inputType === "deleteContentBackward") {
-            e.preventDefault();
-            if (start === 0 && end === 0) return;
-            const delStart = end > start ? start : Math.max(0, start - 1);
-            const delEnd = end > start ? end : start;
-            real = real.slice(0, delStart) + real.slice(delEnd);
-            renderPasswordPeekField(el, real);
-            queueMicrotask(() => el.setSelectionRange(delStart, delStart));
-            return;
-          }
-
-          if (e.inputType === "deleteContentForward") {
-            e.preventDefault();
-            const delStart = start;
-            const delEnd = end > start ? end : Math.min(real.length, start + 1);
-            if (delStart >= real.length && delEnd === delStart) return;
-            real = real.slice(0, delStart) + real.slice(delEnd);
-            renderPasswordPeekField(el, real);
-            queueMicrotask(() => el.setSelectionRange(delStart, delStart));
-          }
-        });
-
-        const form = input.closest("form");
-        if (form) {
-          form.addEventListener("reset", () => {
-            queueMicrotask(() => {
-              real = "";
-              renderPasswordPeekField(input, real);
-            });
-          });
-        }
-      }
-
-      document.querySelectorAll("#settings-password-form [data-password-peek]").forEach(wirePasswordLastCharVisible);
 
       const authUrl = new URL(window.location.href);
       const authStatus = authUrl.searchParams.get("auth");

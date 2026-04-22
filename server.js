@@ -852,6 +852,8 @@ async function handleCustomerProfileUpdate(req, res) {
     const email = String(body.email || "")
       .trim()
       .toLowerCase();
+    const phoneRaw = String(body.phone || "").trim();
+    const phone = phoneRaw ? phoneRaw.replace(/\s+/g, "") : "";
     if (!firstName || !email) {
       json(res, 400, { error: "First name and email are required." });
       return;
@@ -864,6 +866,14 @@ async function handleCustomerProfileUpdate(req, res) {
     if (!customer?.id) {
       json(res, 404, { error: "Customer record not found." });
       return;
+    }
+
+    if (email !== currentEmail) {
+      const conflict = await findCustomerByEmail(email);
+      if (conflict?.id && conflict.id !== customer.id) {
+        json(res, 400, { error: "This email is already registered. Please try another one." });
+        return;
+      }
     }
 
     const mutation = `
@@ -889,6 +899,7 @@ async function handleCustomerProfileUpdate(req, res) {
         firstName,
         lastName: lastName || null,
         email,
+        phone: phone || null,
       },
     });
     const payload = data?.customerUpdate;
