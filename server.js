@@ -736,78 +736,67 @@ async function handleCustomerPreRegister(req, res) {
 async function handleCustomerAccountData(req, res) {
   try {
     const current = getCustomerSession(req);
-    if (!current?.session?.customer?.email) {
+    const sessionCustomer = current?.session?.customer || {};
+    const customerId = String(sessionCustomer.id || "").trim();
+    const email = String(sessionCustomer.email || "")
+      .trim()
+      .toLowerCase();
+    if (!customerId && !email) {
       json(res, 401, { error: "Not authenticated." });
       return;
     }
-    const email = String(current.session.customer.email || "")
-      .trim()
-      .toLowerCase();
-    if (!email) {
-      json(res, 400, { error: "Authenticated customer email is missing." });
-      return;
-    }
-
-    const query = `
-      query CustomerAccountData($query: String!) {
-        customers(first: 1, query: $query) {
-          edges {
-            node {
-              id
-              firstName
-              lastName
-              email
-              phone
-              defaultAddress {
-                id
-                firstName
-                lastName
-                address1
-                address2
-                city
-                province
-                zip
-                country
+    const customerFields = `
+      id
+      firstName
+      lastName
+      email
+      phone
+      defaultAddress {
+        id
+        firstName
+        lastName
+        address1
+        address2
+        city
+        province
+        zip
+        country
+      }
+      addresses(first: 20) {
+        edges {
+          node {
+            id
+            firstName
+            lastName
+            address1
+            address2
+            city
+            province
+            zip
+            country
+          }
+        }
+      }
+      orders(first: 20, sortKey: PROCESSED_AT, reverse: true) {
+        edges {
+          node {
+            id
+            name
+            processedAt
+            displayFinancialStatus
+            displayFulfillmentStatus
+            currentTotalPriceSet {
+              shopMoney {
+                amount
+                currencyCode
               }
-              addresses(first: 20) {
-                edges {
-                  node {
-                    id
-                    firstName
-                    lastName
-                    address1
-                    address2
-                    city
-                    province
-                    zip
-                    country
-                  }
-                }
-              }
-              orders(first: 20, sortKey: PROCESSED_AT, reverse: true) {
-                edges {
-                  node {
-                    id
-                    name
-                    processedAt
-                    displayFinancialStatus
-                    displayFulfillmentStatus
-                    currentTotalPriceSet {
-                      shopMoney {
-                        amount
-                        currencyCode
-                      }
-                    }
-                    lineItems(first: 25) {
-                      edges {
-                        node {
-                          title
-                          quantity
-                          variantTitle
-                        }
-                      }
-                    }
-                  }
+            }
+            lineItems(first: 25) {
+              edges {
+                node {
+                  title
+                  quantity
+                  variantTitle
                 }
               }
             }
@@ -815,8 +804,36 @@ async function handleCustomerAccountData(req, res) {
         }
       }
     `;
-    const data = await adminGraphql(query, { query: `email:${email}` });
-    const customerNode = data?.customers?.edges?.[0]?.node;
+
+    let customerNode = null;
+    if (customerId && customerId.startsWith("gid://shopify/Customer/")) {
+      const byIdQuery = `
+        query CustomerAccountDataById($id: ID!) {
+          customer(id: $id) {
+            ${customerFields}
+          }
+        }
+      `;
+      const byIdData = await adminGraphql(byIdQuery, { id: customerId });
+      customerNode = byIdData?.customer || null;
+    }
+
+    if (!customerNode && email) {
+      const byEmailQuery = `
+        query CustomerAccountDataByEmail($query: String!) {
+          customers(first: 1, query: $query) {
+            edges {
+              node {
+                ${customerFields}
+              }
+            }
+          }
+        }
+      `;
+      const byEmailData = await adminGraphql(byEmailQuery, { query: `email:${email}` });
+      customerNode = byEmailData?.customers?.edges?.[0]?.node;
+    }
+
     if (!customerNode) {
       json(res, 404, { error: "Customer record not found." });
       return;
@@ -833,7 +850,7 @@ async function handleCustomerAccountData(req, res) {
         id: customerNode.id,
         firstName: customerNode.firstName || "",
         lastName: customerNode.lastName || "",
-        email: customerNode.email || email,
+        email: customerNode.email || email || "",
         phone: customerNode.phone || "",
       },
       addresses: addresses.map((a) => ({
