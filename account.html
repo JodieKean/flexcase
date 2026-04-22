@@ -1640,12 +1640,12 @@
         accountApp.classList.remove("auth-hidden");
       }
 
-      function setLoggedOutUI() {
+      function setLoggedOutUI(message = "You are currently signed out.", isError = false) {
         accountApp.classList.add("auth-hidden");
         authGate.classList.remove("auth-hidden");
         switchAuthTab("signin");
         if (headerOrderCountEl) headerOrderCountEl.textContent = "0 orders";
-        setGateMessage("You are currently signed out.");
+        setGateMessage(message, isError);
       }
 
       function beginCustomerOauth(mode, keepLoggedIn) {
@@ -1972,10 +1972,14 @@
       const authUrl = new URL(window.location.href);
       const authStatus = authUrl.searchParams.get("auth");
       const authMessage = authUrl.searchParams.get("message");
+      let pendingGateMessage = "You are currently signed out.";
+      let pendingGateError = false;
       if (authStatus === "error" && authMessage) {
-        setGateMessage(decodeURIComponent(authMessage), true);
+        pendingGateMessage = decodeURIComponent(authMessage);
+        pendingGateError = true;
       } else if (authStatus === "success") {
-        setGateMessage("Signed in with Shopify customer account.");
+        pendingGateMessage = "Completing sign in...";
+        pendingGateError = false;
       }
       if (authStatus) {
         authUrl.searchParams.delete("auth");
@@ -1983,9 +1987,18 @@
         window.history.replaceState({}, "", authUrl.pathname + authUrl.search + authUrl.hash);
       }
 
-      setLoggedOutUI();
+      setLoggedOutUI(pendingGateMessage, pendingGateError);
       syncServerCustomerSession().then((ok) => {
-        if (!ok) setLoggedOutUI();
+        if (!ok) {
+          if (authStatus === "success") {
+            setLoggedOutUI(
+              "Sign in could not be completed. Please try again. If this persists, check Customer Account API credentials and callback settings.",
+              true
+            );
+            return;
+          }
+          setLoggedOutUI(pendingGateMessage, pendingGateError);
+        }
       });
 
       populatePhoneCountryOptions();
