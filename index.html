@@ -619,6 +619,14 @@
       (async function initShopifyCatalog() {
         const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
         const apiUrl = (pathname) => `${API_BASE}${pathname}`;
+        const localApiUrl = (pathname) => pathname;
+        async function fetchApiWithFallback(pathname) {
+          try {
+            return await fetch(apiUrl(pathname));
+          } catch (_) {
+            return fetch(localApiUrl(pathname));
+          }
+        }
         const grid = document.getElementById("catalogGrid");
         if (!grid) return;
 
@@ -676,7 +684,7 @@
         }
 
         try {
-          const response = await fetch(apiUrl("/api/catalog?first=24"));
+          const response = await fetchApiWithFallback("/api/catalog?first=24");
           const payload = await response.json();
           if (!response.ok) {
             throw new Error(payload.error || "Catalog request failed.");

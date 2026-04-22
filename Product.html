@@ -673,6 +673,14 @@
       (async function initShopifyProductPage() {
         const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
         const apiUrl = (pathname) => `${API_BASE}${pathname}`;
+        const localApiUrl = (pathname) => pathname;
+        async function fetchApiWithFallback(pathname) {
+          try {
+            return await fetch(apiUrl(pathname));
+          } catch (_) {
+            return fetch(localApiUrl(pathname));
+          }
+        }
         const titleEl = document.getElementById("product-title");
         const subtitleEl = document.getElementById("product-subtitle");
         const priceNowEl = document.getElementById("product-price-now");
@@ -696,7 +704,7 @@
         const params = new URLSearchParams(window.location.search);
         let handle = params.get("handle");
         if (!handle) {
-          const listResponse = await fetch(apiUrl("/api/catalog?first=1"));
+          const listResponse = await fetchApiWithFallback("/api/catalog?first=1");
           const listPayload = await listResponse.json();
           if (!listResponse.ok) {
             titleEl.textContent = "Unable to load products";
@@ -712,7 +720,7 @@
           }
         }
 
-        const response = await fetch(apiUrl(`/api/product/${encodeURIComponent(handle)}`));
+        const response = await fetchApiWithFallback(`/api/product/${encodeURIComponent(handle)}`);
         const payload = await response.json();
         if (!response.ok || !payload.product) {
           titleEl.textContent = "Product not found";
