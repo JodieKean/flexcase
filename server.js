@@ -774,21 +774,6 @@ async function handleCustomerAccountData(req, res) {
         zip
         country
       }
-      addresses(first: 20) {
-        edges {
-          node {
-            id
-            firstName
-            lastName
-            address1
-            address2
-            city
-            province
-            zip
-            country
-          }
-        }
-      }
       orders(first: 20, sortKey: PROCESSED_AT, reverse: true) {
         edges {
           node {
@@ -855,8 +840,10 @@ async function handleCustomerAccountData(req, res) {
       return;
     }
 
-    const addresses =
-      customerNode.addresses?.edges?.map((edge) => edge?.node).filter(Boolean) || [];
+    const addressesRaw = customerNode.addresses;
+    const addresses = Array.isArray(addressesRaw)
+      ? addressesRaw.filter(Boolean)
+      : customerNode.addresses?.edges?.map((edge) => edge?.node).filter(Boolean) || [];
     const defaultAddressId = customerNode.defaultAddress?.id || "";
     const orders =
       customerNode.orders?.edges?.map((edge) => edge?.node).filter(Boolean) || [];
