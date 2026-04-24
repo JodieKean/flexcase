@@ -144,17 +144,32 @@ async function storefrontGraphql(query, variables = {}) {
     );
   }
 
-  const response = await fetch(
-    `https://${SHOP_FROM_ENV}.myshopify.com/api/${API_VERSION_FROM_ENV}/graphql.json`,
-    {
+  const endpoint = `https://${SHOP_FROM_ENV}.myshopify.com/api/${API_VERSION_FROM_ENV}/graphql.json`;
+  const token = String(STOREFRONT_ACCESS_TOKEN || "").trim();
+  const primaryHeaderName = token.startsWith("shpat_")
+    ? "Shopify-Storefront-Private-Token"
+    : "X-Shopify-Storefront-Access-Token";
+  const secondaryHeaderName =
+    primaryHeaderName === "Shopify-Storefront-Private-Token"
+      ? "X-Shopify-Storefront-Access-Token"
+      : "Shopify-Storefront-Private-Token";
+
+  async function callWithHeader(headerName) {
+    return fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Shopify-Storefront-Access-Token": STOREFRONT_ACCESS_TOKEN,
+        [headerName]: token,
       },
       body: JSON.stringify({ query, variables }),
-    }
-  );
+    });
+  }
+
+  let response = await callWithHeader(primaryHeaderName);
+  if (response.status === 401) {
+    // Some stores use private storefront tokens that require a different auth header.
+    response = await callWithHeader(secondaryHeaderName);
+  }
 
   if (!response.ok) {
     const body = await response.text();
@@ -167,7 +182,7 @@ async function storefrontGraphql(query, variables = {}) {
     const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
     if (response.status === 401 || errorCode === "UNAUTHORIZED") {
       throw new Error(
-        "Storefront access token is unauthorized. Regenerate SHOPIFY_STOREFRONT_ACCESS_TOKEN from Shopify app Storefront API credentials, enable customer scopes (unauthenticated_read_customers and unauthenticated_write_customers), update .env, then restart server."
+        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
       );
     }
     throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
@@ -178,7 +193,7 @@ async function storefrontGraphql(query, variables = {}) {
     const firstCode = payload.errors?.[0]?.extensions?.code || "";
     if (firstCode === "UNAUTHORIZED") {
       throw new Error(
-        "Storefront access token is unauthorized. Regenerate SHOPIFY_STOREFRONT_ACCESS_TOKEN from Shopify app Storefront API credentials, enable customer scopes (unauthenticated_read_customers and unauthenticated_write_customers), update .env, then restart server."
+        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
       );
     }
     throw new Error(payload.errors.map((e) => e.message).join(", "));
