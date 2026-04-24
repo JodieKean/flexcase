@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flex Case — Account</title>
     <link rel="stylesheet" href="assets/navbar.css" />
+    <script src="assets/flexcase-cart-sync.js"></script>
     <style>
       :root {
         color-scheme: light;
@@ -2245,6 +2246,9 @@
           renderOrders(payload.orders || []);
           renderAddresses(payload.addresses || []);
           syncDefaultAddressLabels();
+          if (typeof window.flexcaseRefreshCartFromServer === "function") {
+            await window.flexcaseRefreshCartFromServer().catch(() => {});
+          }
           return true;
         } catch (error) {
           setGateMessage(error.message || "Unable to load account data.", true);
@@ -2255,6 +2259,7 @@
       function confirmAndSignOut() {
         const shouldSignOut = window.confirm("Are you sure you want to sign out?");
         if (!shouldSignOut) return false;
+        window.flexcaseOnLogoutClearMergeFlag?.();
         fetchApiWithFallback("/api/customer/logout", {
           method: "POST",
           credentials: "include",

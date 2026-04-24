@@ -1285,6 +1285,382 @@ async function handleCustomerAddressDelete(req, res) {
   }
 }
 
+const FLEXCASE_HEADLESS_CART_METAFIELD = {
+  namespace: "flexcase",
+  key: "headless_cart_id",
+};
+
+const STOREFRONT_CART_FRAGMENT = `
+  id
+  totalQuantity
+  lines(first: 100) {
+    edges {
+      node {
+        ... on CartLine {
+          id
+          quantity
+          merchandise {
+            ... on ProductVariant {
+              id
+              title
+              price {
+                amount
+                currencyCode
+              }
+              product {
+                title
+                handle
+                featuredImage {
+                  url
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_QUERY = `
+  query FlexcaseCart($id: ID!) {
+    cart(id: $id) {
+      ${STOREFRONT_CART_FRAGMENT}
+    }
+  }
+`;
+
+const STOREFRONT_CART_CREATE = `
+  mutation FlexcaseCartCreate {
+    cartCreate(input: {}) {
+      cart {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_LINES_ADD = `
+  mutation FlexcaseCartLinesAdd($cartId: ID!, $lines: [CartLineInput!]!) {
+    cartLinesAdd(cartId: $cartId, lines: $lines) {
+      cart {
+        ${STOREFRONT_CART_FRAGMENT}
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_LINES_UPDATE = `
+  mutation FlexcaseCartLinesUpdate($cartId: ID!, $lines: [CartLineUpdateInput!]!) {
+    cartLinesUpdate(cartId: $cartId, lines: $lines) {
+      cart {
+        ${STOREFRONT_CART_FRAGMENT}
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_LINES_REMOVE = `
+  mutation FlexcaseCartLinesRemove($cartId: ID!, $lineIds: [ID!]!) {
+    cartLinesRemove(cartId: $cartId, lineIds: $lineIds) {
+      cart {
+        ${STOREFRONT_CART_FRAGMENT}
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+function mapStorefrontCartToClientLines(cart) {
+  if (!cart?.lines?.edges) return [];
+  const out = [];
+  for (const edge of cart.lines.edges) {
+    const n = edge?.node;
+    if (!n) continue;
+    const m = n.merchandise;
+    if (!m?.id) continue;
+    const price = m.price || {};
+    out.push({
+      lineId: n.id,
+      variantId: m.id,
+      productHandle: m.product?.handle || "",
+      productTitle: m.product?.title || "",
+      variantTitle: m.title || "",
+      quantity: Number(n.quantity || 0),
+      price: String(price.amount ?? "0"),
+      currencyCode: price.currencyCode || "USD",
+      image: m.product?.featuredImage?.url || "",
+    });
+  }
+  return out;
+}
+
+function findCartLineForVariant(cart, merchandiseId) {
+  for (const edge of cart?.lines?.edges || []) {
+    const n = edge?.node;
+    const m = n?.merchandise;
+    if (m?.id === merchandiseId) {
+      return { lineId: n.id, quantity: Number(n.quantity || 0) };
+    }
+  }
+  return null;
+}
+
+async function resolveAuthCustomerForCart(req) {
+  const current = getCustomerSession(req);
+  const email = String(current?.session?.customer?.email || "")
+    .trim()
+    .toLowerCase();
+  if (!email) return null;
+  const customer = await findCustomerByEmail(email);
+  if (!customer?.id) return null;
+  return customer;
+}
+
+async function getCustomerHeadlessCartId(customerGid) {
+  const data = await adminGraphql(
+    `query FlexcaseCustomerCartMeta($id: ID!) {
+      customer(id: $id) {
+        metafield(namespace: "${FLEXCASE_HEADLESS_CART_METAFIELD.namespace}", key: "${FLEXCASE_HEADLESS_CART_METAFIELD.key}") {
+          value
+        }
+      }
+    }`,
+    { id: customerGid }
+  );
+  return String(data?.customer?.metafield?.value || "").trim();
+}
+
+async function setCustomerHeadlessCartId(customerGid, cartId) {
+  const mutation = `
+    mutation FlexcaseMetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+      metafieldsSet(metafields: $metafields) {
+        metafields {
+          id
+        }
+        userErrors {
+          field
+          message
+        }
+      }
+    }
+  `;
+  const data = await adminGraphql(mutation, {
+    metafields: [
+      {
+        ownerId: customerGid,
+        namespace: FLEXCASE_HEADLESS_CART_METAFIELD.namespace,
+        key: FLEXCASE_HEADLESS_CART_METAFIELD.key,
+        type: "single_line_text_field",
+        value: String(cartId || "").trim(),
+      },
+    ],
+  });
+  const errs = data?.metafieldsSet?.userErrors?.filter((e) => e?.message) || [];
+  if (errs.length) {
+    throw new Error(errs.map((e) => e.message).join(", "));
+  }
+}
+
+async function ensureCustomerStorefrontCart(customerGid) {
+  let cartId = await getCustomerHeadlessCartId(customerGid);
+  let cart = null;
+  if (cartId) {
+    try {
+      const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+      cart = data?.cart;
+      if (!cart?.id) cart = null;
+    } catch (_) {
+      cart = null;
+    }
+  }
+  if (!cart?.id) {
+    const created = await storefrontGraphql(STOREFRONT_CART_CREATE, {});
+    const payload = created?.cartCreate;
+    const errs = payload?.userErrors?.filter((e) => e?.message) || [];
+    if (errs.length) {
+      throw new Error(errs.map((e) => e.message).join(", "));
+    }
+    const newCart = payload?.cart;
+    if (!newCart?.id) {
+      throw new Error("Unable to create Storefront cart.");
+    }
+    cartId = newCart.id;
+    await setCustomerHeadlessCartId(customerGid, cartId);
+    const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+    cart = data?.cart;
+  }
+  return { cartId, cart };
+}
+
+async function handleCartGet(req, res) {
+  try {
+    const customer = await resolveAuthCustomerForCart(req);
+    if (!customer) {
+      json(res, 401, { error: "Not authenticated.", guest: true });
+      return;
+    }
+    const { cart } = await ensureCustomerStorefrontCart(customer.id);
+    json(res, 200, {
+      cartId: cart.id,
+      lines: mapStorefrontCartToClientLines(cart),
+      totalQuantity: Number(cart.totalQuantity || 0),
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCartAddLine(req, res) {
+  try {
+    const customer = await resolveAuthCustomerForCart(req);
+    if (!customer) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const merchandiseId = String(body.merchandiseId || "").trim();
+    const quantity = Math.max(1, Math.min(99, Number(body.quantity || 1)));
+    if (!merchandiseId.startsWith("gid://shopify/ProductVariant/")) {
+      json(res, 400, { error: "Invalid variant id." });
+      return;
+    }
+    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+    const existing = findCartLineForVariant(cart, merchandiseId);
+    let data;
+    if (existing) {
+      data = await storefrontGraphql(STOREFRONT_CART_LINES_UPDATE, {
+        cartId,
+        lines: [{ id: existing.lineId, quantity: existing.quantity + quantity }],
+      });
+      const errs = data?.cartLinesUpdate?.userErrors?.filter((e) => e?.message) || [];
+      if (errs.length) {
+        json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+        return;
+      }
+      cart = data?.cartLinesUpdate?.cart;
+    } else {
+      data = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, {
+        cartId,
+        lines: [{ merchandiseId, quantity }],
+      });
+      const errs = data?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+      if (errs.length) {
+        json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+        return;
+      }
+      cart = data?.cartLinesAdd?.cart;
+    }
+    json(res, 200, {
+      lines: mapStorefrontCartToClientLines(cart),
+      totalQuantity: Number(cart?.totalQuantity || 0),
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCartMerge(req, res) {
+  try {
+    const customer = await resolveAuthCustomerForCart(req);
+    if (!customer) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const guestLines = Array.isArray(body.lines) ? body.lines : [];
+    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+
+    const byVariant = new Map();
+    for (const edge of cart?.lines?.edges || []) {
+      const n = edge?.node;
+      const m = n?.merchandise;
+      if (m?.id) byVariant.set(m.id, Number(n.quantity || 0));
+    }
+    for (const gl of guestLines) {
+      const vid = String(gl.variantId || "").trim();
+      if (!vid.startsWith("gid://shopify/ProductVariant/")) continue;
+      const q = Math.max(1, Math.min(99, Number(gl.quantity || 1)));
+      byVariant.set(vid, (byVariant.get(vid) || 0) + q);
+    }
+
+    const lineIds = (cart?.lines?.edges || []).map((e) => e?.node?.id).filter(Boolean);
+    if (lineIds.length) {
+      const rm = await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, { cartId, lineIds });
+      const rmErrs = rm?.cartLinesRemove?.userErrors?.filter((e) => e?.message) || [];
+      if (rmErrs.length) {
+        json(res, 400, { error: rmErrs.map((e) => e.message).join(", ") });
+        return;
+      }
+    }
+
+    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, q]) => ({
+      merchandiseId,
+      quantity: q,
+    }));
+    if (linesToAdd.length) {
+      const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
+      const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+      if (addErrs.length) {
+        json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
+        return;
+      }
+    }
+
+    const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+    const nextCart = refreshed?.cart;
+    json(res, 200, {
+      lines: mapStorefrontCartToClientLines(nextCart),
+      totalQuantity: Number(nextCart?.totalQuantity || 0),
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCartClear(req, res) {
+  try {
+    const customer = await resolveAuthCustomerForCart(req);
+    if (!customer) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const cartId = await getCustomerHeadlessCartId(customer.id);
+    if (!cartId) {
+      json(res, 200, { ok: true });
+      return;
+    }
+    try {
+      const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+      const cart = data?.cart;
+      const lineIds = (cart?.lines?.edges || []).map((e) => e?.node?.id).filter(Boolean);
+      if (lineIds.length) {
+        await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, { cartId, lineIds });
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    json(res, 200, { ok: true });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
 async function handleCustomerAddressDefault(req, res) {
   try {
     const current = getCustomerSession(req);
@@ -1478,6 +1854,18 @@ const server = http.createServer(async (req, res) => {
     await handleCustomerAddressDefault(req, res);
     return;
   }
+  if (req.method === "POST" && reqUrl.pathname === "/api/cart/add") {
+    await handleCartAddLine(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/cart/merge") {
+    await handleCartMerge(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/cart/clear") {
+    await handleCartClear(req, res);
+    return;
+  }
 
   if (req.method !== "GET") {
     res.writeHead(405);
@@ -1520,6 +1908,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/customer/session") {
     handleCustomerSession(req, res);
+    return;
+  }
+  if (reqUrl.pathname === "/api/cart") {
+    await handleCartGet(req, res);
     return;
   }
   if (reqUrl.pathname === "/api/customer/check-email") {

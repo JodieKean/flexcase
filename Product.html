@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flex Case — Product</title>
     <link rel="stylesheet" href="assets/navbar.css" />
+    <script src="assets/flexcase-cart-sync.js"></script>
     <style>
       :root {
         color-scheme: light;
@@ -817,6 +818,10 @@
         updatePriceBlock(selectedVariant);
         updateStock(selectedVariant);
 
+        if (typeof window.flexcaseRefreshCartFromServer === "function") {
+          await window.flexcaseRefreshCartFromServer().catch(() => {});
+        }
+
         const qtyContainer = qtyValueEl?.closest(".qty");
         qtyContainer?.addEventListener("click", (event) => {
           const symbol = event.target.textContent?.trim();
@@ -843,27 +848,48 @@
             addToCartBtn.disabled = true;
             addToCartBtn.textContent = "Adding...";
 
-            const items = readCart();
-            const existing = items.find((line) => line.variantId === selectedVariant.id);
-            if (existing) {
-              existing.quantity += quantity;
-            } else {
-              items.push({
-                variantId: selectedVariant.id,
-                productHandle: product.handle,
-                productTitle: product.title,
-                variantTitle: selectedVariant.title,
-                quantity,
-                price: selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount,
-                currencyCode:
-                  selectedVariant.price?.currencyCode ||
-                  product.priceRange?.minVariantPrice?.currencyCode ||
-                  "USD",
-                image: product.featuredImage?.url || "",
-              });
+            let sessionAuthed = false;
+            try {
+              let s;
+              try {
+                s = await fetch(apiUrl("/api/customer/session"), { credentials: "include" });
+              } catch (_) {
+                s = await fetch(localApiUrl("/api/customer/session"), { credentials: "include" });
+              }
+              const sj = await s.json();
+              sessionAuthed = Boolean(sj?.authenticated);
+            } catch (_) {
+              sessionAuthed = false;
             }
-            writeCart(items);
-            const totalQty = items.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
+
+            if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
+              await window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity);
+            } else {
+              const items = readCart();
+              const existing = items.find((line) => line.variantId === selectedVariant.id);
+              if (existing) {
+                existing.quantity += quantity;
+              } else {
+                items.push({
+                  variantId: selectedVariant.id,
+                  productHandle: product.handle,
+                  productTitle: product.title,
+                  variantTitle: selectedVariant.title,
+                  quantity,
+                  price: selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount,
+                  currencyCode:
+                    selectedVariant.price?.currencyCode ||
+                    product.priceRange?.minVariantPrice?.currencyCode ||
+                    "USD",
+                  image: product.featuredImage?.url || "",
+                });
+              }
+              writeCart(items);
+              window.flexcaseUpdateCartBadges?.();
+            }
+
+            const itemsAfter = readCart();
+            const totalQty = itemsAfter.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
             addToCartBtn.textContent = `Added (${totalQty})`;
             setTimeout(() => {
               addToCartBtn.disabled = false;

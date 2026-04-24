@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flex Case — Checkout</title>
     <link rel="stylesheet" href="assets/navbar.css" />
+    <script src="assets/flexcase-cart-sync.js"></script>
     <style>
       :root {
         color-scheme: light;
@@ -1099,18 +1100,28 @@
         cardNumber.focus();
       });
 
-      document.getElementById("checkout-form").addEventListener("submit", (e) => {
+      document.getElementById("checkout-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!validatePayment()) return;
         alert("Thanks — demo order placed. Connect this form to your payment provider next.");
         localStorage.removeItem(cartStorageKey);
+        try {
+          await window.flexcaseClearServerCart?.();
+        } catch (_) {
+          /* ignore */
+        }
+        window.flexcaseUpdateCartBadges?.();
       });
 
-      renderOrderLines(readCartItems());
-      selectMode("guest");
-      selectShipping("standard");
-      recalcTotals();
-      setStep(1);
+      void (async function initCheckoutCart() {
+        await (window.flexcaseRefreshCartFromServer?.() || Promise.resolve());
+      })().then(() => {
+        renderOrderLines(readCartItems());
+        selectMode("guest");
+        selectShipping("standard");
+        recalcTotals();
+        setStep(1);
+      });
     </script>
   </body>
 </html>
