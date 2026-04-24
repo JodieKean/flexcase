@@ -2386,8 +2386,9 @@
         const shouldSignOut = window.confirm("Are you sure you want to sign out?");
         if (!shouldSignOut) return false;
         clearClientSessionState();
+        showAuthRedirectOverlay("Always remember to Flex your collection!");
         // Use provider logout endpoint to clear Shopify Account SSO session too.
-        window.location.assign(apiUrl("/api/customer/logout"));
+        window.setTimeout(() => window.location.assign(apiUrl("/api/customer/logout")), 120);
         return true;
       }
 
@@ -2573,7 +2574,10 @@
         window.history.replaceState({}, "", authUrl.pathname + authUrl.search + authUrl.hash);
       }
 
-      if (authStatus === "success") {
+      const persistedAuth = getPersistedAuthSession();
+      const shouldAttemptWarmRestore = authStatus === "success" || Boolean(persistedAuth);
+
+      if (shouldAttemptWarmRestore) {
         authGate.classList.add("auth-hidden");
         accountApp.classList.add("auth-hidden");
         showAuthRedirectOverlay("Entering your Flex zone!");
@@ -2585,7 +2589,7 @@
         await populatePhoneCountryOptions();
         const ok = await syncServerCustomerSession();
         if (!ok) {
-          if (authStatus === "success") {
+          if (shouldAttemptWarmRestore) {
             setLoggedOutUI(
               "Sign in completed, but your account session was not detected. Check FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS and cookie settings, then try again.",
               true
