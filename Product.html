@@ -27,29 +27,6 @@
         margin: 0 auto;
       }
 
-      body.product-page-loading main {
-        visibility: hidden;
-      }
-
-      .product-page-loading-overlay {
-        position: fixed;
-        inset: 0;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        background: #f5f5f7;
-        z-index: 999;
-      }
-
-      body.product-page-loading .product-page-loading-overlay {
-        display: flex;
-      }
-
-      .product-page-loading-text {
-        color: #6e6e73;
-        font-size: 0.95rem;
-      }
-
       .product-hero {
         display: grid;
         grid-template-columns: minmax(420px, 1.25fr) minmax(380px, 1fr);
@@ -504,10 +481,7 @@
       }
     </style>
   </head>
-  <body class="product-page-loading">
-    <div class="product-page-loading-overlay" aria-live="polite">
-      <div class="product-page-loading-text">Loading product details...</div>
-    </div>
+  <body>
     <nav class="site-navbar" aria-label="Site">
       <div class="site-navbar-inner">
         <a class="site-brand" href="index.html" aria-label="Flex Case home">
@@ -626,10 +600,6 @@
 
     <script>
       (async function initShopifyProductPage() {
-        const revealPage = () => {
-          document.body.classList.remove("product-page-loading");
-        };
-        const revealFailSafe = setTimeout(revealPage, 10000);
         const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
         const apiUrl = (pathname) => `${API_BASE}${pathname}`;
         const localApiUrl = (pathname) => pathname;
@@ -686,7 +656,6 @@
           if (!listResponse.ok) {
             titleEl.textContent = "Unable to load products";
             subtitleEl.textContent = listPayload.error || "Check server/API configuration.";
-            revealPage();
             return;
           }
           const products = listPayload.products || [];
@@ -694,7 +663,6 @@
           if (!handle) {
             titleEl.textContent = "No products in store yet";
             subtitleEl.textContent = "Add products in Shopify Admin to populate this page.";
-            revealPage();
             return;
           }
         }
@@ -704,7 +672,6 @@
         if (!response.ok || !payload.product) {
           titleEl.textContent = "Product not found";
           subtitleEl.textContent = payload.error || "The requested product handle does not exist.";
-          revealPage();
           return;
         }
         const product = payload.product;
@@ -909,8 +876,6 @@
           if (!selectedVariant?.id) return;
           window.location.href = "checkout.html";
         });
-        clearTimeout(revealFailSafe);
-        revealPage();
       })();
     </script>
   </body>
