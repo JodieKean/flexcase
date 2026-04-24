@@ -2304,12 +2304,9 @@
       function confirmAndSignOut() {
         const shouldSignOut = window.confirm("Are you sure you want to sign out?");
         if (!shouldSignOut) return false;
-        fetchApiWithFallback("/api/customer/logout", {
-          method: "POST",
-          credentials: "include",
-        }).catch(() => {});
         clearClientSessionState();
-        setLoggedOutUI();
+        // Use provider logout endpoint to clear Shopify Account SSO session too.
+        window.location.assign(apiUrl("/api/customer/logout"));
         return true;
       }
 

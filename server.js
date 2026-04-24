@@ -533,7 +533,12 @@ function handleCustomerOauthStart(req, res) {
   authorizeUrl.searchParams.set("redirect_uri", CUSTOMER_ACCOUNT_REDIRECT_URI);
   authorizeUrl.searchParams.set("scope", CUSTOMER_ACCOUNT_SCOPES);
   authorizeUrl.searchParams.set("state", state);
-  if (mode === "signup") authorizeUrl.searchParams.set("prompt", "login");
+  if (mode === "signup") {
+    authorizeUrl.searchParams.set("prompt", "login");
+  } else {
+    // Prevent silent re-auth into the previous Shopify Account user.
+    authorizeUrl.searchParams.set("prompt", "select_account");
+  }
 
   res.writeHead(302, { Location: authorizeUrl.toString() });
   res.end();
