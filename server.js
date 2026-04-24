@@ -547,7 +547,11 @@ function handleCustomerOauthStart(req, res) {
   }
   if (emailHint) authorizeUrl.searchParams.set("login_hint", emailHint);
 
-  res.writeHead(302, { Location: authorizeUrl.toString() });
+  // Clear any stale backend session before initiating a new OAuth login attempt.
+  res.writeHead(302, {
+    Location: authorizeUrl.toString(),
+    "Set-Cookie": clearSessionCookie(),
+  });
   res.end();
 }
 

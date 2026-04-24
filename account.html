@@ -2212,6 +2212,8 @@
       }
 
       function beginCustomerOauth(mode, keepLoggedIn, email = "") {
+        // Always clear stale local session/cache before starting a fresh OAuth login.
+        clearClientSessionState();
         const params = new URLSearchParams();
         params.set("mode", mode);
         params.set("keep", keepLoggedIn ? "1" : "0");
