@@ -842,6 +842,30 @@
           localStorage.setItem(cartStorageKey, JSON.stringify(items));
         }
 
+        function addLineToLocalCart() {
+          const items = readCart();
+          const existing = items.find((line) => line.variantId === selectedVariant.id);
+          if (existing) {
+            existing.quantity += quantity;
+          } else {
+            items.push({
+              variantId: selectedVariant.id,
+              productHandle: product.handle,
+              productTitle: product.title,
+              variantTitle: selectedVariant.title,
+              quantity,
+              price: selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount,
+              currencyCode:
+                selectedVariant.price?.currencyCode ||
+                product.priceRange?.minVariantPrice?.currencyCode ||
+                "USD",
+              image: product.featuredImage?.url || "",
+            });
+          }
+          writeCart(items);
+          window.flexcaseUpdateCartBadges?.();
+        }
+
         addToCartBtn.addEventListener("click", async () => {
           if (!selectedVariant?.id) return;
           try {
@@ -863,29 +887,15 @@
             }
 
             if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
-              await window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity);
-            } else {
-              const items = readCart();
-              const existing = items.find((line) => line.variantId === selectedVariant.id);
-              if (existing) {
-                existing.quantity += quantity;
-              } else {
-                items.push({
-                  variantId: selectedVariant.id,
-                  productHandle: product.handle,
-                  productTitle: product.title,
-                  variantTitle: selectedVariant.title,
-                  quantity,
-                  price: selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount,
-                  currencyCode:
-                    selectedVariant.price?.currencyCode ||
-                    product.priceRange?.minVariantPrice?.currencyCode ||
-                    "USD",
-                  image: product.featuredImage?.url || "",
-                });
+              try {
+                await window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity);
+              } catch (error) {
+                // If remote cart API is unavailable, keep checkout usable with local cart.
+                console.warn("Remote add-to-cart failed; falling back to local cart.", error);
+                addLineToLocalCart();
               }
-              writeCart(items);
-              window.flexcaseUpdateCartBadges?.();
+            } else {
+              addLineToLocalCart();
             }
 
             const itemsAfter = readCart();

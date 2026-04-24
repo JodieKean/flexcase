@@ -282,7 +282,7 @@
       .badge-default {
         color: #b08d57;
         font-size: 0.92rem;
-        font-weight: 700;
+        font-weight: 400;
         background: transparent;
         border-radius: 0;
         line-height: 1.2;
@@ -1483,7 +1483,7 @@
             setBtn.type = "button";
             setBtn.className = "set-default";
             setBtn.dataset.setDefault = "";
-            setBtn.textContent = "Set as default";
+            setBtn.textContent = "Set As Default";
             footer.appendChild(setBtn);
           }
           if (isDefault) {
@@ -2233,7 +2233,7 @@
               ${bodyLines}${phoneHtml}
             </div>
             <div class="address-footer">
-              <button type="button" class="set-default ${address.isDefault ? "is-hidden" : ""}" data-set-default>Set as default</button>
+              <button type="button" class="set-default ${address.isDefault ? "is-hidden" : ""}" data-set-default>Set As Default</button>
             </div>
           `;
           addressList.appendChild(card);
