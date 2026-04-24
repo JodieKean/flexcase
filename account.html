@@ -509,6 +509,18 @@
         box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
       }
 
+      #new-address-country:invalid {
+        color: #8e8e93;
+      }
+
+      #new-address-country option {
+        color: #1d1d1f;
+      }
+
+      #new-address-country option[value=""] {
+        color: #8e8e93;
+      }
+
       .form-grid-address-3 {
         display: grid;
         grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr) minmax(0, 1fr);
@@ -1108,7 +1120,7 @@
             <div class="span-2">
               <label for="new-address-country">Country / region</label>
               <select id="new-address-country" name="countryCode" required aria-label="Country or region">
-                <option value="MY">Malaysia</option>
+                <option value="" selected disabled>Select your Country</option>
               </select>
             </div>
             <div>
@@ -1542,8 +1554,7 @@
         addAddressForm.reset();
         clearNewAddressFormError();
         if (newAddressCountry) {
-          const my = Array.from(newAddressCountry.options).find((o) => o.value === "MY");
-          if (my) newAddressCountry.value = "MY";
+          newAddressCountry.value = "";
         }
         prefillNewAddressForm();
       }
@@ -1914,6 +1925,14 @@
         const sel = document.getElementById("new-address-country");
         if (!sel || !rows?.length) return;
         sel.textContent = "";
+
+        const placeholder = document.createElement("option");
+        placeholder.value = "";
+        placeholder.textContent = "Select your Country";
+        placeholder.disabled = true;
+        placeholder.selected = true;
+        sel.appendChild(placeholder);
+
         const frag = document.createDocumentFragment();
         const sorted = [...rows].sort((a, b) => String(a.name).localeCompare(String(b.name)));
         for (const row of sorted) {
@@ -1923,9 +1942,7 @@
           frag.appendChild(opt);
         }
         sel.appendChild(frag);
-        const my = Array.from(sel.options).find((o) => o.value === "MY");
-        if (my) sel.value = "MY";
-        else if (sel.options.length) sel.selectedIndex = 0;
+        sel.value = "";
       }
 
       async function populatePhoneCountryOptions() {
