@@ -804,23 +804,19 @@ async function handleCustomerAccountData(req, res) {
         zip
         country
       }
-      addresses(first: 25) {
-        edges {
-          node {
-            id
-            firstName
-            lastName
-            company
-            address1
-            address2
-            city
-            province
-            provinceCode
-            zip
-            countryCodeV2
-            phone
-          }
-        }
+      addresses {
+        id
+        firstName
+        lastName
+        company
+        address1
+        address2
+        city
+        province
+        provinceCode
+        zip
+        countryCodeV2
+        phone
       }
       orders(first: 20, sortKey: PROCESSED_AT, reverse: true) {
         edges {
@@ -1109,14 +1105,15 @@ async function customerHasAnyAddresses(customerGid) {
   const q = `
     query CustomerAddrCount($id: ID!) {
       customer(id: $id) {
-        addresses(first: 1) {
-          edges { node { id } }
+        addresses {
+          id
         }
       }
     }
   `;
   const data = await adminGraphql(q, { id: customerGid });
-  return Boolean(data?.customer?.addresses?.edges?.length);
+  const list = data?.customer?.addresses;
+  return Array.isArray(list) && list.length > 0;
 }
 
 async function handleCustomerAddressCreate(req, res) {
@@ -1874,11 +1871,15 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (reqUrl.pathname === "/api/health") {
+    const storefrontOk = Boolean(STOREFRONT_ACCESS_TOKEN);
     json(res, 200, {
       ok: true,
       shop: SHOP_FROM_ENV,
       apiVersion: API_VERSION_FROM_ENV,
-      storefrontTokenConfigured: Boolean(STOREFRONT_ACCESS_TOKEN),
+      storefrontTokenConfigured: storefrontOk,
+      storefrontHint: storefrontOk
+        ? null
+        : "Set SHOPIFY_STOREFRONT_ACCESS_TOKEN in Railway (Storefront API app with cart + product scopes).",
       customerAccountConfigured: Boolean(
         CUSTOMER_ACCOUNT_CLIENT_ID &&
           CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT &&
