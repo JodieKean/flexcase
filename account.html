@@ -2577,10 +2577,13 @@
       const persistedAuth = getPersistedAuthSession();
       const shouldAttemptWarmRestore = authStatus === "success" || Boolean(persistedAuth);
 
-      if (shouldAttemptWarmRestore) {
+      if (authStatus === "success") {
         authGate.classList.add("auth-hidden");
         accountApp.classList.add("auth-hidden");
         showAuthRedirectOverlay("Entering your Flex zone!");
+      } else if (persistedAuth) {
+        // Fast path for regular page changes: avoid form flash and loading overlay.
+        setAuthenticatedUI(persistedAuth);
       } else {
         setLoggedOutUI(pendingGateMessage, pendingGateError);
       }
