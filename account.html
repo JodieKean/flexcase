@@ -1778,6 +1778,10 @@
       const cartStorageKey = "flexcase.local.cart";
       const cartMergedKey = "flexcase_guest_cart_merged";
       const authRedirectOverlay = document.getElementById("auth-redirect-overlay");
+      const authRedirectTitle = authRedirectOverlay?.querySelector(".auth-redirect-title");
+      const navbarProfileCurrentLink = document.querySelector(
+        '.icon-btn[href="account.html"][aria-current="page"]'
+      );
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
       const FRONTEND_BASE = (window.FLEXCASE_SITE_ORIGIN || window.location.origin || "").replace(/\/$/, "");
       const apiUrl = (pathname) => `${API_BASE}${pathname}`;
@@ -2101,6 +2105,12 @@
         window.flexcaseUpdateCartBadges?.();
       }
 
+      function hideAuthRedirectOverlay() {
+        if (!authRedirectOverlay) return;
+        authRedirectOverlay.classList.remove("show");
+        authRedirectOverlay.setAttribute("aria-hidden", "true");
+      }
+
       function setAuthenticatedUI(user) {
         const firstName = String(user?.firstName || "").trim();
         const fullName = String(user?.name || "").trim();
@@ -2117,6 +2127,7 @@
         applyPhoneToSettingsFields(user?.phone || "");
         authGate.classList.add("auth-hidden");
         accountApp.classList.remove("auth-hidden");
+        hideAuthRedirectOverlay();
       }
 
       function setLoggedOutUI(message = "You are currently signed out.", isError = false) {
@@ -2125,10 +2136,12 @@
         switchAuthTab("signin");
         if (headerOrderCountEl) headerOrderCountEl.textContent = "0 orders";
         setGateMessage(message, isError);
+        hideAuthRedirectOverlay();
       }
 
-      function showAuthRedirectOverlay() {
+      function showAuthRedirectOverlay(message = "We're sending you to Shopify verification") {
         if (!authRedirectOverlay) return;
+        if (authRedirectTitle) authRedirectTitle.textContent = message;
         authRedirectOverlay.classList.add("show");
         authRedirectOverlay.setAttribute("aria-hidden", "false");
       }
@@ -2478,6 +2491,10 @@
         confirmAndSignOut();
       });
 
+      navbarProfileCurrentLink?.addEventListener("click", (event) => {
+        event.preventDefault();
+      });
+
       settingsProfileForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
         clearProfileFieldErrors();
@@ -2556,21 +2573,21 @@
         window.history.replaceState({}, "", authUrl.pathname + authUrl.search + authUrl.hash);
       }
 
-      setLoggedOutUI(pendingGateMessage, pendingGateError);
+      if (authStatus === "success") {
+        authGate.classList.add("auth-hidden");
+        accountApp.classList.add("auth-hidden");
+        showAuthRedirectOverlay("Entering your Flex zone!");
+      } else {
+        setLoggedOutUI(pendingGateMessage, pendingGateError);
+      }
+
       void (async () => {
         await populatePhoneCountryOptions();
         const ok = await syncServerCustomerSession();
         if (!ok) {
           if (authStatus === "success") {
-            const existingMessage = String(authGateMessage?.textContent || "").trim();
-            const hasSpecificError =
-              existingMessage &&
-              existingMessage !== "Completing sign in..." &&
-              existingMessage !== "You are currently signed out.";
             setLoggedOutUI(
-              hasSpecificError
-                ? existingMessage
-                : "Sign in completed, but your account session was not detected. Check FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS and cookie settings, then try again.",
+              "Sign in completed, but your account session was not detected. Check FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS and cookie settings, then try again.",
               true
             );
             return;
