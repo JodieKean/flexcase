@@ -1045,11 +1045,9 @@
         renderOrderLines(items);
         recalcTotals();
         window.flexcaseUpdateCartBadges?.();
-        // Persist quantity edits to Shopify cart for signed-in users.
-        await window.flexcasePushLocalCartToServer?.();
-        const latest = readCartItems();
-        renderOrderLines(latest);
-        recalcTotals();
+        // Persist quantity edits to Shopify cart for signed-in users without
+        // forcing a second full re-render (prevents visual jumpiness).
+        void window.flexcasePushLocalCartToServer?.();
       }
 
       function setStep(step) {
