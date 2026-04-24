@@ -931,10 +931,16 @@
             }, 800);
           } catch (error) {
             addToCartBtn.disabled = false;
-            addToCartBtn.textContent = sessionAuthed
-              ? "Cart sync unavailable"
-              : "Add to Cart failed";
+            if (sessionAuthed) {
+              const msg = String(error?.message || "Cart sync unavailable").trim();
+              addToCartBtn.textContent = msg.slice(0, 42);
+            } else {
+              addToCartBtn.textContent = "Add to Cart failed";
+            }
             console.error(error);
+            setTimeout(() => {
+              addToCartBtn.textContent = `Add to Cart — ${priceNowEl.textContent}`;
+            }, 2200);
           }
         });
 

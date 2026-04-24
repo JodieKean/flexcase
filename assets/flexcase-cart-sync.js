@@ -138,18 +138,30 @@
   }
 
   async function flexcaseAddToCartLoggedIn(merchandiseId, quantity) {
-    const r = await fetchApi("/api/cart/add", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ merchandiseId, quantity }),
-      timeoutMs: 8000,
-    });
+    let r;
+    try {
+      r = await fetchApi("/api/cart/add", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ merchandiseId, quantity }),
+        timeoutMs: 8000,
+      });
+    } catch (error) {
+      const msg = String(error?.message || "").toLowerCase();
+      if (msg.includes("abort")) {
+        throw new Error("Cart API timeout");
+      }
+      throw new Error("Cart API unavailable");
+    }
     const raw = await r.text();
     let j = {};
     try {
       j = raw ? JSON.parse(raw) : {};
     } catch (_) {}
-    if (!r.ok) throw new Error(j.error || "Unable to add to cart.");
+    if (!r.ok) {
+      const reason = j.error || `Add failed (${r.status})`;
+      throw new Error(reason);
+    }
     writeLocalLines(j.lines || []);
     updateBadges();
   }
