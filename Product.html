@@ -691,6 +691,15 @@
             clearTimeout(timer);
           }
         }
+        function withTimeout(promise, timeoutMs, errorMessage) {
+          let timer = null;
+          const timeoutPromise = new Promise((_, reject) => {
+            timer = setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+          });
+          return Promise.race([promise, timeoutPromise]).finally(() => {
+            if (timer) clearTimeout(timer);
+          });
+        }
         const titleEl = document.getElementById("product-title");
         const subtitleEl = document.getElementById("product-subtitle");
         const priceNowEl = document.getElementById("product-price-now");
@@ -877,11 +886,11 @@
 
         addToCartBtn.addEventListener("click", async () => {
           if (!selectedVariant?.id) return;
+          let sessionAuthed = false;
           try {
             addToCartBtn.disabled = true;
             addToCartBtn.textContent = "Adding...";
 
-            let sessionAuthed = false;
             try {
               let s;
               try {
@@ -904,7 +913,11 @@
             }
 
             if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
-              await window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity);
+              await withTimeout(
+                window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity),
+                9000,
+                "Cart sync timeout"
+              );
             } else {
               addLineToLocalCart();
             }
