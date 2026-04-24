@@ -1,6 +1,10 @@
 (function () {
   const CART_KEY = "flexcase.local.cart";
   const MERGED_KEY = "flexcase_guest_cart_merged";
+  let latestReplaceSyncRequestId = 0;
+  const REPLACE_SYNC_DEBOUNCE_MS = 280;
+  let replaceSyncTimer = null;
+  let replaceSyncPendingResolvers = [];
 
   function apiBase() {
     return (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -179,11 +183,12 @@
     }
   }
 
-  async function flexcasePushLocalCartToServer() {
+  async function runReplaceSyncNow() {
     if (!(await isSessionAuthenticated())) return false;
+    const requestId = ++latestReplaceSyncRequestId;
     const local = readLocalLines();
     try {
-      const r = await fetchApi("/api/cart/merge", {
+      const r = await fetchApi("/api/cart/replace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lines: local }),
@@ -191,12 +196,27 @@
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok) return false;
+      // Ignore stale responses so older requests never overwrite newer edits.
+      if (requestId !== latestReplaceSyncRequestId) return true;
       writeLocalLines(j.lines || []);
       updateBadges();
       return true;
     } catch (_) {
       return false;
     }
+  }
+
+  function flexcasePushLocalCartToServer() {
+    return new Promise((resolve) => {
+      replaceSyncPendingResolvers.push(resolve);
+      if (replaceSyncTimer) clearTimeout(replaceSyncTimer);
+      replaceSyncTimer = setTimeout(async () => {
+        replaceSyncTimer = null;
+        const resolvers = replaceSyncPendingResolvers.splice(0, replaceSyncPendingResolvers.length);
+        const ok = await runReplaceSyncNow();
+        for (const done of resolvers) done(ok);
+      }, REPLACE_SYNC_DEBOUNCE_MS);
+    });
   }
 
   function flexcaseOnLogoutClearMergeFlag() {

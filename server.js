@@ -1680,6 +1680,60 @@ async function handleCartMerge(req, res) {
   }
 }
 
+async function handleCartReplace(req, res) {
+  try {
+    const customer = await resolveAuthCustomerForCart(req);
+    if (!customer) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const requestedLines = Array.isArray(body.lines) ? body.lines : [];
+    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+
+    // Build exact cart state from the provided payload.
+    const byVariant = new Map();
+    for (const line of requestedLines) {
+      const variantId = String(line.variantId || "").trim();
+      if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
+      const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
+      byVariant.set(variantId, qty);
+    }
+
+    const lineIds = (cart?.lines?.edges || []).map((e) => e?.node?.id).filter(Boolean);
+    if (lineIds.length) {
+      const rm = await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, { cartId, lineIds });
+      const rmErrs = rm?.cartLinesRemove?.userErrors?.filter((e) => e?.message) || [];
+      if (rmErrs.length) {
+        json(res, 400, { error: rmErrs.map((e) => e.message).join(", ") });
+        return;
+      }
+    }
+
+    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
+      merchandiseId,
+      quantity,
+    }));
+    if (linesToAdd.length) {
+      const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
+      const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+      if (addErrs.length) {
+        json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
+        return;
+      }
+    }
+
+    const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+    const nextCart = refreshed?.cart;
+    json(res, 200, {
+      lines: mapStorefrontCartToClientLines(nextCart),
+      totalQuantity: Number(nextCart?.totalQuantity || 0),
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
 async function handleCartClear(req, res) {
   try {
     const customer = await resolveAuthCustomerForCart(req);
@@ -1911,6 +1965,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && reqUrl.pathname === "/api/cart/merge") {
     await handleCartMerge(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/cart/replace") {
+    await handleCartReplace(req, res);
     return;
   }
   if (req.method === "POST" && reqUrl.pathname === "/api/cart/clear") {
