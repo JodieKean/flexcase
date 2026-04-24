@@ -409,25 +409,102 @@
         margin-top: 6px;
         display: inline-flex;
         align-items: center;
-        gap: 8px;
+        gap: 10px;
       }
 
       .qty-btn {
-        width: 22px;
-        height: 22px;
-        border: 1px solid #d2d2d7;
-        border-radius: 999px;
-        background: #ffffff;
-        color: #1d1d1f;
+        width: 18px;
+        height: 18px;
+        border: none;
+        border-radius: 0;
+        background: transparent;
+        color: #6e6e73;
         cursor: pointer;
         line-height: 1;
+        padding: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.35rem;
+        font-weight: 400;
+      }
+
+      .qty-btn:hover,
+      .qty-btn:active,
+      .qty-btn:focus,
+      .qty-btn:focus-visible {
+        color: #6e6e73;
+        outline: none;
       }
 
       .qty-value {
-        min-width: 12px;
+        min-width: 14px;
         text-align: center;
-        font-size: 0.82rem;
+        font-size: 1.35rem;
+        line-height: 1;
+        font-weight: 400;
         color: #6e6e73;
+      }
+
+      .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.35);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+        padding: 18px;
+      }
+
+      .modal-backdrop.open {
+        display: flex;
+      }
+
+      .modal {
+        width: min(420px, 100%);
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 16px;
+        padding: 16px;
+        box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+      }
+
+      .modal h3 {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+      }
+
+      .modal p {
+        margin: 0 0 14px;
+        color: #6e6e73;
+        font-size: 0.95rem;
+        line-height: 1.45;
+      }
+
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+      }
+
+      .modal-actions button {
+        border-radius: 999px;
+        padding: 10px 14px;
+        font-size: 0.92rem;
+        cursor: pointer;
+      }
+
+      .modal-cancel {
+        border: 1px solid #d2d2d7;
+        background: #ffffff;
+        color: #1d1d1f;
+      }
+
+      .modal-delete {
+        border: 1px solid #1d1d1f;
+        background: #1d1d1f;
+        color: #f5f5f7;
       }
 
       .line-item .price {
@@ -794,6 +871,17 @@
       </div>
     </main>
 
+    <div id="remove-item-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="remove-item-title" aria-hidden="true">
+      <div class="modal">
+        <h3 id="remove-item-title">Remove item?</h3>
+        <p>Do you want to remove this item from your cart?</p>
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="remove-item-cancel">Cancel</button>
+          <button type="button" class="modal-delete" id="remove-item-confirm">Remove</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       const money = (n, currency = "USD") =>
         Number(n || 0).toLocaleString(undefined, { style: "currency", currency });
@@ -847,6 +935,10 @@
       const totalDisplay = document.getElementById("totalDisplay");
       const promoMessage = document.getElementById("promoMessage");
       const orderLineItems = document.getElementById("order-line-items");
+      const removeItemModal = document.getElementById("remove-item-modal");
+      const removeItemCancel = document.getElementById("remove-item-cancel");
+      const removeItemConfirm = document.getElementById("remove-item-confirm");
+      let pendingRemoveResolve = null;
 
       function readCartItems() {
         try {
@@ -909,14 +1001,41 @@
           .join("");
       }
 
-      function adjustLineQuantity(variantId, delta) {
+      function confirmRemoveItemModal() {
+        return new Promise((resolve) => {
+          pendingRemoveResolve = resolve;
+          removeItemModal.classList.add("open");
+          removeItemModal.setAttribute("aria-hidden", "false");
+        });
+      }
+
+      function closeRemoveItemModal(confirmed) {
+        removeItemModal.classList.remove("open");
+        removeItemModal.setAttribute("aria-hidden", "true");
+        const resolver = pendingRemoveResolve;
+        pendingRemoveResolve = null;
+        if (resolver) resolver(Boolean(confirmed));
+      }
+
+      removeItemCancel?.addEventListener("click", () => closeRemoveItemModal(false));
+      removeItemConfirm?.addEventListener("click", () => closeRemoveItemModal(true));
+      removeItemModal?.addEventListener("click", (event) => {
+        if (event.target === removeItemModal) closeRemoveItemModal(false);
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && removeItemModal?.classList.contains("open")) {
+          closeRemoveItemModal(false);
+        }
+      });
+
+      async function adjustLineQuantity(variantId, delta) {
         const items = readCartItems();
         const idx = items.findIndex((line) => String(line.variantId || "") === String(variantId || ""));
         if (idx < 0) return;
         const currentQty = Math.max(1, Number(items[idx].quantity || 1));
         const nextQty = currentQty + Number(delta || 0);
         if (nextQty < 1) {
-          const shouldRemove = window.confirm("Remove this item from cart?");
+          const shouldRemove = await confirmRemoveItemModal();
           if (!shouldRemove) return;
           items.splice(idx, 1);
         } else {
@@ -1187,7 +1306,7 @@
         const lineItem = event.target.closest("[data-variant-id]");
         const variantId = lineItem?.dataset?.variantId || "";
         if (!variantId) return;
-        adjustLineQuantity(variantId, plusBtn ? 1 : -1);
+        void adjustLineQuantity(variantId, plusBtn ? 1 : -1);
       });
 
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
