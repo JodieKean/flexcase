@@ -1118,10 +1118,14 @@
           <div id="new-address-form-error" class="field-error-text" role="status" aria-live="polite"></div>
           <div class="form-grid">
             <div class="span-2">
-              <label for="new-address-country">Country / region</label>
-              <select id="new-address-country" name="countryCode" required aria-label="Country or region">
-                <option value="" selected disabled>Select your Country</option>
-              </select>
+              <label for="new-address-name">Address name</label>
+              <input
+                id="new-address-name"
+                name="addressName"
+                type="text"
+                placeholder="Home, Office, etc."
+                required
+              />
             </div>
             <div>
               <label for="new-address-first-name">First name</label>
@@ -1130,10 +1134,6 @@
             <div>
               <label for="new-address-last-name">Last name</label>
               <input id="new-address-last-name" name="lastName" type="text" autocomplete="family-name" required />
-            </div>
-            <div class="span-2">
-              <label for="new-address-company">Company (optional)</label>
-              <input id="new-address-company" name="company" type="text" autocomplete="organization" />
             </div>
             <div class="span-2">
               <label for="new-address-line2">Apartment, suite, etc.</label>
@@ -1165,6 +1165,12 @@
                   placeholder="e.g. SGR or Selangor"
                 />
               </div>
+            </div>
+            <div class="span-2">
+              <label for="new-address-country">Country / region</label>
+              <select id="new-address-country" name="countryCode" required aria-label="Country or region">
+                <option value="" selected disabled>Select your Country</option>
+              </select>
             </div>
             <div class="span-2">
               <label for="new-address-phone-national">Phone</label>
@@ -1357,9 +1363,9 @@
       const showAddAddressBtn = document.getElementById("show-add-address");
       const cancelAddAddressBtn = document.getElementById("cancel-add-address");
       const newAddressFormError = document.getElementById("new-address-form-error");
+      const newAddressName = document.getElementById("new-address-name");
       const newAddressFirstName = document.getElementById("new-address-first-name");
       const newAddressLastName = document.getElementById("new-address-last-name");
-      const newAddressCompany = document.getElementById("new-address-company");
       const newAddressCountry = document.getElementById("new-address-country");
       const newAddressLine2 = document.getElementById("new-address-line2");
       const newAddressZip = document.getElementById("new-address-zip");
@@ -1563,9 +1569,10 @@
       addAddressForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         clearNewAddressFormError();
+        const addressName = String(newAddressName?.value || "").trim();
         const firstName = String(newAddressFirstName?.value || "").trim();
         const lastName = String(newAddressLastName?.value || "").trim();
-        const company = String(newAddressCompany?.value || "").trim();
+        const company = addressName;
         const address1 = String(newAddressLine2?.value || "").trim();
         const address2 = "";
         const city = String(newAddressCity?.value || "").trim();
@@ -1575,6 +1582,7 @@
         const phone = composePhoneFromRow(newAddressPhoneCountry, newAddressPhoneNational);
 
         const fieldErrors = {};
+        if (!addressName) fieldErrors.addressName = "Address name is required.";
         if (!firstName) fieldErrors.firstName = "First name is required.";
         if (!lastName) fieldErrors.lastName = "Last name is required.";
         if (!address1) fieldErrors.address1 = "Apartment, suite, etc. is required.";
