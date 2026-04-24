@@ -804,6 +804,24 @@ async function handleCustomerAccountData(req, res) {
         zip
         country
       }
+      addresses(first: 25) {
+        edges {
+          node {
+            id
+            firstName
+            lastName
+            company
+            address1
+            address2
+            city
+            province
+            provinceCode
+            zip
+            countryCodeV2
+            phone
+          }
+        }
+      }
       orders(first: 20, sortKey: PROCESSED_AT, reverse: true) {
         edges {
           node {
@@ -900,7 +918,7 @@ async function handleCustomerAccountData(req, res) {
     const addressesRaw = customerNode.addresses;
     const addresses = Array.isArray(addressesRaw)
       ? addressesRaw.filter(Boolean)
-      : customerNode.addresses?.edges?.map((edge) => edge?.node).filter(Boolean) || [];
+      : (addressesRaw?.edges || []).map((edge) => edge?.node).filter(Boolean);
     const defaultAddressId = customerNode.defaultAddress?.id || "";
     const orders =
       customerNode.orders?.edges?.map((edge) => edge?.node).filter(Boolean) || [];
@@ -917,12 +935,15 @@ async function handleCustomerAccountData(req, res) {
         id: a.id,
         firstName: a.firstName || "",
         lastName: a.lastName || "",
+        company: a.company || "",
         address1: a.address1 || "",
         address2: a.address2 || "",
         city: a.city || "",
         province: a.province || "",
+        provinceCode: a.provinceCode || "",
         zip: a.zip || "",
-        country: a.country || "",
+        country: a.countryCodeV2 || "",
+        phone: a.phone || "",
         isDefault: a.id === defaultAddressId,
       })),
       orders: orders.map((o) => ({
@@ -1084,6 +1105,239 @@ async function handleCustomerProfileUpdate(req, res) {
   }
 }
 
+async function customerHasAnyAddresses(customerGid) {
+  const q = `
+    query CustomerAddrCount($id: ID!) {
+      customer(id: $id) {
+        addresses(first: 1) {
+          edges { node { id } }
+        }
+      }
+    }
+  `;
+  const data = await adminGraphql(q, { id: customerGid });
+  return Boolean(data?.customer?.addresses?.edges?.length);
+}
+
+async function handleCustomerAddressCreate(req, res) {
+  try {
+    const current = getCustomerSession(req);
+    if (!current?.session?.customer?.email) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const currentEmail = String(current.session.customer.email || "").trim().toLowerCase();
+    const customer = await findCustomerByEmail(currentEmail);
+    if (!customer?.id) {
+      json(res, 404, { error: "Customer record not found." });
+      return;
+    }
+
+    const firstName = String(body.firstName || "").trim();
+    const lastName = String(body.lastName || "").trim();
+    const company = String(body.company || "").trim();
+    const address1 = String(body.address1 || "").trim();
+    const address2 = String(body.address2 || "").trim();
+    const city = String(body.city || "").trim();
+    const provinceCode = String(body.provinceCode || "").trim();
+    const zip = String(body.zip || "").trim();
+    const countryCode = String(body.countryCode || "").trim().toUpperCase();
+    const phone = normalizePhone(String(body.phone || "").trim());
+
+    const fieldErrors = {};
+    if (!firstName) fieldErrors.firstName = "First name is required.";
+    if (!lastName) fieldErrors.lastName = "Last name is required.";
+    if (!address1) fieldErrors.address1 = "Address is required.";
+    if (!city) fieldErrors.city = "City is required.";
+    if (!countryCode || !/^[A-Z]{2}$/.test(countryCode)) {
+      fieldErrors.countryCode = "Select a valid country.";
+    }
+    if (Object.keys(fieldErrors).length) {
+      json(res, 400, { error: "Unable to save address.", fieldErrors });
+      return;
+    }
+
+    const hasExisting = await customerHasAnyAddresses(customer.id);
+    const setAsDefault = Boolean(body.setAsDefault) || !hasExisting;
+
+    const addressInput = {
+      firstName,
+      lastName,
+      company: company || null,
+      address1,
+      address2: address2 || null,
+      city,
+      provinceCode: provinceCode || null,
+      zip: zip || null,
+      countryCode,
+      phone: phone || null,
+    };
+
+    const mutation = `
+      mutation CustomerAddressCreate($customerId: ID!, $address: MailingAddressInput!, $setAsDefault: Boolean) {
+        customerAddressCreate(customerId: $customerId, address: $address, setAsDefault: $setAsDefault) {
+          address {
+            id
+            firstName
+            lastName
+            company
+            address1
+            address2
+            city
+            province
+            provinceCode
+            zip
+            countryCodeV2
+            phone
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    const data = await adminGraphql(mutation, {
+      customerId: customer.id,
+      address: addressInput,
+      setAsDefault,
+    });
+    const payload = data?.customerAddressCreate;
+    if (payload?.userErrors?.length) {
+      json(res, 400, {
+        error: payload.userErrors.map((e) => e.message).join(", "),
+      });
+      return;
+    }
+    const created = payload?.address;
+    if (!created?.id) {
+      json(res, 500, { error: "Unable to create address." });
+      return;
+    }
+    json(res, 200, {
+      address: {
+        id: created.id,
+        firstName: created.firstName || "",
+        lastName: created.lastName || "",
+        company: created.company || "",
+        address1: created.address1 || "",
+        address2: created.address2 || "",
+        city: created.city || "",
+        province: created.province || "",
+        provinceCode: created.provinceCode || "",
+        zip: created.zip || "",
+        country: created.countryCodeV2 || "",
+        phone: created.phone || "",
+        isDefault: Boolean(setAsDefault),
+      },
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCustomerAddressDelete(req, res) {
+  try {
+    const current = getCustomerSession(req);
+    if (!current?.session?.customer?.email) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const addressId = String(body.id || "").trim();
+    if (!addressId) {
+      json(res, 400, { error: "Address id is required." });
+      return;
+    }
+    const currentEmail = String(current.session.customer.email || "").trim().toLowerCase();
+    const customer = await findCustomerByEmail(currentEmail);
+    if (!customer?.id) {
+      json(res, 404, { error: "Customer record not found." });
+      return;
+    }
+
+    const mutation = `
+      mutation CustomerAddressDelete($customerId: ID!, $addressId: ID!) {
+        customerAddressDelete(customerId: $customerId, addressId: $addressId) {
+          deletedAddressId
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    const data = await adminGraphql(mutation, {
+      customerId: customer.id,
+      addressId,
+    });
+    const payload = data?.customerAddressDelete;
+    if (payload?.userErrors?.length) {
+      json(res, 400, {
+        error: payload.userErrors.map((e) => e.message).join(", "),
+      });
+      return;
+    }
+    json(res, 200, { ok: true, deletedAddressId: payload?.deletedAddressId || addressId });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCustomerAddressDefault(req, res) {
+  try {
+    const current = getCustomerSession(req);
+    if (!current?.session?.customer?.email) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const addressId = String(body.id || "").trim();
+    if (!addressId) {
+      json(res, 400, { error: "Address id is required." });
+      return;
+    }
+    const currentEmail = String(current.session.customer.email || "").trim().toLowerCase();
+    const customer = await findCustomerByEmail(currentEmail);
+    if (!customer?.id) {
+      json(res, 404, { error: "Customer record not found." });
+      return;
+    }
+
+    const mutation = `
+      mutation CustomerUpdateDefaultAddress($customerId: ID!, $addressId: ID!) {
+        customerUpdateDefaultAddress(customerId: $customerId, addressId: $addressId) {
+          customer {
+            id
+            defaultAddress {
+              id
+            }
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+    const data = await adminGraphql(mutation, {
+      customerId: customer.id,
+      addressId,
+    });
+    const payload = data?.customerUpdateDefaultAddress;
+    if (payload?.userErrors?.length) {
+      json(res, 400, {
+        error: payload.userErrors.map((e) => e.message).join(", "),
+      });
+      return;
+    }
+    json(res, 200, { ok: true });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
 function handleCustomerLogout(req, res) {
   const returnTo = `${FRONTEND_ORIGIN}/account.html`;
   const location = CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT
@@ -1210,6 +1464,18 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && reqUrl.pathname === "/api/customer/profile") {
     await handleCustomerProfileUpdate(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/customer/address") {
+    await handleCustomerAddressCreate(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/customer/address/delete") {
+    await handleCustomerAddressDelete(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/customer/address/default") {
+    await handleCustomerAddressDefault(req, res);
     return;
   }
 

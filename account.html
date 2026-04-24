@@ -508,10 +508,18 @@
         box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
       }
 
+      .form-grid-address-3 {
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.15fr) minmax(0, 1fr);
+        gap: 10px 14px;
+      }
+
       .new-address-actions {
         margin-top: 14px;
         display: flex;
+        justify-content: flex-end;
         gap: 10px;
+        flex-wrap: wrap;
       }
 
       .new-address-actions button {
@@ -893,6 +901,10 @@
           grid-template-columns: 1fr;
         }
 
+        .form-grid-address-3 {
+          grid-template-columns: 1fr;
+        }
+
       }
     </style>
   </head>
@@ -1089,89 +1101,91 @@
         </div>
 
         <form id="new-address-form" class="new-address-card hidden">
-          <h3>New Address</h3>
+          <h3>Add new address</h3>
+          <div id="new-address-form-error" class="field-error-text" role="status" aria-live="polite"></div>
           <div class="form-grid">
-            <div>
-              <label for="addressLabel">Label (home/Office)</label>
-              <input id="addressLabel" name="addressLabel" placeholder="Home" required />
+            <div class="span-2">
+              <label for="new-address-country">Country / region</label>
+              <select id="new-address-country" name="countryCode" required aria-label="Country or region">
+                <option value="MY">Malaysia</option>
+              </select>
             </div>
             <div>
-              <label for="addressFullName">Full Name</label>
-              <input id="addressFullName" name="addressFullName" placeholder="Marcus Chen" required />
+              <label for="new-address-first-name">First name</label>
+              <input id="new-address-first-name" name="firstName" type="text" autocomplete="given-name" required />
             </div>
             <div>
-              <label for="addressStreet">Street Address</label>
-              <input id="addressStreet" name="addressStreet" placeholder="123 Collector Lane" required />
+              <label for="new-address-last-name">Last name</label>
+              <input id="new-address-last-name" name="lastName" type="text" autocomplete="family-name" required />
             </div>
-            <div>
-              <label for="addressCity">City</label>
-              <input id="addressCity" name="addressCity" placeholder="San Francisco" required />
+            <div class="span-2">
+              <label for="new-address-company">Company (optional)</label>
+              <input id="new-address-company" name="company" type="text" autocomplete="organization" />
             </div>
-            <div>
-              <label for="addressState">State</label>
-              <input id="addressState" name="addressState" placeholder="CA" required />
+            <div class="span-2">
+              <label for="new-address-line1">Address</label>
+              <input
+                id="new-address-line1"
+                name="address1"
+                type="text"
+                autocomplete="street-address"
+                placeholder="Start typing your address…"
+                required
+              />
             </div>
-            <div>
-              <label for="addressZip">ZIP Code</label>
-              <input id="addressZip" name="addressZip" placeholder="94102" required />
+            <div class="span-2">
+              <label for="new-address-line2">Apartment, suite, etc. (optional)</label>
+              <input
+                id="new-address-line2"
+                name="address2"
+                type="text"
+                autocomplete="address-line2"
+                placeholder="Apartment, suite, unit, building, floor, etc."
+              />
+            </div>
+            <div class="span-2 form-grid-address-3">
+              <div>
+                <label for="new-address-zip">Postcode</label>
+                <input id="new-address-zip" name="zip" type="text" autocomplete="postal-code" />
+              </div>
+              <div>
+                <label for="new-address-city">City</label>
+                <input id="new-address-city" name="city" type="text" autocomplete="address-level2" required />
+              </div>
+              <div>
+                <label for="new-address-province">State / territory</label>
+                <input
+                  id="new-address-province"
+                  name="provinceCode"
+                  type="text"
+                  autocomplete="address-level1"
+                  placeholder="e.g. SGR or Selangor"
+                />
+              </div>
+            </div>
+            <div class="span-2">
+              <label for="new-address-phone-national">Phone</label>
+              <div class="phone-row">
+                <select id="new-address-phone-country" aria-label="Phone country code">
+                  <option value="MY" data-dial="+60" data-full-label="Malaysia (+60)" data-short-label="MY (+60)">MY (+60)</option>
+                </select>
+                <input
+                  id="new-address-phone-national"
+                  name="phoneNational"
+                  type="text"
+                  autocomplete="tel"
+                  placeholder="Enter phone number"
+                />
+              </div>
             </div>
           </div>
           <div class="new-address-actions">
-            <button type="submit" class="save-address-btn">Save Address</button>
             <button type="button" class="cancel-address-btn" id="cancel-add-address">Cancel</button>
+            <button type="submit" class="save-address-btn">Save</button>
           </div>
         </form>
 
-        <div class="address-grid" id="address-list">
-          <article class="address-card default" data-address-card>
-            <div class="address-head">
-              <div class="address-title">
-                <h3>Home</h3>
-                <span class="badge-default">Default</span>
-              </div>
-              <div class="address-actions">
-                <button type="button" class="icon-link" aria-label="Delete address" data-delete-address>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="13" height="13">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="address-body">
-              <strong>Marcus Chen</strong>
-              847 Fillmore Street, Apt 3B<br />
-              San Francisco, CA 94117<br />
-              United States
-            </div>
-            <div class="address-footer">
-              <button type="button" class="set-default is-hidden" data-set-default>Set as default</button>
-            </div>
-          </article>
-
-          <article class="address-card" data-address-card>
-            <div class="address-head">
-              <div class="address-title">
-                <h3>Office</h3>
-              </div>
-              <div class="address-actions">
-                <button type="button" class="icon-link" aria-label="Delete address" data-delete-address>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="13" height="13">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"></path>
-                  </svg>
-                </button>
-              </div>
-            </div>
-            <div class="address-body">
-              <strong>Marcus Chen</strong>
-              560 Mission Street, Suite 1200<br />
-              San Francisco, CA 94105<br />
-              United States
-            </div>
-            <div class="address-footer">
-              <button type="button" class="set-default" data-set-default>Set as default</button>
-            </div>
-          </article>
-        </div>
+        <div class="address-grid" id="address-list"></div>
       </section>
 
       <section id="section-settings" class="account-section hidden">
@@ -1339,6 +1353,21 @@
       const addAddressForm = document.getElementById("new-address-form");
       const showAddAddressBtn = document.getElementById("show-add-address");
       const cancelAddAddressBtn = document.getElementById("cancel-add-address");
+      const newAddressFormError = document.getElementById("new-address-form-error");
+      const newAddressFirstName = document.getElementById("new-address-first-name");
+      const newAddressLastName = document.getElementById("new-address-last-name");
+      const newAddressCompany = document.getElementById("new-address-company");
+      const newAddressCountry = document.getElementById("new-address-country");
+      const newAddressLine1 = document.getElementById("new-address-line1");
+      const newAddressLine2 = document.getElementById("new-address-line2");
+      const newAddressZip = document.getElementById("new-address-zip");
+      const newAddressCity = document.getElementById("new-address-city");
+      const newAddressProvince = document.getElementById("new-address-province");
+      const newAddressPhoneCountry = document.getElementById("new-address-phone-country");
+      const newAddressPhoneNational = document.getElementById("new-address-phone-national");
+
+      let latestShopifyCustomerProfile = { firstName: "", lastName: "", phone: "" };
+      let cachedAddressCount = 0;
       const deleteAddressModal = document.getElementById("delete-address-modal");
       const deleteAddressCancel = document.getElementById("delete-address-cancel");
       const deleteAddressConfirm = document.getElementById("delete-address-confirm");
@@ -1354,25 +1383,12 @@
         deleteModalTrigger = trigger || null;
         deleteAddressModal.classList.add("open");
         deleteAddressModal.setAttribute("aria-hidden", "false");
-
-        const cards = addressList.querySelectorAll("[data-address-card]");
-        const onlyOne = cards.length <= 1;
-
-        if (onlyOne) {
-          deleteAddressTitle.textContent = "Can't delete this address";
-          deleteAddressBody.textContent = "You need at least one saved address on your account.";
-          deleteAddressCancel.classList.add("hidden");
-          deleteAddressConfirm.classList.add("hidden");
-          deleteAddressDismissSingle.classList.remove("hidden");
-          deleteAddressDismissSingle.focus();
-        } else {
-          deleteAddressTitle.textContent = "Delete address?";
-          deleteAddressBody.textContent = "This will remove the address from your saved list.";
-          deleteAddressCancel.classList.remove("hidden");
-          deleteAddressConfirm.classList.remove("hidden");
-          deleteAddressDismissSingle.classList.add("hidden");
-          deleteAddressConfirm.focus();
-        }
+        deleteAddressTitle.textContent = "Delete address?";
+        deleteAddressBody.textContent = "This will remove the address from your Shopify account.";
+        deleteAddressCancel.classList.remove("hidden");
+        deleteAddressConfirm.classList.remove("hidden");
+        deleteAddressDismissSingle.classList.add("hidden");
+        deleteAddressConfirm.focus();
       }
 
       function closeDeleteAddressModal() {
@@ -1390,24 +1406,33 @@
         deleteModalTrigger = null;
       }
 
-      function confirmDeleteAddress() {
-        if (!pendingDeleteCard) return;
-        const cards = addressList.querySelectorAll("[data-address-card]");
-        if (cards.length <= 1) {
-          closeDeleteAddressModal();
-          return;
-        }
-
-        const wasDefault = pendingDeleteCard.classList.contains("default");
-        pendingDeleteCard.remove();
-
-        if (wasDefault) {
-          const next = addressList.querySelector("[data-address-card]");
-          if (next) next.classList.add("default");
-        }
-
-        syncDefaultAddressLabels();
+      async function confirmDeleteAddress() {
+        const card = pendingDeleteCard;
+        if (!card) return;
+        const addressId = String(card.dataset.addressId || "").trim();
         closeDeleteAddressModal();
+        if (!addressId) return;
+        try {
+          const response = await fetchApiWithFallback("/api/customer/address/delete", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: addressId }),
+          });
+          const raw = await response.text();
+          let payload = {};
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch (_) {
+            payload = {};
+          }
+          if (!response.ok) {
+            throw new Error(payload.error || "Unable to delete address.");
+          }
+          await loadCustomerAccountData();
+        } catch (error) {
+          window.alert(error.message || "Unable to delete address.");
+        }
       }
 
       deleteAddressCancel.addEventListener("click", closeDeleteAddressModal);
@@ -1473,18 +1498,57 @@
         if (!setDefaultButton) return;
         const card = setDefaultButton.closest("[data-address-card]");
         if (!card) return;
-        addressList.querySelectorAll("[data-address-card]").forEach((c) => {
-          c.classList.remove("default");
-        });
-        card.classList.add("default");
-        syncDefaultAddressLabels();
+        const addressId = String(card.dataset.addressId || "").trim();
+        if (!addressId) return;
+        void (async () => {
+          try {
+            const response = await fetchApiWithFallback("/api/customer/address/default", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ id: addressId }),
+            });
+            const raw = await response.text();
+            let payload = {};
+            try {
+              payload = raw ? JSON.parse(raw) : {};
+            } catch (_) {
+              payload = {};
+            }
+            if (!response.ok) {
+              throw new Error(payload.error || "Unable to set default address.");
+            }
+            await loadCustomerAccountData();
+          } catch (error) {
+            window.alert(error.message || "Unable to set default address.");
+          }
+        })();
       });
+
+      function clearNewAddressFormError() {
+        if (newAddressFormError) newAddressFormError.textContent = "";
+      }
+
+      function prefillNewAddressForm() {
+        clearNewAddressFormError();
+        const c = latestShopifyCustomerProfile;
+        if (newAddressFirstName) newAddressFirstName.value = c.firstName || "";
+        if (newAddressLastName) newAddressLastName.value = c.lastName || "";
+        applyPhoneFullToRow(newAddressPhoneCountry, newAddressPhoneNational, c.phone || "");
+      }
 
       function resetAddAddressForm() {
         addAddressForm.reset();
+        clearNewAddressFormError();
+        if (newAddressCountry) {
+          const my = Array.from(newAddressCountry.options).find((o) => o.value === "MY");
+          if (my) newAddressCountry.value = "MY";
+        }
+        prefillNewAddressForm();
       }
 
       showAddAddressBtn.addEventListener("click", () => {
+        prefillNewAddressForm();
         addAddressForm.classList.remove("hidden");
         showAddAddressBtn.classList.add("is-hidden");
       });
@@ -1495,54 +1559,73 @@
         resetAddAddressForm();
       });
 
-      addAddressForm.addEventListener("submit", (event) => {
+      addAddressForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        const formData = new FormData(addAddressForm);
-        const label = String(formData.get("addressLabel") || "").trim();
-        const fullName = String(formData.get("addressFullName") || "").trim();
-        const street = String(formData.get("addressStreet") || "").trim();
-        const city = String(formData.get("addressCity") || "").trim();
-        const state = String(formData.get("addressState") || "").trim();
-        const zip = String(formData.get("addressZip") || "").trim();
+        clearNewAddressFormError();
+        const firstName = String(newAddressFirstName?.value || "").trim();
+        const lastName = String(newAddressLastName?.value || "").trim();
+        const company = String(newAddressCompany?.value || "").trim();
+        const address1 = String(newAddressLine1?.value || "").trim();
+        const address2 = String(newAddressLine2?.value || "").trim();
+        const city = String(newAddressCity?.value || "").trim();
+        const provinceCode = String(newAddressProvince?.value || "").trim();
+        const zip = String(newAddressZip?.value || "").trim();
+        const countryCode = String(newAddressCountry?.value || "").trim().toUpperCase();
+        const phone = composePhoneFromRow(newAddressPhoneCountry, newAddressPhoneNational);
 
-        if (!label || !fullName || !street || !city || !state || !zip) return;
+        const fieldErrors = {};
+        if (!firstName) fieldErrors.firstName = "First name is required.";
+        if (!lastName) fieldErrors.lastName = "Last name is required.";
+        if (!address1) fieldErrors.address1 = "Address is required.";
+        if (!city) fieldErrors.city = "City is required.";
+        if (!countryCode) fieldErrors.countryCode = "Country is required.";
+        if (Object.keys(fieldErrors).length) {
+          if (newAddressFormError) {
+            newAddressFormError.textContent = Object.values(fieldErrors).join(" ");
+          }
+          return;
+        }
 
-        const card = document.createElement("article");
-        card.className = "address-card default";
-        card.setAttribute("data-address-card", "");
-        card.innerHTML = `
-          <div class="address-head">
-            <div class="address-title">
-              <h3>${label}</h3>
-            </div>
-            <div class="address-actions">
-              <button type="button" class="icon-link" aria-label="Delete address" data-delete-address>
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="13" height="13">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="address-body">
-            <strong>${fullName}</strong>
-            ${street}<br />
-            ${city}, ${state} ${zip}<br />
-            United States
-          </div>
-          <div class="address-footer">
-            <button type="button" class="set-default is-hidden" data-set-default>Set as default</button>
-          </div>
-        `;
-        addressList.querySelector(".address-empty")?.remove();
-        addressList.querySelectorAll("[data-address-card]").forEach((existing) => {
-          existing.classList.remove("default");
-        });
-        addressList.appendChild(card);
-        syncDefaultAddressLabels();
-
-        addAddressForm.classList.add("hidden");
-        showAddAddressBtn.classList.remove("is-hidden");
-        resetAddAddressForm();
+        try {
+          const response = await fetchApiWithFallback("/api/customer/address", {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              firstName,
+              lastName,
+              company,
+              address1,
+              address2,
+              city,
+              provinceCode,
+              zip,
+              countryCode,
+              phone,
+              setAsDefault: cachedAddressCount === 0,
+            }),
+          });
+          const raw = await response.text();
+          let payload = {};
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch (_) {
+            payload = {};
+          }
+          if (!response.ok) {
+            const fe = payload.fieldErrors || {};
+            const parts = Object.values(fe).filter(Boolean);
+            const msg = parts.length ? parts.join(" ") : payload.error || "Unable to save address.";
+            if (newAddressFormError) newAddressFormError.textContent = msg;
+            return;
+          }
+          addAddressForm.classList.add("hidden");
+          showAddAddressBtn.classList.remove("is-hidden");
+          resetAddAddressForm();
+          await loadCustomerAccountData();
+        } catch (error) {
+          if (newAddressFormError) newAddressFormError.textContent = error.message || "Unable to save address.";
+        }
       });
 
       document.getElementById("section-orders")?.addEventListener("click", (event) => {
@@ -1771,37 +1854,18 @@
         selectEl.addEventListener("blur", () => setCountryOptionDisplay(selectEl, "short"));
       }
 
-      let cachedCountryDialRows = null;
-
-      async function populatePhoneCountryOptionsForSelect(selectEl, rows) {
-        if (!selectEl) return;
-        fillSelectWithCountryRows(selectEl, rows);
-        wirePhoneCountrySelect(selectEl);
-      }
-
-      async function populatePhoneCountryOptions() {
-        if (!cachedCountryDialRows) {
-          cachedCountryDialRows = await loadCountryDialRows();
-        }
-        const rows = cachedCountryDialRows;
-        await populatePhoneCountryOptionsForSelect(authSignUpPhoneCountry, rows);
-        await populatePhoneCountryOptionsForSelect(settingsPhoneCountry, rows);
-      }
-
-      function applyPhoneToSettingsFields(fullPhone) {
-        if (!settingsPhoneCountry || !settingsPhoneNational) return;
+      function applyPhoneFullToRow(countrySelect, nationalInput, fullPhone) {
+        if (!countrySelect || !nationalInput) return;
+        nationalInput.value = "";
         const raw = String(fullPhone || "").trim();
-        settingsPhoneNational.value = "";
-
         if (!raw) {
-          const preferred = Array.from(settingsPhoneCountry.options).find((opt) => opt.value === "MY");
-          settingsPhoneCountry.value = preferred?.value || settingsPhoneCountry.options?.[0]?.value || "";
-          setCountryOptionDisplay(settingsPhoneCountry, "short");
+          const preferred = Array.from(countrySelect.options).find((opt) => opt.value === "MY");
+          countrySelect.value = preferred?.value || countrySelect.options?.[0]?.value || "";
+          setCountryOptionDisplay(countrySelect, "short");
           return;
         }
-
         const digitsOnly = raw.replace(/\D/g, "");
-        const ranked = Array.from(settingsPhoneCountry.options)
+        const ranked = Array.from(countrySelect.options)
           .map((opt) => ({
             opt,
             dialDigits: optionDial(opt).replace(/\D/g, ""),
@@ -1812,7 +1876,6 @@
             (a, b) =>
               b.dialDigits.length - a.dialDigits.length || String(a.iso).localeCompare(String(b.iso))
           );
-
         let matched = null;
         for (const row of ranked) {
           if (digitsOnly.startsWith(row.dialDigits)) {
@@ -1820,24 +1883,67 @@
             break;
           }
         }
-
         if (matched) {
-          settingsPhoneCountry.value = matched.opt.value;
-          settingsPhoneNational.value = digitsOnly.slice(matched.dialDigits.length);
+          countrySelect.value = matched.opt.value;
+          nationalInput.value = digitsOnly.slice(matched.dialDigits.length);
         } else {
-          const preferred = Array.from(settingsPhoneCountry.options).find((opt) => opt.value === "MY");
-          settingsPhoneCountry.value = preferred?.value || settingsPhoneCountry.options?.[0]?.value || "";
-          settingsPhoneNational.value = digitsOnly;
+          const preferred = Array.from(countrySelect.options).find((opt) => opt.value === "MY");
+          countrySelect.value = preferred?.value || countrySelect.options?.[0]?.value || "";
+          nationalInput.value = digitsOnly;
         }
+        setCountryOptionDisplay(countrySelect, "short");
+      }
 
-        setCountryOptionDisplay(settingsPhoneCountry, "short");
+      function composePhoneFromRow(countrySelect, nationalInput) {
+        const dial = optionDial(countrySelect?.selectedOptions?.[0]);
+        const nationalDigits = String(nationalInput?.value || "").replace(/\D/g, "");
+        if (!dial || !nationalDigits) return "";
+        return `${dial}${nationalDigits}`;
+      }
+
+      let cachedCountryDialRows = null;
+
+      async function populatePhoneCountryOptionsForSelect(selectEl, rows) {
+        if (!selectEl) return;
+        fillSelectWithCountryRows(selectEl, rows);
+        wirePhoneCountrySelect(selectEl);
+      }
+
+      function fillNewAddressCountrySelect(rows) {
+        const sel = document.getElementById("new-address-country");
+        if (!sel || !rows?.length) return;
+        sel.textContent = "";
+        const frag = document.createDocumentFragment();
+        const sorted = [...rows].sort((a, b) => String(a.name).localeCompare(String(b.name)));
+        for (const row of sorted) {
+          const opt = document.createElement("option");
+          opt.value = row.iso2;
+          opt.textContent = row.name;
+          frag.appendChild(opt);
+        }
+        sel.appendChild(frag);
+        const my = Array.from(sel.options).find((o) => o.value === "MY");
+        if (my) sel.value = "MY";
+        else if (sel.options.length) sel.selectedIndex = 0;
+      }
+
+      async function populatePhoneCountryOptions() {
+        if (!cachedCountryDialRows) {
+          cachedCountryDialRows = await loadCountryDialRows();
+        }
+        const rows = cachedCountryDialRows;
+        await populatePhoneCountryOptionsForSelect(authSignUpPhoneCountry, rows);
+        await populatePhoneCountryOptionsForSelect(settingsPhoneCountry, rows);
+        await populatePhoneCountryOptionsForSelect(document.getElementById("new-address-phone-country"), rows);
+        fillNewAddressCountrySelect(rows);
+      }
+
+      function applyPhoneToSettingsFields(fullPhone) {
+        applyPhoneFullToRow(settingsPhoneCountry, settingsPhoneNational, fullPhone);
       }
 
       function composeSettingsPhoneE164() {
-        const dial = optionDial(settingsPhoneCountry?.selectedOptions?.[0]);
-        const nationalDigits = String(settingsPhoneNational?.value || "").replace(/\D/g, "");
-        if (!dial || !nationalDigits) return "";
-        return `${dial}${nationalDigits}`;
+        return composePhoneFromRow(settingsPhoneCountry, settingsPhoneNational);
       }
 
       function setGateMessage(message, isError = false) {
@@ -2048,6 +2154,14 @@
         });
       }
 
+      function escapeHtml(str) {
+        return String(str || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
+      }
+
       function renderAddresses(addresses = []) {
         if (!addressList) return;
         addressList.innerHTML = "";
@@ -2058,26 +2172,41 @@
 
         addresses.forEach((address, idx) => {
           const fullName = `${address.firstName || ""} ${address.lastName || ""}`.trim() || "Customer";
-          const lines = [
-            address.address1 || "",
-            address.address2 || "",
-            [address.city, address.province, address.zip].filter(Boolean).join(", "),
-            address.country || "",
-          ].filter(Boolean);
-          const label = idx === 0 ? "Address" : `Address ${idx + 1}`;
+          const titleBase =
+            (address.company || "").trim() ||
+            (address.address1 || "").trim() ||
+            `Address ${idx + 1}`;
+          const title = titleBase.length > 48 ? `${titleBase.slice(0, 45)}…` : titleBase;
+          const cityLine = [address.city, address.provinceCode || address.province, address.zip]
+            .filter(Boolean)
+            .join(", ");
+          const lines = [address.address1 || "", address.address2 || "", cityLine, address.country || ""].filter(
+            Boolean
+          );
+          const phoneLine = (address.phone || "").trim();
           const card = document.createElement("article");
           card.className = address.isDefault ? "address-card default" : "address-card";
           card.setAttribute("data-address-card", "");
+          if (address.id) card.dataset.addressId = address.id;
+          const bodyLines = lines.map((l) => escapeHtml(l)).join("<br />");
+          const phoneHtml = phoneLine ? `<br />${escapeHtml(phoneLine)}` : "";
           card.innerHTML = `
             <div class="address-head">
               <div class="address-title">
-                <h3>${label}</h3>
+                <h3>${escapeHtml(title)}</h3>
                 ${address.isDefault ? '<span class="badge-default">Default</span>' : ""}
+              </div>
+              <div class="address-actions">
+                <button type="button" class="icon-link" aria-label="Delete address" data-delete-address>
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="13" height="13">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="m14.74 9-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 0 1-2.244 2.077H8.084a2.25 2.25 0 0 1-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 0 0-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 0 1 3.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 0 0-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 0 0-7.5 0"></path>
+                  </svg>
+                </button>
               </div>
             </div>
             <div class="address-body">
-              <strong>${fullName}</strong>
-              ${lines.join("<br />")}
+              <strong>${escapeHtml(fullName)}</strong><br />
+              ${bodyLines}${phoneHtml}
             </div>
             <div class="address-footer">
               <button type="button" class="set-default ${address.isDefault ? "is-hidden" : ""}" data-set-default>Set as default</button>
@@ -2105,10 +2234,17 @@
             phone: customer.phone || "",
             keepLoggedIn: true,
           };
+          latestShopifyCustomerProfile = {
+            firstName: customer.firstName || "",
+            lastName: customer.lastName || "",
+            phone: customer.phone || "",
+          };
+          cachedAddressCount = (payload.addresses || []).length;
           setAuthenticatedUI(user);
           persistAuthSession(user, true);
           renderOrders(payload.orders || []);
           renderAddresses(payload.addresses || []);
+          syncDefaultAddressLabels();
           return true;
         } catch (error) {
           setGateMessage(error.message || "Unable to load account data.", true);
@@ -2266,6 +2402,11 @@
           }
           clearProfileFieldErrors();
           const customer = payload.customer || {};
+          latestShopifyCustomerProfile = {
+            firstName: customer.firstName || firstName,
+            lastName: customer.lastName || lastName,
+            phone: customer.phone || phone,
+          };
           const updatedUser = {
             firstName: customer.firstName || firstName,
             lastName: customer.lastName || lastName,
