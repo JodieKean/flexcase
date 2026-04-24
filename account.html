@@ -1379,7 +1379,7 @@
             addAddressForm.reset();
           }
           if (isSignedInForAccountApp()) {
-            showTabContentLoading();
+            if (!hasLoadedAccountDetails) showTabContentLoading();
             loadCustomerAccountData().catch(() => {});
           }
         });
@@ -1403,6 +1403,7 @@
 
       let latestShopifyCustomerProfile = { firstName: "", lastName: "", phone: "" };
       let cachedAddressCount = 0;
+      let hasLoadedAccountDetails = false;
       const deleteAddressModal = document.getElementById("delete-address-modal");
       const deleteAddressCancel = document.getElementById("delete-address-cancel");
       const deleteAddressConfirm = document.getElementById("delete-address-confirm");
@@ -2058,6 +2059,7 @@
         // Reset in-memory view model state.
         latestShopifyCustomerProfile = { firstName: "", lastName: "", phone: "" };
         cachedAddressCount = 0;
+        hasLoadedAccountDetails = false;
         clearProfileFieldErrors();
         clearNewAddressFormError();
 
@@ -2104,15 +2106,16 @@
           if (countEl) countEl.textContent = "Loading...";
           if (headerOrderCountEl) headerOrderCountEl.textContent = "Loading...";
           ordersSection.querySelectorAll("[data-order-card]").forEach((node) => node.remove());
-          const loadingCard = document.createElement("article");
-          loadingCard.className = "order-card";
-          loadingCard.setAttribute("data-order-card", "");
-          loadingCard.innerHTML = `<div class="order-top"><div class="order-id section-loading"><span>Loading details${loadingDotsHtml()}</span></div></div>`;
-          ordersSection.appendChild(loadingCard);
+          ordersSection.querySelectorAll("[data-order-loading]").forEach((node) => node.remove());
+          const loadingState = document.createElement("div");
+          loadingState.className = "address-empty section-loading";
+          loadingState.setAttribute("data-order-loading", "");
+          loadingState.innerHTML = `Loading${loadingDotsHtml()}`;
+          ordersSection.appendChild(loadingState);
         }
 
         if (addressList) {
-          addressList.innerHTML = `<div class="address-empty section-loading">Loading details${loadingDotsHtml()}</div>`;
+          addressList.innerHTML = `<div class="address-empty section-loading">Loading${loadingDotsHtml()}</div>`;
         }
 
         const settingsSection = document.getElementById("section-settings");
@@ -2125,7 +2128,7 @@
             loadingEl.className = "section-loading";
             settingsHead.appendChild(loadingEl);
           }
-          loadingEl.innerHTML = `Loading details${loadingDotsHtml()}`;
+          loadingEl.innerHTML = `Loading${loadingDotsHtml()}`;
         }
       }
 
@@ -2163,7 +2166,7 @@
           });
           const payload = await response.json();
           if (payload?.authenticated && payload?.customer) {
-            showTabContentLoading();
+            if (!hasLoadedAccountDetails) showTabContentLoading();
             const ok = await loadCustomerAccountData();
             return ok;
           }
@@ -2196,6 +2199,7 @@
         if (headerOrderCountEl) headerOrderCountEl.textContent = `${orders.length} orders`;
 
         section.querySelectorAll("[data-order-card]").forEach((node) => node.remove());
+        section.querySelectorAll("[data-order-loading]").forEach((node) => node.remove());
         if (!orders.length) {
           const emptyCard = document.createElement("article");
           emptyCard.className = "order-card";
@@ -2368,6 +2372,7 @@
           };
           cachedAddressCount = (payload.addresses || []).length;
           setAuthenticatedUI(user);
+          hasLoadedAccountDetails = true;
           const settingsLoadingNote = document.getElementById("settings-loading-note");
           if (settingsLoadingNote) settingsLoadingNote.remove();
           persistAuthSession(user, true);
@@ -2586,7 +2591,7 @@
       } else if (persistedAuth) {
         // Fast path for regular page changes: avoid form flash and loading overlay.
         setAuthenticatedUI(persistedAuth);
-        showTabContentLoading();
+        if (!hasLoadedAccountDetails) showTabContentLoading();
       } else {
         setLoggedOutUI(pendingGateMessage, pendingGateError);
       }
