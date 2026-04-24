@@ -179,6 +179,26 @@
     }
   }
 
+  async function flexcasePushLocalCartToServer() {
+    if (!(await isSessionAuthenticated())) return false;
+    const local = readLocalLines();
+    try {
+      const r = await fetchApi("/api/cart/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lines: local }),
+        timeoutMs: 8000,
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) return false;
+      writeLocalLines(j.lines || []);
+      updateBadges();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   function flexcaseOnLogoutClearMergeFlag() {
     try {
       sessionStorage.removeItem(MERGED_KEY);
@@ -193,6 +213,7 @@
   window.flexcaseRefreshCartFromServer = flexcaseRefreshCartFromServer;
   window.flexcaseAddToCartLoggedIn = flexcaseAddToCartLoggedIn;
   window.flexcaseClearServerCart = flexcaseClearServerCart;
+  window.flexcasePushLocalCartToServer = flexcasePushLocalCartToServer;
   window.flexcaseOnLogoutClearMergeFlag = flexcaseOnLogoutClearMergeFlag;
 
   function boot() {
