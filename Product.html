@@ -682,6 +682,15 @@
             return fetch(localApiUrl(pathname));
           }
         }
+        async function fetchWithTimeout(url, options = {}, timeoutMs = 5000) {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
+          try {
+            return await fetch(url, { ...options, signal: controller.signal });
+          } finally {
+            clearTimeout(timer);
+          }
+        }
         const titleEl = document.getElementById("product-title");
         const subtitleEl = document.getElementById("product-subtitle");
         const priceNowEl = document.getElementById("product-price-now");
@@ -876,9 +885,17 @@
             try {
               let s;
               try {
-                s = await fetch(apiUrl("/api/customer/session"), { credentials: "include" });
+                s = await fetchWithTimeout(
+                  apiUrl("/api/customer/session"),
+                  { credentials: "include" },
+                  3500
+                );
               } catch (_) {
-                s = await fetch(localApiUrl("/api/customer/session"), { credentials: "include" });
+                s = await fetchWithTimeout(
+                  localApiUrl("/api/customer/session"),
+                  { credentials: "include" },
+                  2500
+                );
               }
               const sj = await s.json();
               sessionAuthed = Boolean(sj?.authenticated);

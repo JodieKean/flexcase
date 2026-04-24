@@ -14,11 +14,32 @@
     return p;
   }
 
-  async function fetchApi(path, options = {}) {
+  async function fetchWithTimeout(url, options = {}, timeoutMs = 6000) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      return await fetch(apiUrl(path), { credentials: "include", ...options });
+      return await fetch(url, { ...options, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function fetchApi(path, options = {}) {
+    const timeoutMs = Number(options?.timeoutMs || 6000);
+    const fetchOptions = { ...options };
+    delete fetchOptions.timeoutMs;
+    try {
+      return await fetchWithTimeout(
+        apiUrl(path),
+        { credentials: "include", ...fetchOptions },
+        timeoutMs
+      );
     } catch (_) {
-      return fetch(localApiUrl(path), { credentials: "include", ...options });
+      return fetchWithTimeout(
+        localApiUrl(path),
+        { credentials: "include", ...fetchOptions },
+        Math.max(2500, Math.min(timeoutMs, 5000))
+      );
     }
   }
 
@@ -121,6 +142,7 @@
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ merchandiseId, quantity }),
+      timeoutMs: 8000,
     });
     const raw = await r.text();
     let j = {};

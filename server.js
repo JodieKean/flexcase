@@ -1419,13 +1419,32 @@ function findCartLineForVariant(cart, merchandiseId) {
 
 async function resolveAuthCustomerForCart(req) {
   const current = getCustomerSession(req);
-  const email = String(current?.session?.customer?.email || "")
+  const sessionCustomer = current?.session?.customer || {};
+  const customerId = String(sessionCustomer.id || "").trim();
+  if (customerId && customerId.startsWith("gid://shopify/Customer/")) {
+    const byIdQuery = `
+      query FlexcaseCartCustomerById($id: ID!) {
+        customer(id: $id) {
+          id
+          firstName
+          lastName
+          email
+          phone
+        }
+      }
+    `;
+    const byIdData = await adminGraphql(byIdQuery, { id: customerId });
+    const byIdCustomer = byIdData?.customer;
+    if (byIdCustomer?.id) return byIdCustomer;
+  }
+
+  const email = String(sessionCustomer.email || "")
     .trim()
     .toLowerCase();
   if (!email) return null;
-  const customer = await findCustomerByEmail(email);
-  if (!customer?.id) return null;
-  return customer;
+  const byEmailCustomer = await findCustomerByEmail(email);
+  if (!byEmailCustomer?.id) return null;
+  return byEmailCustomer;
 }
 
 async function getCustomerHeadlessCartId(customerGid) {
