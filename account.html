@@ -2103,8 +2103,8 @@
         const ordersSection = document.getElementById("section-orders");
         if (ordersSection) {
           const countEl = ordersSection.querySelector(".section-head span");
-          if (countEl) countEl.textContent = "Loading...";
-          if (headerOrderCountEl) headerOrderCountEl.textContent = "Loading...";
+          if (countEl) countEl.innerHTML = loadingDotsHtml();
+          if (headerOrderCountEl) headerOrderCountEl.innerHTML = loadingDotsHtml();
           ordersSection.querySelectorAll("[data-order-card]").forEach((node) => node.remove());
           ordersSection.querySelectorAll("[data-order-loading]").forEach((node) => node.remove());
           const loadingState = document.createElement("div");
