@@ -615,6 +615,7 @@ async function handleCustomerOauthCallback(req, res) {
       : Date.now() + 12 * 60 * 60 * 1000;
     const sessionPayload = {
       customer,
+      idToken: String(payload.id_token || ""),
       mode: stateValue.mode,
       createdAt: Date.now(),
       expiresAt: expiresAtMs,
@@ -1751,11 +1752,15 @@ async function handleCustomerAddressDefault(req, res) {
 
 function handleCustomerLogout(req, res) {
   const returnTo = `${FRONTEND_ORIGIN}/account.html`;
-  const location = CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT
-    ? `${CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT}${
-        CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT.includes("?") ? "&" : "?"
-      }post_logout_redirect_uri=${encodeURIComponent(returnTo)}`
-    : returnTo;
+  const current = getCustomerSession(req);
+  const idTokenHint = String(current?.session?.idToken || "").trim();
+  let location = returnTo;
+  if (CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT && idTokenHint) {
+    const logoutUrl = new URL(CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT);
+    logoutUrl.searchParams.set("post_logout_redirect_uri", returnTo);
+    logoutUrl.searchParams.set("id_token_hint", idTokenHint);
+    location = logoutUrl.toString();
+  }
   res.writeHead(302, {
     Location: location,
     "Set-Cookie": clearSessionCookie(),
