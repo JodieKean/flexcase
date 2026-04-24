@@ -2071,8 +2071,13 @@
         setGateMessage(message, isError);
       }
 
-      function beginCustomerOauth(mode, keepLoggedIn) {
-        const target = apiUrl(`/api/customer/oauth/start?mode=${mode}&keep=${keepLoggedIn ? "1" : "0"}`);
+      function beginCustomerOauth(mode, keepLoggedIn, email = "") {
+        const params = new URLSearchParams();
+        params.set("mode", mode);
+        params.set("keep", keepLoggedIn ? "1" : "0");
+        const normalizedEmail = String(email || "").trim().toLowerCase();
+        if (normalizedEmail) params.set("email", normalizedEmail);
+        const target = apiUrl(`/api/customer/oauth/start?${params.toString()}`);
         window.location.assign(target);
       }
 
@@ -2352,7 +2357,7 @@
           return;
         }
 
-        beginCustomerOauth("signin", keepLoggedIn);
+        beginCustomerOauth("signin", keepLoggedIn, email);
       });
 
       authSignUpForm?.addEventListener("submit", async (event) => {
@@ -2402,7 +2407,7 @@
           return;
         }
 
-        beginCustomerOauth("signup", keepLoggedIn);
+        beginCustomerOauth("signup", keepLoggedIn, email);
       });
 
       headerSignout?.addEventListener("click", (event) => {

@@ -525,6 +525,9 @@ function handleCustomerOauthStart(req, res) {
   const reqUrl = new URL(req.url, "http://localhost");
   const mode = reqUrl.searchParams.get("mode") === "signup" ? "signup" : "signin";
   const keep = reqUrl.searchParams.get("keep") === "1";
+  const emailHint = String(reqUrl.searchParams.get("email") || "")
+    .trim()
+    .toLowerCase();
   const state = createOAuthState(mode, keep);
 
   const authorizeUrl = new URL(CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT);
@@ -535,10 +538,14 @@ function handleCustomerOauthStart(req, res) {
   authorizeUrl.searchParams.set("state", state);
   if (mode === "signup") {
     authorizeUrl.searchParams.set("prompt", "login");
+  } else if (emailHint) {
+    // With an explicit email hint, move directly into that account's OTP flow.
+    authorizeUrl.searchParams.set("prompt", "login");
   } else {
     // Prevent silent re-auth into the previous Shopify Account user.
     authorizeUrl.searchParams.set("prompt", "select_account");
   }
+  if (emailHint) authorizeUrl.searchParams.set("login_hint", emailHint);
 
   res.writeHead(302, { Location: authorizeUrl.toString() });
   res.end();
