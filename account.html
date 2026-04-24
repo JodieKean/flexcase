@@ -1136,24 +1136,14 @@
               <input id="new-address-company" name="company" type="text" autocomplete="organization" />
             </div>
             <div class="span-2">
-              <label for="new-address-line1">Address</label>
-              <input
-                id="new-address-line1"
-                name="address1"
-                type="text"
-                autocomplete="street-address"
-                placeholder="Start typing your address…"
-                required
-              />
-            </div>
-            <div class="span-2">
-              <label for="new-address-line2">Apartment, suite, etc. (optional)</label>
+              <label for="new-address-line2">Apartment, suite, etc.</label>
               <input
                 id="new-address-line2"
-                name="address2"
+                name="address1"
                 type="text"
                 autocomplete="address-line2"
                 placeholder="Apartment, suite, unit, building, floor, etc."
+                required
               />
             </div>
             <div class="span-2 form-grid-address-3">
@@ -1371,7 +1361,6 @@
       const newAddressLastName = document.getElementById("new-address-last-name");
       const newAddressCompany = document.getElementById("new-address-company");
       const newAddressCountry = document.getElementById("new-address-country");
-      const newAddressLine1 = document.getElementById("new-address-line1");
       const newAddressLine2 = document.getElementById("new-address-line2");
       const newAddressZip = document.getElementById("new-address-zip");
       const newAddressCity = document.getElementById("new-address-city");
@@ -1577,8 +1566,8 @@
         const firstName = String(newAddressFirstName?.value || "").trim();
         const lastName = String(newAddressLastName?.value || "").trim();
         const company = String(newAddressCompany?.value || "").trim();
-        const address1 = String(newAddressLine1?.value || "").trim();
-        const address2 = String(newAddressLine2?.value || "").trim();
+        const address1 = String(newAddressLine2?.value || "").trim();
+        const address2 = "";
         const city = String(newAddressCity?.value || "").trim();
         const provinceCode = String(newAddressProvince?.value || "").trim();
         const zip = String(newAddressZip?.value || "").trim();
@@ -1588,7 +1577,7 @@
         const fieldErrors = {};
         if (!firstName) fieldErrors.firstName = "First name is required.";
         if (!lastName) fieldErrors.lastName = "Last name is required.";
-        if (!address1) fieldErrors.address1 = "Address is required.";
+        if (!address1) fieldErrors.address1 = "Apartment, suite, etc. is required.";
         if (!city) fieldErrors.city = "City is required.";
         if (!countryCode) fieldErrors.countryCode = "Country is required.";
         if (Object.keys(fieldErrors).length) {
