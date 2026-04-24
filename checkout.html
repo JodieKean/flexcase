@@ -90,6 +90,10 @@
         font-weight: 600;
       }
 
+      .step.step-back-editable {
+        cursor: pointer;
+      }
+
       .layout {
         display: grid;
         grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
@@ -401,6 +405,31 @@
         color: #8e8e93;
       }
 
+      .line-qty {
+        margin-top: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .qty-btn {
+        width: 22px;
+        height: 22px;
+        border: 1px solid #d2d2d7;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #1d1d1f;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      .qty-value {
+        min-width: 12px;
+        text-align: center;
+        font-size: 0.82rem;
+        color: #6e6e73;
+      }
+
       .line-item .price {
         font-size: 0.92rem;
         color: #1d1d1f;
@@ -502,7 +531,7 @@
     </nav>
 
     <main>
-      <p class="back-link"><a href="index.html">← Back to Flex Case</a></p>
+      <p class="back-link"><a href="index.html">← Back to Add More</a></p>
 
       <div class="stepper" role="navigation" aria-label="Checkout steps">
         <div class="step active" data-step-label="1">
@@ -829,6 +858,10 @@
         }
       }
 
+      function writeCartItems(items) {
+        localStorage.setItem(cartStorageKey, JSON.stringify(Array.isArray(items) ? items : []));
+      }
+
       function lineSubtotal(line) {
         const unit = Number(line?.price || 0);
         const qty = Number(line?.quantity || 1);
@@ -858,19 +891,41 @@
               ? `style="background-image:url('${line.image}');background-size:cover;background-position:center;"`
               : "";
             return `
-              <div class="line-item">
+              <div class="line-item" data-variant-id="${line.variantId || ""}">
                 <div class="thumb" aria-hidden="true" ${imageStyle}></div>
                 <div>
                   <div class="name">${line.productTitle || "Product"}</div>
-                  <div class="meta">${line.variantTitle || "Default"} · Qty ${Number(
-                    line.quantity || 1
-                  )}</div>
+                  <div class="meta">${line.variantTitle || "Default"}</div>
+                  <div class="line-qty">
+                    <button type="button" class="qty-btn" data-qty-minus aria-label="Decrease quantity">−</button>
+                    <span class="qty-value">${Number(line.quantity || 1)}</span>
+                    <button type="button" class="qty-btn" data-qty-plus aria-label="Increase quantity">+</button>
+                  </div>
                 </div>
                 <div class="price">${money(lineTotal, currency)}</div>
               </div>
             `;
           })
           .join("");
+      }
+
+      function adjustLineQuantity(variantId, delta) {
+        const items = readCartItems();
+        const idx = items.findIndex((line) => String(line.variantId || "") === String(variantId || ""));
+        if (idx < 0) return;
+        const currentQty = Math.max(1, Number(items[idx].quantity || 1));
+        const nextQty = currentQty + Number(delta || 0);
+        if (nextQty < 1) {
+          const shouldRemove = window.confirm("Remove this item from cart?");
+          if (!shouldRemove) return;
+          items.splice(idx, 1);
+        } else {
+          items[idx].quantity = nextQty;
+        }
+        writeCartItems(items);
+        renderOrderLines(items);
+        recalcTotals();
+        window.flexcaseUpdateCartBadges?.();
       }
 
       function setStep(step) {
@@ -886,6 +941,12 @@
             dot.textContent = n < step ? "✓" : String(n);
           }
         });
+      }
+
+      function getCurrentStep() {
+        if (!stepContact.classList.contains("hidden")) return 1;
+        if (!stepShipping.classList.contains("hidden")) return 2;
+        return 3;
       }
 
       function selectMode(mode) {
@@ -1039,6 +1100,25 @@
         }
       });
 
+      steps.forEach((stepEl) => {
+        const targetStep = Number(stepEl.dataset.stepLabel || 0);
+        if (targetStep === 1 || targetStep === 2) {
+          stepEl.classList.add("step-back-editable");
+          stepEl.setAttribute("role", "button");
+          stepEl.setAttribute("tabindex", "0");
+          const goBackward = () => {
+            if (targetStep < getCurrentStep()) setStep(targetStep);
+          };
+          stepEl.addEventListener("click", goBackward);
+          stepEl.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              goBackward();
+            }
+          });
+        }
+      });
+
       document.getElementById("to-shipping").addEventListener("click", () => {
         if (!validateContact()) return;
         address1.setAttribute("required", "required");
@@ -1100,6 +1180,16 @@
         cardNumber.focus();
       });
 
+      orderLineItems.addEventListener("click", (event) => {
+        const plusBtn = event.target.closest("[data-qty-plus]");
+        const minusBtn = event.target.closest("[data-qty-minus]");
+        if (!plusBtn && !minusBtn) return;
+        const lineItem = event.target.closest("[data-variant-id]");
+        const variantId = lineItem?.dataset?.variantId || "";
+        if (!variantId) return;
+        adjustLineQuantity(variantId, plusBtn ? 1 : -1);
+      });
+
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!validatePayment()) return;
@@ -1113,15 +1203,21 @@
         window.flexcaseUpdateCartBadges?.();
       });
 
-      void (async function initCheckoutCart() {
-        await (window.flexcaseRefreshCartFromServer?.() || Promise.resolve());
-      })().then(() => {
+      (function initCheckoutCartInstantly() {
+        // Render immediately from local cache to avoid visible loading on page entry.
         renderOrderLines(readCartItems());
         selectMode("guest");
         selectShipping("standard");
         recalcTotals();
         setStep(1);
-      });
+
+        // Then refresh from server in background for signed-in users.
+        void (async () => {
+          await (window.flexcaseRefreshCartFromServer?.() || Promise.resolve());
+          renderOrderLines(readCartItems());
+          recalcTotals();
+        })();
+      })();
     </script>
   </body>
 </html>

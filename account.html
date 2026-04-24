@@ -1358,6 +1358,17 @@
       </div>
     </div>
 
+    <div id="signout-modal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="signout-title" aria-hidden="true">
+      <div class="modal">
+        <h3 id="signout-title">Sign out?</h3>
+        <p>Are you sure you want to sign out?</p>
+        <div class="modal-actions">
+          <button type="button" class="modal-cancel" id="signout-cancel">Cancel</button>
+          <button type="button" class="modal-delete" id="signout-confirm">Sign Out</button>
+        </div>
+      </div>
+    </div>
+
     <script>
       const tabs = document.querySelectorAll("[data-tab]");
       const sections = {
@@ -1415,6 +1426,9 @@
       const deleteAddressDismissSingle = document.getElementById("delete-address-dismiss-single");
       const deleteAddressTitle = document.getElementById("delete-address-title");
       const deleteAddressBody = document.getElementById("delete-address-body");
+      const signoutModal = document.getElementById("signout-modal");
+      const signoutCancel = document.getElementById("signout-cancel");
+      const signoutConfirm = document.getElementById("signout-confirm");
 
       let pendingDeleteCard = null;
       let deleteModalTrigger = null;
@@ -1484,9 +1498,36 @@
         if (event.target === deleteAddressModal) closeDeleteAddressModal();
       });
 
+      function openSignoutModal() {
+        if (!signoutModal) return;
+        signoutModal.classList.add("open");
+        signoutModal.setAttribute("aria-hidden", "false");
+      }
+
+      function closeSignoutModal() {
+        if (!signoutModal) return;
+        signoutModal.classList.remove("open");
+        signoutModal.setAttribute("aria-hidden", "true");
+      }
+
+      signoutCancel?.addEventListener("click", closeSignoutModal);
+      signoutModal?.addEventListener("click", (event) => {
+        if (event.target === signoutModal) closeSignoutModal();
+      });
+      signoutConfirm?.addEventListener("click", () => {
+        closeSignoutModal();
+        clearClientSessionState();
+        showAuthRedirectOverlay("Always remember to Flex your collection!");
+        // Use provider logout endpoint to clear Shopify Account SSO session too.
+        window.setTimeout(() => window.location.assign(apiUrl("/api/customer/logout")), 120);
+      });
+
       document.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && deleteAddressModal.classList.contains("open")) {
           closeDeleteAddressModal();
+        }
+        if (event.key === "Escape" && signoutModal?.classList.contains("open")) {
+          closeSignoutModal();
         }
       });
 
@@ -2411,12 +2452,7 @@
       }
 
       function confirmAndSignOut() {
-        const shouldSignOut = window.confirm("Are you sure you want to sign out?");
-        if (!shouldSignOut) return false;
-        clearClientSessionState();
-        showAuthRedirectOverlay("Always remember to Flex your collection!");
-        // Use provider logout endpoint to clear Shopify Account SSO session too.
-        window.setTimeout(() => window.location.assign(apiUrl("/api/customer/logout")), 120);
+        openSignoutModal();
         return true;
       }
 
