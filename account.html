@@ -436,22 +436,19 @@
       }
 
       .review-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
+        display: inline;
         border: 0;
         background: transparent;
         padding: 0;
         cursor: pointer;
-        color: #b45309;
+        color: #b08d57;
         font-size: 0.92rem;
-        font-weight: 600;
+        font-weight: 400;
       }
 
-      .review-link svg {
-        width: 16px;
-        height: 16px;
-        stroke: currentColor;
+      .review-link:hover {
+        text-decoration: underline;
+        text-underline-offset: 2px;
       }
 
       .account-section.hidden {
@@ -1169,7 +1166,7 @@
             <div class="span-2 form-grid-address-3">
               <div>
                 <label for="new-address-zip">Postcode</label>
-                <input id="new-address-zip" name="zip" type="text" autocomplete="postal-code" />
+                <input id="new-address-zip" name="zip" type="text" autocomplete="postal-code" required />
               </div>
               <div>
                 <label for="new-address-city">City</label>
@@ -1183,6 +1180,7 @@
                   type="text"
                   autocomplete="address-level1"
                   placeholder=""
+                  required
                 />
               </div>
             </div>
@@ -1204,6 +1202,7 @@
                   type="text"
                   autocomplete="tel"
                   placeholder="Enter phone number"
+                  required
                 />
               </div>
             </div>
@@ -1246,6 +1245,11 @@
                   <label for="settings-email">Email Address</label>
                   <input id="settings-email" name="email" type="email" value="" autocomplete="email" />
                   <div id="settings-email-error" class="field-error-text" role="status" aria-live="polite"></div>
+                </div>
+                <div>
+                  <label for="settings-email-confirm">Confirm Email Address</label>
+                  <input id="settings-email-confirm" name="emailConfirm" type="email" value="" autocomplete="email" />
+                  <div id="settings-email-confirm-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div class="span-2">
                   <label for="settings-phone-national">Phone number</label>
@@ -1615,8 +1619,11 @@
         if (!firstName) fieldErrors.firstName = "First name is required.";
         if (!lastName) fieldErrors.lastName = "Last name is required.";
         if (!address1) fieldErrors.address1 = "Apartment, suite, etc. is required.";
+        if (!zip) fieldErrors.zip = "Postcode is required.";
         if (!city) fieldErrors.city = "City is required.";
+        if (!provinceCode) fieldErrors.provinceCode = "State is required.";
         if (!countryCode) fieldErrors.countryCode = "Country is required.";
+        if (!phone) fieldErrors.phone = "Phone number is required.";
         if (Object.keys(fieldErrors).length) {
           if (newAddressFormError) {
             newAddressFormError.textContent = Object.values(fieldErrors).join(" ");
@@ -1722,11 +1729,13 @@
       const settingsFirstName = document.getElementById("settings-first-name");
       const settingsLastName = document.getElementById("settings-last-name");
       const settingsEmailInput = document.getElementById("settings-email");
+      const settingsEmailConfirmInput = document.getElementById("settings-email-confirm");
       const settingsPhoneCountry = document.getElementById("settings-phone-country");
       const settingsPhoneNational = document.getElementById("settings-phone-national");
       const settingsFirstNameError = document.getElementById("settings-first-name-error");
       const settingsLastNameError = document.getElementById("settings-last-name-error");
       const settingsEmailError = document.getElementById("settings-email-error");
+      const settingsEmailConfirmError = document.getElementById("settings-email-confirm-error");
       const settingsPhoneError = document.getElementById("settings-phone-error");
 
       headerOrdersPill?.addEventListener("click", (event) => {
@@ -1946,6 +1955,14 @@
         return `${dial}${nationalDigits}`;
       }
 
+      function countryNameFromIso(isoCode) {
+        const iso = String(isoCode || "").trim().toUpperCase();
+        if (!iso) return "";
+        const rows = Array.isArray(cachedCountryDialRows) ? cachedCountryDialRows : [];
+        const match = rows.find((row) => String(row?.iso2 || "").toUpperCase() === iso);
+        return match?.name || iso;
+      }
+
       let cachedCountryDialRows = null;
 
       async function populatePhoneCountryOptionsForSelect(selectEl, rows) {
@@ -2006,6 +2023,7 @@
         if (settingsFirstNameError) settingsFirstNameError.textContent = "";
         if (settingsLastNameError) settingsLastNameError.textContent = "";
         if (settingsEmailError) settingsEmailError.textContent = "";
+        if (settingsEmailConfirmError) settingsEmailConfirmError.textContent = "";
         if (settingsPhoneError) settingsPhoneError.textContent = "";
       }
 
@@ -2013,6 +2031,7 @@
         if (settingsFirstNameError) settingsFirstNameError.textContent = fieldErrors.firstName || "";
         if (settingsLastNameError) settingsLastNameError.textContent = fieldErrors.lastName || "";
         if (settingsEmailError) settingsEmailError.textContent = fieldErrors.email || "";
+        if (settingsEmailConfirmError) settingsEmailConfirmError.textContent = fieldErrors.emailConfirm || "";
         if (settingsPhoneError) settingsPhoneError.textContent = fieldErrors.phone || "";
       }
 
@@ -2087,9 +2106,11 @@
           headerMetaEl.textContent = `${user?.email || "no-email"} · Member`;
         }
         const settingsEmail = document.getElementById("settings-email");
+        const settingsEmailConfirm = document.getElementById("settings-email-confirm");
         if (settingsFirstName) settingsFirstName.value = firstName || displayName;
         if (settingsLastName) settingsLastName.value = String(user?.lastName || "").trim();
         if (settingsEmail) settingsEmail.value = user?.email || "";
+        if (settingsEmailConfirm) settingsEmailConfirm.value = user?.email || "";
         applyPhoneToSettingsFields(user?.phone || "");
         authGate.classList.add("auth-hidden");
         accountApp.classList.remove("auth-hidden");
@@ -2272,12 +2293,7 @@
             <div class="order-details ${idx === 0 ? "" : "hidden"}" data-order-details>
               ${itemsMarkup || '<div class="item"><div><div class="item-name">No line items</div></div></div>'}
               <div class="order-footer">
-                <button type="button" class="review-link" data-write-review${safeReviewAttr}>
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" aria-hidden="true">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M11.48 3.499a.75.75 0 0 1 1.04 0l2.431 2.25c.181.167.418.26.664.26h3.285a.75.75 0 0 1 .548 1.26l-2.5 2.5a.75.75 0 0 0-.22.53v3.285a.75.75 0 0 1-1.26.548l-2.5-2.5a.75.75 0 0 0-.53-.22H9.75a.75.75 0 0 1-.548-1.26l2.5-2.5a.75.75 0 0 0 .22-.53V6.509a.75.75 0 0 1 .548-.76Z" />
-                  </svg>
-                  Write a Review
-                </button>
+                <button type="button" class="review-link" data-write-review${safeReviewAttr}>Write a Review</button>
                 <div class="order-footer-totals"><strong>Total: ${total}</strong>${taxLabelHtml}</div>
               </div>
             </div>
@@ -2309,10 +2325,11 @@
             (address.address1 || "").trim() ||
             `Address ${idx + 1}`;
           const title = titleBase.length > 48 ? `${titleBase.slice(0, 45)}…` : titleBase;
-          const cityLine = [address.city, address.provinceCode || address.province, address.zip]
+          const cityLine = [address.city, address.province || address.provinceCode, address.zip]
             .filter(Boolean)
             .join(", ");
-          const lines = [address.address1 || "", address.address2 || "", cityLine, address.country || ""].filter(
+          const countryDisplay = countryNameFromIso(address.countryCode || address.country || "");
+          const lines = [address.address1 || "", address.address2 || "", cityLine, countryDisplay].filter(
             Boolean
           );
           const phoneLine = (address.phone || "").trim();
@@ -2343,7 +2360,7 @@
               ${
                 address.isDefault
                   ? '<span class="badge-default">DEFAULT</span>'
-                  : '<button type="button" class="set-default" data-set-default>Same as default</button>'
+                  : '<button type="button" class="set-default" data-set-default>Save as default</button>'
               }
             </div>
           `;
@@ -2513,16 +2530,21 @@
         const firstName = settingsFirstName?.value.trim() || "";
         const lastName = settingsLastName?.value.trim() || "";
         const email = settingsEmailInput?.value.trim() || "";
+        const emailConfirm = settingsEmailConfirmInput?.value.trim() || "";
         const nationalDigits = String(settingsPhoneNational?.value || "").replace(/\D/g, "");
         const phone = composeSettingsPhoneE164();
         const localFieldErrors = {};
         if (!firstName) localFieldErrors.firstName = "First name is required.";
         if (!lastName) localFieldErrors.lastName = "Last name is required.";
         if (!email) localFieldErrors.email = "Email address is required.";
+        if (!emailConfirm) localFieldErrors.emailConfirm = "Confirm email address is required.";
+        if (email && emailConfirm && email.toLowerCase() !== emailConfirm.toLowerCase()) {
+          localFieldErrors.emailConfirm = "Email addresses are different.";
+        }
         if (!nationalDigits) localFieldErrors.phone = "Contact number is required.";
         if (Object.keys(localFieldErrors).length) {
           applyProfileFieldErrors(localFieldErrors);
-          setGateMessage("Please complete all profile fields.", true);
+          setGateMessage(localFieldErrors.emailConfirm ? "Email addresses are different." : "Please complete all profile fields.", true);
           return;
         }
         try {
@@ -2565,6 +2587,18 @@
         } catch (error) {
           setGateMessage(error.message || "Unable to save profile changes.", true);
         }
+      });
+
+      settingsEmailConfirmInput?.addEventListener("input", () => {
+        const email = (settingsEmailInput?.value || "").trim().toLowerCase();
+        const emailConfirm = (settingsEmailConfirmInput?.value || "").trim().toLowerCase();
+        if (!settingsEmailConfirmError) return;
+        if (!emailConfirm) {
+          settingsEmailConfirmError.textContent = "";
+          return;
+        }
+        settingsEmailConfirmError.textContent =
+          email && emailConfirm && email !== emailConfirm ? "Email addresses are different." : "";
       });
 
       const authUrl = new URL(window.location.href);
