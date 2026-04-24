@@ -1720,6 +1720,8 @@
       });
 
       const authStorageKey = "flexcase.auth.user";
+      const cartStorageKey = "flexcase.local.cart";
+      const cartMergedKey = "flexcase_guest_cart_merged";
       const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
       const FRONTEND_BASE = (window.FLEXCASE_SITE_ORIGIN || window.location.origin || "").replace(/\/$/, "");
       const apiUrl = (pathname) => `${API_BASE}${pathname}`;
@@ -2023,6 +2025,26 @@
         sessionStorage.removeItem(authStorageKey);
       }
 
+      function clearClientSessionState() {
+        // Remove known Flexcase client-side session/cart caches.
+        clearAuthSession();
+        localStorage.removeItem(cartStorageKey);
+        sessionStorage.removeItem(cartMergedKey);
+        window.flexcaseOnLogoutClearMergeFlag?.();
+
+        // Reset in-memory view model state.
+        latestShopifyCustomerProfile = { firstName: "", lastName: "", phone: "" };
+        cachedAddressCount = 0;
+        clearProfileFieldErrors();
+        clearNewAddressFormError();
+
+        // Clear rendered account sections to avoid stale data flash.
+        renderOrders([]);
+        renderAddresses([]);
+        resetAddAddressForm();
+        window.flexcaseUpdateCartBadges?.();
+      }
+
       function setAuthenticatedUI(user) {
         const firstName = String(user?.firstName || "").trim();
         const fullName = String(user?.name || "").trim();
@@ -2064,7 +2086,7 @@
             const ok = await loadCustomerAccountData();
             return ok;
           }
-          clearAuthSession();
+          clearClientSessionState();
           return false;
         } catch (_) {
           return false;
@@ -2282,12 +2304,11 @@
       function confirmAndSignOut() {
         const shouldSignOut = window.confirm("Are you sure you want to sign out?");
         if (!shouldSignOut) return false;
-        window.flexcaseOnLogoutClearMergeFlag?.();
         fetchApiWithFallback("/api/customer/logout", {
           method: "POST",
           credentials: "include",
         }).catch(() => {});
-        clearAuthSession();
+        clearClientSessionState();
         setLoggedOutUI();
         return true;
       }
