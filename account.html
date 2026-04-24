@@ -176,6 +176,40 @@
         font-size: 0.95rem;
       }
 
+      .loading-dots {
+        display: inline-flex;
+        min-width: 0.8em;
+      }
+
+      .loading-dots span {
+        opacity: 0;
+        animation: loadingDotPulse 1.2s infinite;
+      }
+
+      .loading-dots span:nth-child(2) {
+        animation-delay: 0.2s;
+      }
+
+      .loading-dots span:nth-child(3) {
+        animation-delay: 0.4s;
+      }
+
+      .section-loading {
+        color: #6e6e73;
+        font-size: 0.92rem;
+      }
+
+      @keyframes loadingDotPulse {
+        0%,
+        20% {
+          opacity: 0;
+        }
+        40%,
+        100% {
+          opacity: 1;
+        }
+      }
+
       .header-actions {
         display: flex;
         gap: 10px;
@@ -1199,17 +1233,17 @@
               <div class="form-grid">
                 <div>
                   <label for="settings-first-name">First Name</label>
-                  <input id="settings-first-name" name="firstName" type="text" value="Marcus" autocomplete="given-name" />
+                  <input id="settings-first-name" name="firstName" type="text" value="" autocomplete="given-name" />
                   <div id="settings-first-name-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div>
                   <label for="settings-last-name">Last Name</label>
-                  <input id="settings-last-name" name="lastName" type="text" value="Chen" autocomplete="family-name" />
+                  <input id="settings-last-name" name="lastName" type="text" value="" autocomplete="family-name" />
                   <div id="settings-last-name-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div>
                   <label for="settings-email">Email Address</label>
-                  <input id="settings-email" name="email" type="email" value="marcus.chen@example.com" autocomplete="email" />
+                  <input id="settings-email" name="email" type="email" value="" autocomplete="email" />
                   <div id="settings-email-error" class="field-error-text" role="status" aria-live="polite"></div>
                 </div>
                 <div class="span-2">
@@ -1345,6 +1379,7 @@
             addAddressForm.reset();
           }
           if (isSignedInForAccountApp()) {
+            showTabContentLoading();
             loadCustomerAccountData().catch(() => {});
           }
         });
@@ -2058,6 +2093,42 @@
         hideAuthRedirectOverlay();
       }
 
+      function loadingDotsHtml() {
+        return '<span class="loading-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></span>';
+      }
+
+      function showTabContentLoading() {
+        const ordersSection = document.getElementById("section-orders");
+        if (ordersSection) {
+          const countEl = ordersSection.querySelector(".section-head span");
+          if (countEl) countEl.textContent = "Loading...";
+          if (headerOrderCountEl) headerOrderCountEl.textContent = "Loading...";
+          ordersSection.querySelectorAll("[data-order-card]").forEach((node) => node.remove());
+          const loadingCard = document.createElement("article");
+          loadingCard.className = "order-card";
+          loadingCard.setAttribute("data-order-card", "");
+          loadingCard.innerHTML = `<div class="order-top"><div class="order-id section-loading"><span>Loading details${loadingDotsHtml()}</span></div></div>`;
+          ordersSection.appendChild(loadingCard);
+        }
+
+        if (addressList) {
+          addressList.innerHTML = `<div class="address-empty section-loading">Loading details${loadingDotsHtml()}</div>`;
+        }
+
+        const settingsSection = document.getElementById("section-settings");
+        const settingsHead = settingsSection?.querySelector(".section-head");
+        if (settingsHead) {
+          let loadingEl = document.getElementById("settings-loading-note");
+          if (!loadingEl) {
+            loadingEl = document.createElement("div");
+            loadingEl.id = "settings-loading-note";
+            loadingEl.className = "section-loading";
+            settingsHead.appendChild(loadingEl);
+          }
+          loadingEl.innerHTML = `Loading details${loadingDotsHtml()}`;
+        }
+      }
+
       function setLoggedOutUI(message = "You are currently signed out.", isError = false) {
         accountApp.classList.add("auth-hidden");
         authGate.classList.remove("auth-hidden");
@@ -2092,6 +2163,7 @@
           });
           const payload = await response.json();
           if (payload?.authenticated && payload?.customer) {
+            showTabContentLoading();
             const ok = await loadCustomerAccountData();
             return ok;
           }
@@ -2296,6 +2368,8 @@
           };
           cachedAddressCount = (payload.addresses || []).length;
           setAuthenticatedUI(user);
+          const settingsLoadingNote = document.getElementById("settings-loading-note");
+          if (settingsLoadingNote) settingsLoadingNote.remove();
           persistAuthSession(user, true);
           renderOrders(payload.orders || []);
           renderAddresses(payload.addresses || []);
@@ -2512,6 +2586,7 @@
       } else if (persistedAuth) {
         // Fast path for regular page changes: avoid form flash and loading overlay.
         setAuthenticatedUI(persistedAuth);
+        showTabContentLoading();
       } else {
         setLoggedOutUI(pendingGateMessage, pendingGateError);
       }
