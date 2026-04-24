@@ -269,8 +269,7 @@
         font-weight: 700;
       }
 
-      .status,
-      .badge-default {
+      .status {
         background: #dcfce7;
         color: #166534;
         border-radius: 999px;
@@ -278,6 +277,16 @@
         line-height: 1rem;
         padding: 2px 8px;
         font-weight: 600;
+      }
+
+      .badge-default {
+        color: #b08d57;
+        font-size: 0.92rem;
+        font-weight: 700;
+        background: transparent;
+        border-radius: 0;
+        line-height: 1.2;
+        padding: 0;
       }
 
       .order-side {
@@ -626,7 +635,7 @@
 
       .address-body strong {
         display: block;
-        margin-bottom: 2px;
+        margin-bottom: 0;
         font-weight: 400;
         color: #1d1d1f;
       }
@@ -2220,7 +2229,7 @@
               </div>
             </div>
             <div class="address-body">
-              <strong>${escapeHtml(fullName)}</strong><br />
+              <strong>${escapeHtml(fullName)}</strong>
               ${bodyLines}${phoneHtml}
             </div>
             <div class="address-footer">
