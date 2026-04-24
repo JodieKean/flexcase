@@ -1155,8 +1155,7 @@ async function handleCustomerAddressCreate(req, res) {
       return;
     }
 
-    const hasExisting = await customerHasAnyAddresses(customer.id);
-    const setAsDefault = Boolean(body.setAsDefault) || !hasExisting;
+    const setAsDefault = true;
 
     const addressInput = {
       firstName,
