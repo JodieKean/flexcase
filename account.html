@@ -1534,7 +1534,9 @@
         const cards = addressList.querySelectorAll("[data-address-card]");
         cards.forEach((card) => {
           const isDefault = card.classList.contains("default");
-          let badge = card.querySelector(".badge-default");
+          // Ensure we only render DEFAULT badge in footer (never in title) to avoid jumpy transitions.
+          card.querySelectorAll(".address-title .badge-default").forEach((node) => node.remove());
+          let badge = card.querySelector(".address-footer .badge-default");
           let footer = card.querySelector(".address-footer");
           let setBtn = card.querySelector("[data-set-default]");
           if (!footer) {
@@ -1547,7 +1549,7 @@
             setBtn.type = "button";
             setBtn.className = "set-default";
             setBtn.dataset.setDefault = "";
-            setBtn.textContent = "Set As Default";
+            setBtn.textContent = "Save as default";
             footer.appendChild(setBtn);
           }
           if (isDefault) {
@@ -1555,13 +1557,13 @@
             if (!badge) {
               badge = document.createElement("span");
               badge.className = "badge-default";
-              badge.textContent = "Default";
-              const title = card.querySelector(".address-title");
-              if (title) title.appendChild(badge);
+              badge.textContent = "DEFAULT";
+              footer.appendChild(badge);
             }
           } else {
             if (badge) badge.remove();
             setBtn.classList.remove("is-hidden");
+            setBtn.textContent = "Save as default";
           }
         });
       }
