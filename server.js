@@ -531,9 +531,34 @@ function handleCustomerOauthStart(req, res) {
   const reqUrl = new URL(req.url, "http://localhost");
   const mode = reqUrl.searchParams.get("mode") === "signup" ? "signup" : "signin";
   const keep = reqUrl.searchParams.get("keep") === "1";
+  const shopifyCleared = reqUrl.searchParams.get("shopify_cleared") === "1";
   const emailHint = String(reqUrl.searchParams.get("email") || "")
     .trim()
     .toLowerCase();
+
+  // Force a Shopify-side logout once before each new OAuth start so account selection
+  // starts from a clean state instead of silently reusing prior Shopify sessions.
+  if (CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT && !shopifyCleared) {
+    const resumeUrl = new URL(`${API_ORIGIN}/api/customer/oauth/start`);
+    resumeUrl.searchParams.set("mode", mode);
+    resumeUrl.searchParams.set("keep", keep ? "1" : "0");
+    if (emailHint) resumeUrl.searchParams.set("email", emailHint);
+    resumeUrl.searchParams.set("shopify_cleared", "1");
+
+    const logoutUrl = new URL(CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT);
+    logoutUrl.searchParams.set("post_logout_redirect_uri", resumeUrl.toString());
+    const current = getCustomerSession(req);
+    const idTokenHint = String(current?.session?.idToken || "").trim();
+    if (idTokenHint) logoutUrl.searchParams.set("id_token_hint", idTokenHint);
+
+    res.writeHead(302, {
+      Location: logoutUrl.toString(),
+      "Set-Cookie": clearSessionCookie(),
+    });
+    res.end();
+    return;
+  }
+
   const state = createOAuthState(mode, keep, emailHint);
 
   const authorizeUrl = new URL(CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT);
