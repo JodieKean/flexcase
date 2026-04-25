@@ -538,7 +538,9 @@ function handleCustomerOauthStart(req, res) {
 
   // Force a Shopify-side logout once before each new OAuth start so account selection
   // starts from a clean state instead of silently reusing prior Shopify sessions.
-  if (CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT && !shopifyCleared) {
+  const current = getCustomerSession(req);
+  const idTokenHint = String(current?.session?.idToken || "").trim();
+  if (CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT && !shopifyCleared && idTokenHint) {
     const resumeUrl = new URL(`${API_ORIGIN}/api/customer/oauth/start`);
     resumeUrl.searchParams.set("mode", mode);
     resumeUrl.searchParams.set("keep", keep ? "1" : "0");
@@ -547,8 +549,7 @@ function handleCustomerOauthStart(req, res) {
 
     const logoutUrl = new URL(CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT);
     logoutUrl.searchParams.set("post_logout_redirect_uri", resumeUrl.toString());
-    // Do not send id_token_hint in pre-login cleanup flow.
-    // A stale/invalid hint can cause Shopify to fail logout with invalid_id_token.
+    logoutUrl.searchParams.set("id_token_hint", idTokenHint);
 
     res.writeHead(302, {
       Location: logoutUrl.toString(),
