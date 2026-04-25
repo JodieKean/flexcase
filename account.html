@@ -2743,6 +2743,18 @@
         }
       })();
 
+      window.addEventListener("pageshow", (event) => {
+        const navEntry =
+          typeof performance !== "undefined" && performance.getEntriesByType
+            ? performance.getEntriesByType("navigation")[0]
+            : null;
+        const isBackForward = Boolean(event?.persisted) || navEntry?.type === "back_forward";
+        if (!isBackForward) return;
+        if (authRedirectOverlay?.classList.contains("show")) {
+          setLoggedOutUI("You are currently signed out.", false);
+        }
+      });
+
       setActiveTab("orders");
     </script>
   </body>
