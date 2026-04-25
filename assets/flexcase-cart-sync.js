@@ -130,45 +130,11 @@
     }
   }
 
-  async function pullServerCartToLocal() {
-    const r = await fetchApi("/api/cart");
-    if (r.status === 401) return false;
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) return false;
-    const current = readLocalLines();
-    writeLocalLines(mergeWithStableOrder(j.lines || [], current, false));
-    return true;
-  }
-
   async function mergeGuestThenPull() {
-    if (sessionStorage.getItem(MERGED_KEY)) {
-      await pullServerCartToLocal();
-      return;
-    }
+    if (sessionStorage.getItem(MERGED_KEY)) return;
     const local = readLocalLines();
     if (local.length) {
-      try {
-        const r = await fetchApi("/api/cart/merge", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ lines: local }),
-        });
-        if (r.ok) {
-          const j = await r.json();
-          writeLocalLines(mergeWithStableOrder(j.lines || [], local, false));
-        } else {
-          const t = await r.text();
-          let p = {};
-          try {
-            p = JSON.parse(t);
-          } catch (_) {}
-          console.warn(p.error || "Cart merge failed", t);
-        }
-      } catch (e) {
-        console.warn(e);
-      }
-    } else {
-      await pullServerCartToLocal();
+      await runReplaceSyncNow();
     }
     sessionStorage.setItem(MERGED_KEY, "1");
   }
@@ -181,7 +147,9 @@
 
   async function flexcaseRefreshCartFromServer() {
     if (!(await isSessionAuthenticated())) return false;
-    const ok = await pullServerCartToLocal();
+    // Local cart is UI source-of-truth. Refresh requests only push local state.
+    const local = readLocalLines();
+    const ok = local.length ? await runReplaceSyncNow() : true;
     updateBadges();
     return ok;
   }
@@ -229,7 +197,7 @@
     }
   }
 
-  async function runReplaceSyncNow() {
+  async function runReplaceSyncNow(options = {}) {
     if (!(await isSessionAuthenticated())) return false;
     const requestId = ++latestReplaceSyncRequestId;
     const local = readLocalLines();
@@ -238,21 +206,14 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ lines: local }),
+        keepalive: Boolean(options.keepalive),
         timeoutMs: 8000,
       });
-      const j = await r.json().catch(() => ({}));
       if (!r.ok) return false;
       // Ignore stale responses so older requests never overwrite newer edits.
       if (requestId !== latestReplaceSyncRequestId) return true;
-      const localQty = cartTotalQty(local);
-      const serverQty = cartTotalQty(j.lines || []);
-      // Keep optimistic local lines authoritative for UI stability.
-      // Only accept server payload if totals match local intent.
-      if (localQty === serverQty) {
-        writeLocalLines(mergeWithStableOrder(j.lines || [], local, false));
-      } else {
-        writeLocalLines(local);
-      }
+      // Never overwrite UI from server payload; local stays authoritative.
+      writeLocalLines(local);
       updateBadges();
       return true;
     } catch (_) {
@@ -277,6 +238,22 @@
     });
   }
 
+  function flexcaseFlushCartSync(options = {}) {
+    return new Promise((resolve) => {
+      if (replaceSyncTimer) clearTimeout(replaceSyncTimer);
+      replaceSyncTimer = null;
+      const resolvers = replaceSyncPendingResolvers.splice(0, replaceSyncPendingResolvers.length);
+      replaceSyncChain = replaceSyncChain
+        .catch(() => {})
+        .then(() => runReplaceSyncNow({ keepalive: Boolean(options?.keepalive) }))
+        .then((ok) => {
+          for (const done of resolvers) done(ok);
+          resolve(ok);
+        })
+        .catch(() => resolve(false));
+    });
+  }
+
   function flexcaseOnLogoutClearMergeFlag() {
     try {
       sessionStorage.removeItem(MERGED_KEY);
@@ -292,11 +269,15 @@
   window.flexcaseAddToCartLoggedIn = flexcaseAddToCartLoggedIn;
   window.flexcaseClearServerCart = flexcaseClearServerCart;
   window.flexcasePushLocalCartToServer = flexcasePushLocalCartToServer;
+  window.flexcaseFlushCartSync = flexcaseFlushCartSync;
   window.flexcaseOnLogoutClearMergeFlag = flexcaseOnLogoutClearMergeFlag;
 
   function boot() {
     updateBadges();
     flexcaseSyncCartAfterAuth().catch(() => {});
+    window.addEventListener("pagehide", () => {
+      void flexcaseFlushCartSync({ keepalive: true });
+    });
   }
 
   if (document.readyState === "loading") {
