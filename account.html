@@ -2256,7 +2256,7 @@
             return "Sign in completed, but this frontend origin is not allowed by API CORS. Update FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS to include this exact domain.";
           }
           if (reason === "session_invalid_or_expired") {
-            return "Sign in completed, but the session cookie is invalid or expired. Try signing in again and ensure API/frontend domains are consistent.";
+            return "We kept your vault secure while you were away. Please sign in again.";
           }
         } catch (_) {
           /* ignore */
