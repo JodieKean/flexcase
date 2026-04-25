@@ -656,6 +656,48 @@ function handleCustomerSession(req, res) {
   json(res, 200, { authenticated: true, customer: current.session.customer });
 }
 
+function handleCustomerSessionDebug(req, res) {
+  const origin = String(req.headers.origin || "");
+  const host = String(req.headers.host || "");
+  const cookieHeader = String(req.headers.cookie || "");
+  const hasSessionCookie = cookieHeader.includes("flexcase_customer_session=");
+  const originAllowed = Boolean(origin) && ALLOWED_ORIGINS.has(origin);
+  const current = getCustomerSession(req);
+  const authenticated = Boolean(current?.session?.customer);
+  const expectedSecureCookie = FRONTEND_ORIGIN.startsWith("https://");
+
+  let reason = "unknown";
+  if (authenticated) {
+    reason = "ok";
+  } else if (!hasSessionCookie) {
+    reason = "missing_session_cookie";
+  } else if (origin && !originAllowed) {
+    reason = "origin_not_allowed";
+  } else {
+    reason = "session_invalid_or_expired";
+  }
+
+  json(res, 200, {
+    ok: authenticated,
+    reason,
+    diagnostics: {
+      requestOrigin: origin || null,
+      requestHost: host || null,
+      originAllowed,
+      hasSessionCookie,
+      expectedSecureCookie,
+      frontendOrigin: FRONTEND_ORIGIN,
+      apiOrigin: API_ORIGIN,
+      allowedOrigins: [...ALLOWED_ORIGINS],
+      cookieHints: {
+        sameSite: "Lax",
+        httpOnly: true,
+        secure: expectedSecureCookie,
+      },
+    },
+  });
+}
+
 async function handleCustomerEmailExists(req, res) {
   try {
     const reqUrl = new URL(req.url, "http://localhost");
@@ -2021,6 +2063,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/customer/session") {
     handleCustomerSession(req, res);
+    return;
+  }
+  if (reqUrl.pathname === "/api/customer/session/debug") {
+    handleCustomerSessionDebug(req, res);
     return;
   }
   if (reqUrl.pathname === "/api/cart") {

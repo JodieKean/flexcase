@@ -2242,6 +2242,28 @@
         }
       }
 
+      async function diagnoseMissingSessionAfterAuth() {
+        try {
+          const response = await fetchApiWithFallback("/api/customer/session/debug", {
+            credentials: "include",
+          });
+          const payload = await response.json().catch(() => ({}));
+          const reason = String(payload?.reason || "").trim();
+          if (reason === "missing_session_cookie") {
+            return "Sign in completed, but no session cookie was detected. Check cookie policy, domain, and HTTPS setup.";
+          }
+          if (reason === "origin_not_allowed") {
+            return "Sign in completed, but this frontend origin is not allowed by API CORS. Update FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS to include this exact domain.";
+          }
+          if (reason === "session_invalid_or_expired") {
+            return "Sign in completed, but the session cookie is invalid or expired. Try signing in again and ensure API/frontend domains are consistent.";
+          }
+        } catch (_) {
+          /* ignore */
+        }
+        return "Sign in completed, but your account session was not detected. Check FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS and cookie settings, then try again.";
+      }
+
       function money(amount, currencyCode = "USD") {
         return new Intl.NumberFormat("en-US", {
           style: "currency",
@@ -2677,10 +2699,8 @@
         const ok = await syncServerCustomerSession();
         if (!ok) {
           if (shouldAttemptWarmRestore) {
-            setLoggedOutUI(
-              "Sign in completed, but your account session was not detected. Check FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS and cookie settings, then try again.",
-              true
-            );
+            const failureMessage = await diagnoseMissingSessionAfterAuth();
+            setLoggedOutUI(failureMessage, true);
             return;
           }
           setLoggedOutUI(pendingGateMessage, pendingGateError);
