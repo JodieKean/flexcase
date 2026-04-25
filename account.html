@@ -2110,9 +2110,41 @@
         sessionStorage.removeItem(authStorageKey);
       }
 
+      function clearBrowserFlexcaseStorage() {
+        const purge = (store) => {
+          try {
+            const toDelete = [];
+            for (let i = 0; i < store.length; i += 1) {
+              const key = String(store.key(i) || "");
+              if (!key) continue;
+              if (key.startsWith("flexcase.") || key.startsWith("flexcase_") || key === "checkout-demo-order") {
+                toDelete.push(key);
+              }
+            }
+            toDelete.forEach((key) => store.removeItem(key));
+          } catch (_) {
+            /* ignore */
+          }
+        };
+        purge(localStorage);
+        purge(sessionStorage);
+      }
+
+      async function clearServerSessionCookieSilently() {
+        try {
+          await fetchApiWithFallback("/api/customer/logout", {
+            method: "POST",
+            credentials: "include",
+          });
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
       function clearClientSessionState() {
         // Remove known Flexcase client-side session/cart caches.
         clearAuthSession();
+        clearBrowserFlexcaseStorage();
         localStorage.removeItem(cartStorageKey);
         sessionStorage.removeItem(cartMergedKey);
         window.flexcaseOnLogoutClearMergeFlag?.();
@@ -2236,8 +2268,10 @@
             return ok;
           }
           clearClientSessionState();
+          void clearServerSessionCookieSilently();
           return false;
         } catch (_) {
+          clearClientSessionState();
           return false;
         }
       }
@@ -2256,6 +2290,8 @@
             return "Sign in completed, but this frontend origin is not allowed by API CORS. Update FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS to include this exact domain.";
           }
           if (reason === "session_invalid_or_expired") {
+            clearClientSessionState();
+            void clearServerSessionCookieSilently();
             return "We kept your vault secure while you were away. Please sign in again.";
           }
         } catch (_) {
