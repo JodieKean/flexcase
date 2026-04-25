@@ -892,6 +892,10 @@
       const taxRate = 0.08;
 
       let discount = 0;
+      /** After user edits quantities, ignore a late background server refresh so it cannot revert the UI. */
+      let checkoutCartDirty = false;
+      /** Serialize +/- so rapid clicks do not read stale cart state in parallel. */
+      let lineQtyAdjustChain = Promise.resolve();
 
       const stepContact = document.getElementById("step-contact");
       const stepShipping = document.getElementById("step-shipping");
@@ -952,6 +956,11 @@
 
       function writeCartItems(items) {
         localStorage.setItem(cartStorageKey, JSON.stringify(Array.isArray(items) ? items : []));
+        try {
+          window.dispatchEvent(new CustomEvent("flexcase-cart-updated"));
+        } catch (_) {
+          /* ignore */
+        }
       }
 
       function lineSubtotal(line) {
@@ -1032,6 +1041,7 @@
         const items = readCartItems();
         const idx = items.findIndex((line) => String(line.variantId || "") === String(variantId || ""));
         if (idx < 0) return;
+        checkoutCartDirty = true;
         const currentQty = Math.max(1, Number(items[idx].quantity || 1));
         const nextQty = currentQty + Number(delta || 0);
         if (nextQty < 1) {
@@ -1303,13 +1313,18 @@
       });
 
       orderLineItems.addEventListener("click", (event) => {
-        const plusBtn = event.target.closest("[data-qty-plus]");
-        const minusBtn = event.target.closest("[data-qty-minus]");
+        const raw = event.target;
+        const el =
+          raw && raw.nodeType === Node.ELEMENT_NODE ? raw : raw?.parentElement;
+        const plusBtn = el?.closest?.("[data-qty-plus]");
+        const minusBtn = el?.closest?.("[data-qty-minus]");
         if (!plusBtn && !minusBtn) return;
-        const lineItem = event.target.closest("[data-variant-id]");
+        const lineItem = el?.closest?.("[data-variant-id]");
         const variantId = lineItem?.dataset?.variantId || "";
         if (!variantId) return;
-        void adjustLineQuantity(variantId, plusBtn ? 1 : -1);
+        lineQtyAdjustChain = lineQtyAdjustChain
+          .catch(() => {})
+          .then(() => adjustLineQuantity(variantId, plusBtn ? 1 : -1));
       });
 
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
@@ -1336,6 +1351,7 @@
         // Then refresh from server in background for signed-in users.
         void (async () => {
           await (window.flexcaseRefreshCartFromServer?.() || Promise.resolve());
+          if (checkoutCartDirty) return;
           renderOrderLines(readCartItems());
           recalcTotals();
         })();

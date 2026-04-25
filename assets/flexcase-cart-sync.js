@@ -5,6 +5,8 @@
   const REPLACE_SYNC_DEBOUNCE_MS = 280;
   let replaceSyncTimer = null;
   let replaceSyncPendingResolvers = [];
+  /** Ensures at most one /api/cart/replace is in flight so older payloads cannot win on the server. */
+  let replaceSyncChain = Promise.resolve();
 
   function apiBase() {
     return (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -63,7 +65,11 @@
   }
 
   function cartTotalQty(lines) {
-    return (lines || []).reduce((s, l) => s + Number(l.quantity || 0), 0);
+    return (lines || []).reduce((s, l) => {
+      const q = Number(l.quantity);
+      if (Number.isFinite(q) && q >= 1) return s + Math.min(99, q);
+      return s + 1;
+    }, 0);
   }
 
   function updateBadges() {
@@ -210,11 +216,15 @@
     return new Promise((resolve) => {
       replaceSyncPendingResolvers.push(resolve);
       if (replaceSyncTimer) clearTimeout(replaceSyncTimer);
-      replaceSyncTimer = setTimeout(async () => {
+      replaceSyncTimer = setTimeout(() => {
         replaceSyncTimer = null;
         const resolvers = replaceSyncPendingResolvers.splice(0, replaceSyncPendingResolvers.length);
-        const ok = await runReplaceSyncNow();
-        for (const done of resolvers) done(ok);
+        replaceSyncChain = replaceSyncChain
+          .catch(() => {})
+          .then(() => runReplaceSyncNow())
+          .then((ok) => {
+            for (const done of resolvers) done(ok);
+          });
       }, REPLACE_SYNC_DEBOUNCE_MS);
     });
   }
