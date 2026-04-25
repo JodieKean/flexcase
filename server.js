@@ -569,6 +569,9 @@ function handleCustomerOauthStart(req, res) {
   authorizeUrl.searchParams.set("state", state);
   if (mode === "signup") {
     authorizeUrl.searchParams.set("prompt", "login");
+  } else if (emailHint) {
+    // When user entered an email, force fresh login so Shopify lands on that email's OTP flow.
+    authorizeUrl.searchParams.set("prompt", "login");
   } else {
     // Prevent silent re-auth into the previous Shopify Account user.
     authorizeUrl.searchParams.set("prompt", "select_account");
