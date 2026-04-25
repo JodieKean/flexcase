@@ -5,6 +5,7 @@
   const REPLACE_SYNC_DEBOUNCE_MS = 280;
   let replaceSyncTimer = null;
   let replaceSyncPendingResolvers = [];
+  const SYNC_ONLY_ON_EXIT = true;
   /** Ensures at most one /api/cart/replace is in flight so older payloads cannot win on the server. */
   let replaceSyncChain = Promise.resolve();
 
@@ -132,10 +133,6 @@
 
   async function mergeGuestThenPull() {
     if (sessionStorage.getItem(MERGED_KEY)) return;
-    const local = readLocalLines();
-    if (local.length) {
-      await runReplaceSyncNow();
-    }
     sessionStorage.setItem(MERGED_KEY, "1");
   }
 
@@ -146,41 +143,30 @@
   }
 
   async function flexcaseRefreshCartFromServer() {
-    if (!(await isSessionAuthenticated())) return false;
-    // Local cart is UI source-of-truth. Refresh requests only push local state.
-    const local = readLocalLines();
-    const ok = local.length ? await runReplaceSyncNow() : true;
+    // Keep UI fully local during active browsing.
     updateBadges();
-    return ok;
+    return true;
   }
 
   async function flexcaseAddToCartLoggedIn(merchandiseId, quantity) {
-    let r;
-    try {
-      r = await fetchApi("/api/cart/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ merchandiseId, quantity }),
-        timeoutMs: 8000,
-      });
-    } catch (error) {
-      const msg = String(error?.message || "").toLowerCase();
-      if (msg.includes("abort")) {
-        throw new Error("Cart API timeout");
-      }
-      throw new Error("Cart API unavailable");
-    }
-    const raw = await r.text();
-    let j = {};
-    try {
-      j = raw ? JSON.parse(raw) : {};
-    } catch (_) {}
-    if (!r.ok) {
-      const reason = j.error || `Add failed (${r.status})`;
-      throw new Error(reason);
-    }
+    // UI-first: update local cart immediately and persist later.
     const current = readLocalLines();
-    writeLocalLines(mergeWithStableOrder(j.lines || [], current, true));
+    const next = dedupeByIdentity(current);
+    const targetId = String(merchandiseId || "").trim();
+    const addQty = Math.max(1, Math.min(99, Number(quantity || 1)));
+    const idx = next.findIndex((line) => String(line?.variantId || "").trim() === targetId);
+    if (idx >= 0) {
+      const q = Math.max(1, Number(next[idx].quantity || 1));
+      next[idx].quantity = Math.min(99, q + addQty);
+    } else {
+      // Fallback line model if this helper is called directly.
+      next.unshift({
+        variantId: targetId,
+        quantity: addQty,
+      });
+    }
+    writeLocalLines(next);
+    void flexcasePushLocalCartToServer();
     updateBadges();
   }
 
@@ -222,6 +208,7 @@
   }
 
   function flexcasePushLocalCartToServer() {
+    if (SYNC_ONLY_ON_EXIT) return Promise.resolve(true);
     return new Promise((resolve) => {
       replaceSyncPendingResolvers.push(resolve);
       if (replaceSyncTimer) clearTimeout(replaceSyncTimer);
@@ -239,6 +226,9 @@
   }
 
   function flexcaseFlushCartSync(options = {}) {
+    if (!(options?.force) && SYNC_ONLY_ON_EXIT && !options?.keepalive) {
+      return Promise.resolve(true);
+    }
     return new Promise((resolve) => {
       if (replaceSyncTimer) clearTimeout(replaceSyncTimer);
       replaceSyncTimer = null;
@@ -276,7 +266,7 @@
     updateBadges();
     flexcaseSyncCartAfterAuth().catch(() => {});
     window.addEventListener("pagehide", () => {
-      void flexcaseFlushCartSync({ keepalive: true });
+      void flexcaseFlushCartSync({ keepalive: true, force: true });
     });
   }
 
