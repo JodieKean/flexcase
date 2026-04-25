@@ -346,10 +346,13 @@ function getCustomerSession(req) {
   return { session };
 }
 
-function createOAuthState(mode, keep) {
+function createOAuthState(mode, keep, expectedEmail = "") {
   return encodeSignedPayload({
     mode,
     keep,
+    expectedEmail: String(expectedEmail || "")
+      .trim()
+      .toLowerCase(),
     expiresAt: Date.now() + 10 * 60_000,
     nonce: crypto.randomBytes(8).toString("hex"),
   });
@@ -362,6 +365,9 @@ function parseOAuthState(state) {
   return {
     mode,
     keep: payload.keep === true,
+    expectedEmail: String(payload.expectedEmail || "")
+      .trim()
+      .toLowerCase(),
     expiresAt: Number(payload.expiresAt) || 0,
   };
 }
@@ -528,7 +534,7 @@ function handleCustomerOauthStart(req, res) {
   const emailHint = String(reqUrl.searchParams.get("email") || "")
     .trim()
     .toLowerCase();
-  const state = createOAuthState(mode, keep);
+  const state = createOAuthState(mode, keep, emailHint);
 
   const authorizeUrl = new URL(CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT);
   authorizeUrl.searchParams.set("client_id", CUSTOMER_ACCOUNT_CLIENT_ID);
@@ -537,9 +543,6 @@ function handleCustomerOauthStart(req, res) {
   authorizeUrl.searchParams.set("scope", CUSTOMER_ACCOUNT_SCOPES);
   authorizeUrl.searchParams.set("state", state);
   if (mode === "signup") {
-    authorizeUrl.searchParams.set("prompt", "login");
-  } else if (emailHint) {
-    // With an explicit email hint, move directly into that account's OTP flow.
     authorizeUrl.searchParams.set("prompt", "login");
   } else {
     // Prevent silent re-auth into the previous Shopify Account user.
@@ -621,6 +624,23 @@ async function handleCustomerOauthCallback(req, res) {
       lastName: idPayload?.family_name || "",
       email: idPayload?.email || "",
     };
+    const returnedEmail = String(customer.email || "")
+      .trim()
+      .toLowerCase();
+    const expectedEmail = String(stateValue.expectedEmail || "")
+      .trim()
+      .toLowerCase();
+    if (expectedEmail && returnedEmail && returnedEmail !== expectedEmail) {
+      const message = encodeURIComponent(
+        `Signed in as ${returnedEmail}, but you entered ${expectedEmail}. Please choose the correct Shopify account and try again.`
+      );
+      res.writeHead(302, {
+        Location: `${FRONTEND_ORIGIN}/account.html?auth=error&message=${message}`,
+        "Set-Cookie": clearSessionCookie(),
+      });
+      res.end();
+      return;
+    }
     const expiresAtMs = payload.expires_in
       ? Date.now() + Number(payload.expires_in) * 1000
       : Date.now() + 12 * 60 * 60 * 1000;
