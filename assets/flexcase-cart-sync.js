@@ -64,6 +64,44 @@
     window.dispatchEvent(new CustomEvent("flexcase-cart-updated"));
   }
 
+  function lineIdentity(line) {
+    const variantId = String(line?.variantId || "").trim();
+    if (variantId) return `variant:${variantId}`;
+    const fallback = `${String(line?.productTitle || "").trim()}|${String(line?.variantTitle || "").trim()}`;
+    return `title:${fallback}`;
+  }
+
+  function dedupeByIdentity(lines) {
+    const out = [];
+    const seen = new Set();
+    for (const line of Array.isArray(lines) ? lines : []) {
+      const key = lineIdentity(line);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      out.push(line);
+    }
+    return out;
+  }
+
+  function mergeWithStableOrder(nextLines, previousLines, newItemsOnTop = false) {
+    const prev = dedupeByIdentity(previousLines);
+    const next = dedupeByIdentity(nextLines);
+    if (!next.length) return [];
+
+    const prevOrder = new Map(prev.map((line, idx) => [lineIdentity(line), idx]));
+    const existing = [];
+    const newcomers = [];
+
+    for (const line of next) {
+      const key = lineIdentity(line);
+      if (prevOrder.has(key)) existing.push(line);
+      else newcomers.push(line);
+    }
+
+    existing.sort((a, b) => prevOrder.get(lineIdentity(a)) - prevOrder.get(lineIdentity(b)));
+    return newItemsOnTop ? [...newcomers, ...existing] : [...existing, ...newcomers];
+  }
+
   function cartTotalQty(lines) {
     return (lines || []).reduce((s, l) => {
       const q = Number(l.quantity);
@@ -97,7 +135,8 @@
     if (r.status === 401) return false;
     const j = await r.json().catch(() => ({}));
     if (!r.ok) return false;
-    writeLocalLines(j.lines || []);
+    const current = readLocalLines();
+    writeLocalLines(mergeWithStableOrder(j.lines || [], current, false));
     return true;
   }
 
@@ -116,7 +155,7 @@
         });
         if (r.ok) {
           const j = await r.json();
-          writeLocalLines(j.lines || []);
+          writeLocalLines(mergeWithStableOrder(j.lines || [], local, false));
         } else {
           const t = await r.text();
           let p = {};
@@ -172,7 +211,8 @@
       const reason = j.error || `Add failed (${r.status})`;
       throw new Error(reason);
     }
-    writeLocalLines(j.lines || []);
+    const current = readLocalLines();
+    writeLocalLines(mergeWithStableOrder(j.lines || [], current, true));
     updateBadges();
   }
 
@@ -204,7 +244,15 @@
       if (!r.ok) return false;
       // Ignore stale responses so older requests never overwrite newer edits.
       if (requestId !== latestReplaceSyncRequestId) return true;
-      writeLocalLines(j.lines || []);
+      const localQty = cartTotalQty(local);
+      const serverQty = cartTotalQty(j.lines || []);
+      // Keep optimistic local lines authoritative for UI stability.
+      // Only accept server payload if totals match local intent.
+      if (localQty === serverQty) {
+        writeLocalLines(mergeWithStableOrder(j.lines || [], local, false));
+      } else {
+        writeLocalLines(local);
+      }
       updateBadges();
       return true;
     } catch (_) {
