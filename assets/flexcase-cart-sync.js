@@ -148,7 +148,7 @@
     return true;
   }
 
-  async function flexcaseAddToCartLoggedIn(merchandiseId, quantity) {
+  async function flexcaseAddToCartLoggedIn(merchandiseId, quantity, lineDetails = {}) {
     // UI-first: update local cart immediately and persist later.
     const current = readLocalLines();
     const next = dedupeByIdentity(current);
@@ -158,11 +158,36 @@
     if (idx >= 0) {
       const q = Math.max(1, Number(next[idx].quantity || 1));
       next[idx].quantity = Math.min(99, q + addQty);
+      // Backfill missing display fields when existing line is sparse.
+      if (!next[idx].productTitle && lineDetails.productTitle) {
+        next[idx].productTitle = String(lineDetails.productTitle);
+      }
+      if (!next[idx].variantTitle && lineDetails.variantTitle) {
+        next[idx].variantTitle = String(lineDetails.variantTitle);
+      }
+      if ((!next[idx].price || Number(next[idx].price) <= 0) && lineDetails.price != null) {
+        next[idx].price = Number(lineDetails.price || 0);
+      }
+      if (!next[idx].currencyCode && lineDetails.currencyCode) {
+        next[idx].currencyCode = String(lineDetails.currencyCode);
+      }
+      if (!next[idx].image && lineDetails.image) {
+        next[idx].image = String(lineDetails.image);
+      }
+      if (!next[idx].productHandle && lineDetails.productHandle) {
+        next[idx].productHandle = String(lineDetails.productHandle);
+      }
     } else {
-      // Fallback line model if this helper is called directly.
+      const normalizedPrice = Number(lineDetails.price || 0);
       next.unshift({
         variantId: targetId,
+        productHandle: String(lineDetails.productHandle || ""),
+        productTitle: String(lineDetails.productTitle || "Product"),
+        variantTitle: String(lineDetails.variantTitle || "Default"),
         quantity: addQty,
+        price: Number.isFinite(normalizedPrice) ? normalizedPrice : 0,
+        currencyCode: String(lineDetails.currencyCode || "USD"),
+        image: String(lineDetails.image || ""),
       });
     }
     writeLocalLines(next);

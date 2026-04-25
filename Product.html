@@ -841,8 +841,20 @@
             }
 
             if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
+              const lineDetails = {
+                productHandle: product.handle,
+                productTitle: product.title,
+                variantTitle: selectedVariant.title || "Default",
+                price:
+                  selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount || 0,
+                currencyCode:
+                  selectedVariant.price?.currencyCode ||
+                  product.priceRange?.minVariantPrice?.currencyCode ||
+                  "USD",
+                image: product.featuredImage?.url || "",
+              };
               await withTimeout(
-                window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity),
+                window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity, lineDetails),
                 9000,
                 "Cart sync timeout"
               );
