@@ -547,9 +547,8 @@ function handleCustomerOauthStart(req, res) {
 
     const logoutUrl = new URL(CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT);
     logoutUrl.searchParams.set("post_logout_redirect_uri", resumeUrl.toString());
-    const current = getCustomerSession(req);
-    const idTokenHint = String(current?.session?.idToken || "").trim();
-    if (idTokenHint) logoutUrl.searchParams.set("id_token_hint", idTokenHint);
+    // Do not send id_token_hint in pre-login cleanup flow.
+    // A stale/invalid hint can cause Shopify to fail logout with invalid_id_token.
 
     res.writeHead(302, {
       Location: logoutUrl.toString(),
