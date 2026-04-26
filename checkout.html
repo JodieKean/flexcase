@@ -1038,6 +1038,7 @@
       });
 
       async function adjustLineQuantity(variantId, delta) {
+        window.__flexcaseSkipHydrateWrite = true;
         const items = readCartItems();
         const idx = items.findIndex((line) => String(line.variantId || "") === String(variantId || ""));
         if (idx < 0) return;
@@ -1342,20 +1343,24 @@
 
       (function initCheckoutCartInstantly() {
         // Render immediately from local cache to avoid visible loading on page entry.
+        window.__flexcaseSkipHydrateWrite = false;
         renderOrderLines(readCartItems());
         selectMode("guest");
         selectShipping("standard");
         recalcTotals();
         setStep(1);
 
-        // Push latest local quantities in background for signed-in users.
+        // Pull Shopify truth only when returning from another page or local cache is empty.
         void (async () => {
-          await (window.flexcaseRefreshCartFromServer?.() || Promise.resolve());
           const lastPath = String(window.flexcaseGetLastVisitedPath?.() || "").trim();
           const currentPath = String(window.location.pathname || "").trim();
           const cameFromOtherPage = Boolean(lastPath) && lastPath !== currentPath;
-          // Only replace local with Shopify truth when returning to checkout from another page.
-          if (cameFromOtherPage) {
+          const navEntry =
+            typeof performance !== "undefined" && performance.getEntriesByType
+              ? performance.getEntriesByType("navigation")[0]
+              : null;
+          const isReload = navEntry?.type === "reload";
+          if (cameFromOtherPage || isReload) {
             await (window.flexcaseHydrateLocalCartFromServer?.() || Promise.resolve());
           }
           if (checkoutCartDirty) return;

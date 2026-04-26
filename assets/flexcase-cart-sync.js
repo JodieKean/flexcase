@@ -149,6 +149,9 @@
     if (!r.ok) return false;
     const j = await r.json().catch(() => ({}));
     const lines = Array.isArray(j?.lines) ? j.lines : [];
+    // Checkout can set this flag while user is actively editing quantity,
+    // so late hydration responses never stomp local optimistic state.
+    if (window.__flexcaseSkipHydrateWrite) return true;
     writeLocalLines(lines);
     return true;
   }
@@ -161,24 +164,16 @@
   async function flexcaseSyncCartAfterAuth() {
     if (!(await isSessionAuthenticated())) return;
     await mergeGuestThenPull();
+    // Keep local UI stable by default; checkout page decides when to hydrate from Shopify.
     const local = readLocalLines();
-    if (local.length) {
-      // Keep current local cart stable; push in background without replacing UI.
-      void runReplaceSyncNow().catch(() => false);
-    } else {
-      // Fresh sign-in after local clear: restore cart from Shopify truth.
-      await pullServerCartToLocal().catch(() => false);
-    }
+    if (local.length) void runReplaceSyncNow().catch(() => false);
     updateBadges();
   }
 
   async function flexcaseRefreshCartFromServer() {
-    // Smart sync: if local cart is empty, hydrate from Shopify; otherwise push local edits.
+    // Explicit refresh should hydrate from Shopify truth.
     if (!(await isSessionAuthenticated())) return false;
-    const local = readLocalLines();
-    const ok = local.length
-      ? await runReplaceSyncNow().catch(() => false)
-      : await pullServerCartToLocal().catch(() => false);
+    const ok = await pullServerCartToLocal().catch(() => false);
     updateBadges();
     return ok;
   }
