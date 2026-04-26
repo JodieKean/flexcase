@@ -264,9 +264,7 @@
       if (!r.ok) return false;
       // Ignore stale responses so older requests never overwrite newer edits.
       if (requestId !== latestReplaceSyncRequestId) return true;
-      // Never overwrite UI from server payload; local stays authoritative.
-      writeLocalLines(local);
-      updateBadges();
+      // Push-only path: never rewrite local state from sync responses.
       return true;
     } catch (_) {
       return false;
