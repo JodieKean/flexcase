@@ -161,15 +161,24 @@
   async function flexcaseSyncCartAfterAuth() {
     if (!(await isSessionAuthenticated())) return;
     await mergeGuestThenPull();
-    // Keep current local cart stable; push in background without replacing UI.
-    void runReplaceSyncNow().catch(() => false);
+    const local = readLocalLines();
+    if (local.length) {
+      // Keep current local cart stable; push in background without replacing UI.
+      void runReplaceSyncNow().catch(() => false);
+    } else {
+      // Fresh sign-in after local clear: restore cart from Shopify truth.
+      await pullServerCartToLocal().catch(() => false);
+    }
     updateBadges();
   }
 
   async function flexcaseRefreshCartFromServer() {
-    // Push local cart to Shopify without replacing local UI.
+    // Smart sync: if local cart is empty, hydrate from Shopify; otherwise push local edits.
     if (!(await isSessionAuthenticated())) return false;
-    const ok = await runReplaceSyncNow().catch(() => false);
+    const local = readLocalLines();
+    const ok = local.length
+      ? await runReplaceSyncNow().catch(() => false)
+      : await pullServerCartToLocal().catch(() => false);
     updateBadges();
     return ok;
   }
