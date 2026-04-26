@@ -666,8 +666,17 @@ async function handleCustomerOauthCallback(req, res) {
       const message = encodeURIComponent(
         `Signed in as ${returnedEmail}, but you entered ${expectedEmail}. Please choose the correct Shopify account and try again.`
       );
+      let location = `${FRONTEND_ORIGIN}/account.html?auth=error&message=${message}`;
+      const mismatchIdToken = String(payload.id_token || "").trim();
+      if (CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT && mismatchIdToken) {
+        // Clear Shopify account context immediately on mismatch while we still have a valid id_token.
+        const logoutUrl = new URL(CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT);
+        logoutUrl.searchParams.set("post_logout_redirect_uri", location);
+        logoutUrl.searchParams.set("id_token_hint", mismatchIdToken);
+        location = logoutUrl.toString();
+      }
       res.writeHead(302, {
-        Location: `${FRONTEND_ORIGIN}/account.html?auth=error&message=${message}`,
+        Location: location,
         "Set-Cookie": clearSessionCookie(),
       });
       res.end();
