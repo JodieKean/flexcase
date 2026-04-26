@@ -142,6 +142,16 @@
     return true;
   }
 
+  async function pullServerCartToLocal() {
+    const r = await fetchApi("/api/cart");
+    if (r.status === 401) return false;
+    if (!r.ok) return false;
+    const j = await r.json().catch(() => ({}));
+    const lines = Array.isArray(j?.lines) ? j.lines : [];
+    writeLocalLines(lines);
+    return true;
+  }
+
   async function mergeGuestThenPull() {
     if (sessionStorage.getItem(MERGED_KEY)) return;
     sessionStorage.setItem(MERGED_KEY, "1");
@@ -150,15 +160,21 @@
   async function flexcaseSyncCartAfterAuth() {
     if (!(await isSessionAuthenticated())) return;
     await mergeGuestThenPull();
-    // Restore per-account server cart on fresh login if local cache is empty.
-    await pullServerCartToLocalIfEmpty().catch(() => {});
+    // On page entry, prefer Shopify as source of truth.
+    const ok = await pullServerCartToLocal().catch(() => false);
+    if (!ok) {
+      // Fallback: keep existing local when server is unavailable.
+      await pullServerCartToLocalIfEmpty().catch(() => {});
+    }
     updateBadges();
   }
 
   async function flexcaseRefreshCartFromServer() {
-    // Keep UI fully local during active browsing.
+    // On refresh/page switch, render Shopify truth cart.
+    if (!(await isSessionAuthenticated())) return false;
+    const ok = await pullServerCartToLocal().catch(() => false);
     updateBadges();
-    return true;
+    return ok;
   }
 
   async function flexcaseAddToCartLoggedIn(merchandiseId, quantity, lineDetails = {}) {
