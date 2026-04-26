@@ -2323,7 +2323,13 @@
         authRedirectOverlay.setAttribute("aria-hidden", "false");
       }
 
-      function beginCustomerOauth(mode, keepLoggedIn, email = "", forceAccountSelect = false) {
+      function beginCustomerOauth(
+        mode,
+        keepLoggedIn,
+        email = "",
+        forceAccountSelect = false,
+        useProviderLogoutFirst = false
+      ) {
         // Always clear stale local session/cache before starting a fresh OAuth login.
         void (async () => {
           try {
@@ -2341,7 +2347,10 @@
           if (normalizedEmail) params.set("email", normalizedEmail);
           const target = apiUrl(`/api/customer/oauth/start?${params.toString()}`);
           showAuthRedirectOverlay();
-          window.setTimeout(() => window.location.assign(target), 120);
+          const nextUrl = useProviderLogoutFirst
+            ? apiUrl(`/api/customer/logout?next=${encodeURIComponent(target)}`)
+            : target;
+          window.setTimeout(() => window.location.assign(nextUrl), 120);
         })();
       }
 
@@ -2656,8 +2665,8 @@
           .trim()
           .toLowerCase();
         if (!email) return;
-        // Force account picker for mismatch recovery so Shopify can switch accounts explicitly.
-        beginCustomerOauth("signin", keepLoggedIn, email, true);
+        // Use provider logout sequence first, then restart OAuth with the new email.
+        beginCustomerOauth("signin", keepLoggedIn, email, true, true);
       });
 
       authSignUpForm?.addEventListener("submit", async (event) => {

@@ -1910,7 +1910,20 @@ async function handleCustomerAddressDefault(req, res) {
 }
 
 function handleCustomerLogout(req, res) {
-  const returnTo = `${FRONTEND_ORIGIN}/account.html`;
+  const reqUrl = new URL(req.url, "http://localhost");
+  const fallbackReturnTo = `${FRONTEND_ORIGIN}/account.html`;
+  let returnTo = fallbackReturnTo;
+  const requestedNext = String(reqUrl.searchParams.get("next") || "").trim();
+  if (requestedNext) {
+    try {
+      const candidate = new URL(requestedNext);
+      if (candidate.origin === API_ORIGIN || candidate.origin === FRONTEND_ORIGIN) {
+        returnTo = candidate.toString();
+      }
+    } catch (_) {
+      // Ignore invalid custom return URLs.
+    }
+  }
   const current = getCustomerSession(req);
   const idTokenHint = String(current?.session?.idToken || "").trim();
   let location = returnTo;
