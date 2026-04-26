@@ -2105,21 +2105,25 @@
         if (!authMismatchContinueBtn) return;
         authMismatchContinueBtn.classList.add("auth-hidden");
         authMismatchContinueBtn.textContent = "Continue with this account";
-        if (!isError) return;
+        if (!isError) return message;
         const msg = String(message || "");
         const m = msg.match(/Signed in as\s+([^,]+),\s+but you entered\s+([^.]+)\./i);
         const signedInEmail = String(m?.[1] || "").trim().toLowerCase();
-        if (!signedInEmail || !signedInEmail.includes("@")) return;
-        mismatchSuggestedEmail = signedInEmail;
-        if (authSignInEmail) authSignInEmail.value = signedInEmail;
-        authMismatchContinueBtn.textContent = `Continue with ${signedInEmail}`;
+        const enteredEmail = String(m?.[2] || "").trim().toLowerCase();
+        if (!signedInEmail || !signedInEmail.includes("@") || !enteredEmail || !enteredEmail.includes("@")) {
+          return message;
+        }
+        mismatchSuggestedEmail = enteredEmail;
+        if (authSignInEmail) authSignInEmail.value = enteredEmail;
+        authMismatchContinueBtn.textContent = `Continue with account ${enteredEmail}`;
         authMismatchContinueBtn.classList.remove("auth-hidden");
+        return `Previously signed into ${signedInEmail}, but you are signing in with ${enteredEmail} now, would you like to proceed?`;
       }
 
       function setGateMessage(message, isError = false) {
-        authGateMessage.textContent = message;
+        const nextMessage = updateMismatchAssist(message, isError);
+        authGateMessage.textContent = nextMessage;
         authGateMessage.classList.toggle("error", isError);
-        updateMismatchAssist(message, isError);
       }
 
       function clearProfileFieldErrors() {
@@ -2629,6 +2633,7 @@
           .trim()
           .toLowerCase();
         if (!email) return;
+        // Route through OAuth start with the new email hint; backend handles Shopify pre-clear sequence.
         beginCustomerOauth("signin", keepLoggedIn, email);
       });
 
