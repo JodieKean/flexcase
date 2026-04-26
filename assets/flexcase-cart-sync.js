@@ -212,6 +212,28 @@
     return ok;
   }
 
+  async function flexcaseHydrateLocalCartQuantitiesFromServer() {
+    const session = await getSessionState();
+    if (!session.authenticated) return { ok: false, lines: [] };
+    const r = await fetchApi("/api/cart").catch(() => null);
+    if (!r || r.status === 401 || !r.ok) return { ok: false, lines: [] };
+    const j = await r.json().catch(() => ({}));
+    const serverLines = Array.isArray(j?.lines) ? j.lines : [];
+    const local = readLocalLines();
+    const byVariantId = new Map(
+      serverLines.map((line) => [String(line?.variantId || "").trim(), Math.max(1, Number(line?.quantity || 1))])
+    );
+    const merged = local.map((line) => {
+      const key = String(line?.variantId || "").trim();
+      if (!key || !byVariantId.has(key)) return line;
+      return { ...line, quantity: byVariantId.get(key) };
+    });
+    writeLocalLines(merged);
+    if (session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
+    updateBadges();
+    return { ok: true, lines: serverLines };
+  }
+
   function getLastVisitedPath() {
     try {
       return String(sessionStorage.getItem(LAST_PATH_KEY) || "").trim();
@@ -354,6 +376,7 @@
   window.flexcaseSyncCartAfterAuth = flexcaseSyncCartAfterAuth;
   window.flexcaseRefreshCartFromServer = flexcaseRefreshCartFromServer;
   window.flexcaseHydrateLocalCartFromServer = flexcaseHydrateLocalCartFromServer;
+  window.flexcaseHydrateLocalCartQuantitiesFromServer = flexcaseHydrateLocalCartQuantitiesFromServer;
   window.flexcaseGetLastVisitedPath = getLastVisitedPath;
   window.flexcaseAddToCartLoggedIn = flexcaseAddToCartLoggedIn;
   window.flexcaseClearServerCart = flexcaseClearServerCart;

@@ -1010,6 +1010,22 @@
           .join("");
       }
 
+      function patchRenderedQuantities(items) {
+        const byVariantId = new Map(
+          (items || []).map((line) => [String(line?.variantId || "").trim(), line])
+        );
+        orderLineItems.querySelectorAll("[data-variant-id]").forEach((row) => {
+          const variantId = String(row?.dataset?.variantId || "").trim();
+          if (!variantId) return;
+          const line = byVariantId.get(variantId);
+          if (!line) return;
+          const qtyEl = row.querySelector(".qty-value");
+          if (qtyEl) qtyEl.textContent = String(Math.max(1, Number(line?.quantity || 1)));
+          const priceEl = row.querySelector(".price");
+          if (priceEl) priceEl.textContent = money(lineSubtotal(line), line.currencyCode || "USD");
+        });
+      }
+
       function confirmRemoveItemModal() {
         return new Promise((resolve) => {
           pendingRemoveResolve = resolve;
@@ -1361,10 +1377,22 @@
               : null;
           const isReload = navEntry?.type === "reload";
           if (cameFromOtherPage || isReload) {
-            await (window.flexcaseHydrateLocalCartFromServer?.() || Promise.resolve());
+            const before = readCartItems();
+            const result =
+              (await window.flexcaseHydrateLocalCartQuantitiesFromServer?.()) ||
+              { ok: false, lines: [] };
+            const after = readCartItems();
+            const localHasRows = before.length > 0;
+            const serverHasRows = Array.isArray(result?.lines) && result.lines.length > 0;
+            const sameShape = before.length === after.length;
+            if (localHasRows && (serverHasRows || !result.ok) && sameShape) {
+              patchRenderedQuantities(after);
+            } else {
+              renderOrderLines(after);
+            }
           }
           if (checkoutCartDirty) return;
-          renderOrderLines(readCartItems());
+          patchRenderedQuantities(readCartItems());
           recalcTotals();
         })();
       })();
