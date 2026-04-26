@@ -146,6 +146,17 @@
         color: #b42318;
       }
 
+      .auth-message-action {
+        margin-top: 8px;
+        border: 1px solid #d2d2d7;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #1d1d1f;
+        padding: 9px 13px;
+        font-size: 0.86rem;
+        cursor: pointer;
+      }
+
       .auth-hidden {
         display: none !important;
       }
@@ -1092,6 +1103,13 @@
           </form>
 
           <div id="auth-gate-message" class="auth-message">You are currently signed out.</div>
+          <button
+            type="button"
+            id="auth-mismatch-continue"
+            class="auth-message-action auth-hidden"
+          >
+            Continue with this account
+          </button>
         </div>
       </section>
 
@@ -1776,6 +1794,7 @@
       }
       const headerSignout = document.getElementById("header-signout");
       const authGateMessage = document.getElementById("auth-gate-message");
+      const authMismatchContinueBtn = document.getElementById("auth-mismatch-continue");
       const authTabSignIn = document.getElementById("auth-tab-signin");
       const authTabSignUp = document.getElementById("auth-tab-signup");
       const authSignInForm = document.getElementById("auth-signin-form");
@@ -1835,6 +1854,7 @@
       }
 
       const wiredPhoneCountrySelects = new WeakSet();
+      let mismatchSuggestedEmail = "";
 
       function optionDial(opt) {
         if (!opt) return "";
@@ -2080,9 +2100,26 @@
         return composePhoneFromRow(settingsPhoneCountry, settingsPhoneNational);
       }
 
+      function updateMismatchAssist(message, isError = false) {
+        mismatchSuggestedEmail = "";
+        if (!authMismatchContinueBtn) return;
+        authMismatchContinueBtn.classList.add("auth-hidden");
+        authMismatchContinueBtn.textContent = "Continue with this account";
+        if (!isError) return;
+        const msg = String(message || "");
+        const m = msg.match(/Signed in as\s+([^,]+),\s+but you entered\s+([^.]+)\./i);
+        const signedInEmail = String(m?.[1] || "").trim().toLowerCase();
+        if (!signedInEmail || !signedInEmail.includes("@")) return;
+        mismatchSuggestedEmail = signedInEmail;
+        if (authSignInEmail) authSignInEmail.value = signedInEmail;
+        authMismatchContinueBtn.textContent = `Continue with ${signedInEmail}`;
+        authMismatchContinueBtn.classList.remove("auth-hidden");
+      }
+
       function setGateMessage(message, isError = false) {
         authGateMessage.textContent = message;
         authGateMessage.classList.toggle("error", isError);
+        updateMismatchAssist(message, isError);
       }
 
       function clearProfileFieldErrors() {
@@ -2309,7 +2346,7 @@
           const payload = await response.json().catch(() => ({}));
           const reason = String(payload?.reason || "").trim();
           if (reason === "missing_session_cookie") {
-            return "Sign in completed, but no session cookie was detected. Check cookie policy, domain, and HTTPS setup.";
+            return "We kept your vault secure while you were away. Please sign in again.";
           }
           if (reason === "origin_not_allowed") {
             return "Sign in completed, but this frontend origin is not allowed by API CORS. Update FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS to include this exact domain.";
@@ -2583,6 +2620,15 @@
           return;
         }
 
+        beginCustomerOauth("signin", keepLoggedIn, email);
+      });
+
+      authMismatchContinueBtn?.addEventListener("click", () => {
+        const keepLoggedIn = !!authSignInKeep?.checked;
+        const email = String(mismatchSuggestedEmail || authSignInEmail?.value || "")
+          .trim()
+          .toLowerCase();
+        if (!email) return;
         beginCustomerOauth("signin", keepLoggedIn, email);
       });
 
