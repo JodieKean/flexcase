@@ -131,6 +131,17 @@
     }
   }
 
+  async function pullServerCartToLocalIfEmpty() {
+    const local = readLocalLines();
+    if (local.length) return true;
+    const r = await fetchApi("/api/cart");
+    if (!r.ok) return false;
+    const j = await r.json().catch(() => ({}));
+    const lines = Array.isArray(j?.lines) ? j.lines : [];
+    if (lines.length) writeLocalLines(lines);
+    return true;
+  }
+
   async function mergeGuestThenPull() {
     if (sessionStorage.getItem(MERGED_KEY)) return;
     sessionStorage.setItem(MERGED_KEY, "1");
@@ -139,6 +150,8 @@
   async function flexcaseSyncCartAfterAuth() {
     if (!(await isSessionAuthenticated())) return;
     await mergeGuestThenPull();
+    // Restore per-account server cart on fresh login if local cache is empty.
+    await pullServerCartToLocalIfEmpty().catch(() => {});
     updateBadges();
   }
 
@@ -291,6 +304,10 @@
     updateBadges();
     flexcaseSyncCartAfterAuth().catch(() => {});
     window.addEventListener("pagehide", () => {
+      if (window.__flexcaseSkipExitCartFlush) {
+        window.__flexcaseSkipExitCartFlush = false;
+        return;
+      }
       void flexcaseFlushCartSync({ keepalive: true, force: true });
     });
   }

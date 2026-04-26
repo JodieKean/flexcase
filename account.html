@@ -1531,8 +1531,14 @@
       signoutModal?.addEventListener("click", (event) => {
         if (event.target === signoutModal) closeSignoutModal();
       });
-      signoutConfirm?.addEventListener("click", () => {
+      signoutConfirm?.addEventListener("click", async () => {
         closeSignoutModal();
+        try {
+          await window.flexcaseFlushCartSync?.({ force: true });
+        } catch (_) {
+          /* ignore */
+        }
+        window.__flexcaseSkipExitCartFlush = true;
         clearClientSessionState();
         showAuthRedirectOverlay("Always remember to Flex your collection!");
         // Use provider logout endpoint to clear Shopify Account SSO session too.
@@ -2311,15 +2317,23 @@
 
       function beginCustomerOauth(mode, keepLoggedIn, email = "") {
         // Always clear stale local session/cache before starting a fresh OAuth login.
-        clearClientSessionState();
-        const params = new URLSearchParams();
-        params.set("mode", mode);
-        params.set("keep", keepLoggedIn ? "1" : "0");
-        const normalizedEmail = String(email || "").trim().toLowerCase();
-        if (normalizedEmail) params.set("email", normalizedEmail);
-        const target = apiUrl(`/api/customer/oauth/start?${params.toString()}`);
-        showAuthRedirectOverlay();
-        window.setTimeout(() => window.location.assign(target), 120);
+        void (async () => {
+          try {
+            await window.flexcaseFlushCartSync?.({ force: true });
+          } catch (_) {
+            /* ignore */
+          }
+          window.__flexcaseSkipExitCartFlush = true;
+          clearClientSessionState();
+          const params = new URLSearchParams();
+          params.set("mode", mode);
+          params.set("keep", keepLoggedIn ? "1" : "0");
+          const normalizedEmail = String(email || "").trim().toLowerCase();
+          if (normalizedEmail) params.set("email", normalizedEmail);
+          const target = apiUrl(`/api/customer/oauth/start?${params.toString()}`);
+          showAuthRedirectOverlay();
+          window.setTimeout(() => window.location.assign(target), 120);
+        })();
       }
 
       async function syncServerCustomerSession() {
