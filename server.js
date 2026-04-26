@@ -531,6 +531,7 @@ function handleCustomerOauthStart(req, res) {
   const reqUrl = new URL(req.url, "http://localhost");
   const mode = reqUrl.searchParams.get("mode") === "signup" ? "signup" : "signin";
   const keep = reqUrl.searchParams.get("keep") === "1";
+  const forceSelect = reqUrl.searchParams.get("force_select") === "1";
   const shopifyCleared = reqUrl.searchParams.get("shopify_cleared") === "1";
   const emailHint = String(reqUrl.searchParams.get("email") || "")
     .trim()
@@ -544,6 +545,7 @@ function handleCustomerOauthStart(req, res) {
     const resumeUrl = new URL(`${API_ORIGIN}/api/customer/oauth/start`);
     resumeUrl.searchParams.set("mode", mode);
     resumeUrl.searchParams.set("keep", keep ? "1" : "0");
+    if (forceSelect) resumeUrl.searchParams.set("force_select", "1");
     if (emailHint) resumeUrl.searchParams.set("email", emailHint);
     resumeUrl.searchParams.set("shopify_cleared", "1");
 
@@ -567,7 +569,9 @@ function handleCustomerOauthStart(req, res) {
   authorizeUrl.searchParams.set("redirect_uri", CUSTOMER_ACCOUNT_REDIRECT_URI);
   authorizeUrl.searchParams.set("scope", CUSTOMER_ACCOUNT_SCOPES);
   authorizeUrl.searchParams.set("state", state);
-  if (mode === "signup") {
+  if (forceSelect) {
+    authorizeUrl.searchParams.set("prompt", "select_account");
+  } else if (mode === "signup") {
     authorizeUrl.searchParams.set("prompt", "login");
   } else if (emailHint) {
     // When user entered an email, force fresh login so Shopify lands on that email's OTP flow.

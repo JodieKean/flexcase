@@ -2323,7 +2323,7 @@
         authRedirectOverlay.setAttribute("aria-hidden", "false");
       }
 
-      function beginCustomerOauth(mode, keepLoggedIn, email = "") {
+      function beginCustomerOauth(mode, keepLoggedIn, email = "", forceAccountSelect = false) {
         // Always clear stale local session/cache before starting a fresh OAuth login.
         void (async () => {
           try {
@@ -2336,6 +2336,7 @@
           const params = new URLSearchParams();
           params.set("mode", mode);
           params.set("keep", keepLoggedIn ? "1" : "0");
+          if (forceAccountSelect) params.set("force_select", "1");
           const normalizedEmail = String(email || "").trim().toLowerCase();
           if (normalizedEmail) params.set("email", normalizedEmail);
           const target = apiUrl(`/api/customer/oauth/start?${params.toString()}`);
@@ -2655,8 +2656,8 @@
           .trim()
           .toLowerCase();
         if (!email) return;
-        // Route through OAuth start with the new email hint; backend handles Shopify pre-clear sequence.
-        beginCustomerOauth("signin", keepLoggedIn, email);
+        // Force account picker for mismatch recovery so Shopify can switch accounts explicitly.
+        beginCustomerOauth("signin", keepLoggedIn, email, true);
       });
 
       authSignUpForm?.addEventListener("submit", async (event) => {
