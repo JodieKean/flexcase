@@ -1539,7 +1539,7 @@
           /* ignore */
         }
         window.__flexcaseSkipExitCartFlush = true;
-        clearClientSessionState();
+        clearClientSessionState({ clearCart: false });
         showAuthRedirectOverlay("Always remember to Flex your collection!");
         // Use provider logout endpoint to clear Shopify Account SSO session too.
         window.setTimeout(() => window.location.assign(apiUrl("/api/customer/logout")), 120);
@@ -2221,11 +2221,12 @@
         }
       }
 
-      function clearClientSessionState() {
+      function clearClientSessionState(options = {}) {
+        const clearCart = options?.clearCart !== false;
         // Remove known Flexcase client-side session/cart caches.
         clearAuthSession();
         clearBrowserFlexcaseStorage();
-        localStorage.removeItem(cartStorageKey);
+        if (clearCart) localStorage.removeItem(cartStorageKey);
         sessionStorage.removeItem(cartMergedKey);
         window.flexcaseOnLogoutClearMergeFlag?.();
 
@@ -2338,7 +2339,7 @@
             /* ignore */
           }
           window.__flexcaseSkipExitCartFlush = true;
-          clearClientSessionState();
+          clearClientSessionState({ clearCart: false });
           const params = new URLSearchParams();
           params.set("mode", mode);
           params.set("keep", keepLoggedIn ? "1" : "0");

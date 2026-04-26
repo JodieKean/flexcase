@@ -2,6 +2,7 @@
   const CART_KEY = "flexcase.local.cart";
   const MERGED_KEY = "flexcase_guest_cart_merged";
   const LAST_PATH_KEY = "flexcase.last.path";
+  const LAST_AUTH_IDENTITY_KEY = "flexcase.last.auth.identity";
   let latestReplaceSyncRequestId = 0;
   const REPLACE_SYNC_DEBOUNCE_MS = Number(window.FLEXCASE_CART_SYNC_DEBOUNCE_MS || 800);
   let replaceSyncTimer = null;
@@ -122,13 +123,26 @@
 
   window.addEventListener("flexcase-cart-updated", updateBadges);
 
-  async function isSessionAuthenticated() {
+  function sessionIdentity(sessionPayload) {
+    const id = String(sessionPayload?.customer?.id || "").trim();
+    if (id) return `id:${id}`;
+    const email = String(sessionPayload?.customer?.email || "")
+      .trim()
+      .toLowerCase();
+    if (email) return `email:${email}`;
+    return "";
+  }
+
+  async function getSessionState() {
     try {
       const r = await fetchApi("/api/customer/session");
       const j = await r.json();
-      return Boolean(j?.authenticated);
+      return {
+        authenticated: Boolean(j?.authenticated),
+        identity: sessionIdentity(j),
+      };
     } catch (_) {
-      return false;
+      return { authenticated: false, identity: "" };
     }
   }
 
@@ -162,25 +176,38 @@
   }
 
   async function flexcaseSyncCartAfterAuth() {
-    if (!(await isSessionAuthenticated())) return;
+    const session = await getSessionState();
+    if (!session.authenticated) return;
     await mergeGuestThenPull();
-    // Keep local UI stable by default; checkout page decides when to hydrate from Shopify.
+    const priorIdentity = String(sessionStorage.getItem(LAST_AUTH_IDENTITY_KEY) || "").trim();
+    const currentIdentity = String(session.identity || "").trim();
+    const accountSwitched = Boolean(priorIdentity && currentIdentity && priorIdentity !== currentIdentity);
+    // Keep local UI stable by default, but always hydrate if account changed.
     const local = readLocalLines();
-    if (local.length) void runReplaceSyncNow().catch(() => false);
+    if (accountSwitched || !local.length) {
+      await pullServerCartToLocal().catch(() => false);
+    } else if (local.length) {
+      void runReplaceSyncNow().catch(() => false);
+    }
+    if (currentIdentity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, currentIdentity);
     updateBadges();
   }
 
   async function flexcaseRefreshCartFromServer() {
     // Explicit refresh should hydrate from Shopify truth.
-    if (!(await isSessionAuthenticated())) return false;
+    const session = await getSessionState();
+    if (!session.authenticated) return false;
     const ok = await pullServerCartToLocal().catch(() => false);
+    if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
     updateBadges();
     return ok;
   }
 
   async function flexcaseHydrateLocalCartFromServer() {
-    if (!(await isSessionAuthenticated())) return false;
+    const session = await getSessionState();
+    if (!session.authenticated) return false;
     const ok = await pullServerCartToLocal().catch(() => false);
+    if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
     updateBadges();
     return ok;
   }
@@ -241,7 +268,8 @@
   }
 
   async function flexcaseClearServerCart() {
-    if (!(await isSessionAuthenticated())) return;
+    const session = await getSessionState();
+    if (!session.authenticated) return;
     try {
       await fetchApi("/api/cart/clear", {
         method: "POST",
@@ -254,7 +282,8 @@
   }
 
   async function runReplaceSyncNow(options = {}) {
-    if (!(await isSessionAuthenticated())) return false;
+    const session = await getSessionState();
+    if (!session.authenticated) return false;
     const requestId = ++latestReplaceSyncRequestId;
     const local = readLocalLines();
     try {
