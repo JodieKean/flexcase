@@ -2113,9 +2113,17 @@
         authMismatchContinueBtn.textContent = "Continue with this account";
         if (!isError) return message;
         const msg = String(message || "");
-        const m = msg.match(/Signed in as\s+([^,]+),\s+but you entered\s+([^.]+)\./i);
-        const signedInEmail = String(m?.[1] || "").trim().toLowerCase();
-        const enteredEmail = String(m?.[2] || "").trim().toLowerCase();
+        const m = msg.match(
+          /Signed in as\s+([^\s,]+@[^\s,]+),\s+but you entered\s+([^\s,]+@[^\s,]+)\.?/i
+        );
+        const signedInEmail = String(m?.[1] || "")
+          .trim()
+          .replace(/[),.;:!?]+$/g, "")
+          .toLowerCase();
+        const enteredEmail = String(m?.[2] || "")
+          .trim()
+          .replace(/[),.;:!?]+$/g, "")
+          .toLowerCase();
         if (!signedInEmail || !signedInEmail.includes("@") || !enteredEmail || !enteredEmail.includes("@")) {
           return message;
         }
