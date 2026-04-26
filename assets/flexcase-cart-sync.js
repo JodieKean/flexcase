@@ -2,10 +2,10 @@
   const CART_KEY = "flexcase.local.cart";
   const MERGED_KEY = "flexcase_guest_cart_merged";
   let latestReplaceSyncRequestId = 0;
-  const REPLACE_SYNC_DEBOUNCE_MS = 280;
+  const REPLACE_SYNC_DEBOUNCE_MS = Number(window.FLEXCASE_CART_SYNC_DEBOUNCE_MS || 800);
   let replaceSyncTimer = null;
   let replaceSyncPendingResolvers = [];
-  const SYNC_ONLY_ON_EXIT = true;
+  const SYNC_ONLY_ON_EXIT = false;
   /** Ensures at most one /api/cart/replace is in flight so older payloads cannot win on the server. */
   let replaceSyncChain = Promise.resolve();
 
