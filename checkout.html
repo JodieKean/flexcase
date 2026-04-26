@@ -1348,9 +1348,16 @@
         recalcTotals();
         setStep(1);
 
-        // Then refresh from server in background for signed-in users.
+        // Push latest local quantities in background for signed-in users.
         void (async () => {
           await (window.flexcaseRefreshCartFromServer?.() || Promise.resolve());
+          const lastPath = String(window.flexcaseGetLastVisitedPath?.() || "").trim();
+          const currentPath = String(window.location.pathname || "").trim();
+          const cameFromOtherPage = Boolean(lastPath) && lastPath !== currentPath;
+          // Only replace local with Shopify truth when returning to checkout from another page.
+          if (cameFromOtherPage) {
+            await (window.flexcaseHydrateLocalCartFromServer?.() || Promise.resolve());
+          }
           if (checkoutCartDirty) return;
           renderOrderLines(readCartItems());
           recalcTotals();

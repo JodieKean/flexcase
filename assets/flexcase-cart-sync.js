@@ -1,6 +1,7 @@
 (function () {
   const CART_KEY = "flexcase.local.cart";
   const MERGED_KEY = "flexcase_guest_cart_merged";
+  const LAST_PATH_KEY = "flexcase.last.path";
   let latestReplaceSyncRequestId = 0;
   const REPLACE_SYNC_DEBOUNCE_MS = Number(window.FLEXCASE_CART_SYNC_DEBOUNCE_MS || 800);
   let replaceSyncTimer = null;
@@ -160,21 +161,32 @@
   async function flexcaseSyncCartAfterAuth() {
     if (!(await isSessionAuthenticated())) return;
     await mergeGuestThenPull();
-    // On page entry, prefer Shopify as source of truth.
-    const ok = await pullServerCartToLocal().catch(() => false);
-    if (!ok) {
-      // Fallback: keep existing local when server is unavailable.
-      await pullServerCartToLocalIfEmpty().catch(() => {});
-    }
+    // Keep current local cart stable; push in background without replacing UI.
+    void runReplaceSyncNow().catch(() => false);
     updateBadges();
   }
 
   async function flexcaseRefreshCartFromServer() {
-    // On refresh/page switch, render Shopify truth cart.
+    // Push local cart to Shopify without replacing local UI.
+    if (!(await isSessionAuthenticated())) return false;
+    const ok = await runReplaceSyncNow().catch(() => false);
+    updateBadges();
+    return ok;
+  }
+
+  async function flexcaseHydrateLocalCartFromServer() {
     if (!(await isSessionAuthenticated())) return false;
     const ok = await pullServerCartToLocal().catch(() => false);
     updateBadges();
     return ok;
+  }
+
+  function getLastVisitedPath() {
+    try {
+      return String(sessionStorage.getItem(LAST_PATH_KEY) || "").trim();
+    } catch (_) {
+      return "";
+    }
   }
 
   async function flexcaseAddToCartLoggedIn(merchandiseId, quantity, lineDetails = {}) {
@@ -310,6 +322,8 @@
   window.flexcaseUpdateCartBadges = updateBadges;
   window.flexcaseSyncCartAfterAuth = flexcaseSyncCartAfterAuth;
   window.flexcaseRefreshCartFromServer = flexcaseRefreshCartFromServer;
+  window.flexcaseHydrateLocalCartFromServer = flexcaseHydrateLocalCartFromServer;
+  window.flexcaseGetLastVisitedPath = getLastVisitedPath;
   window.flexcaseAddToCartLoggedIn = flexcaseAddToCartLoggedIn;
   window.flexcaseClearServerCart = flexcaseClearServerCart;
   window.flexcasePushLocalCartToServer = flexcasePushLocalCartToServer;
@@ -320,6 +334,11 @@
     updateBadges();
     flexcaseSyncCartAfterAuth().catch(() => {});
     window.addEventListener("pagehide", () => {
+      try {
+        sessionStorage.setItem(LAST_PATH_KEY, window.location.pathname || "");
+      } catch (_) {
+        /* ignore */
+      }
       if (window.__flexcaseSkipExitCartFlush) {
         window.__flexcaseSkipExitCartFlush = false;
         return;
