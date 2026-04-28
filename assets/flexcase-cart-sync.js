@@ -386,7 +386,12 @@
 
   function boot() {
     updateBadges();
-    flexcaseSyncCartAfterAuth().catch(() => {});
+    const path = String(window.location.pathname || "").toLowerCase();
+    const isCheckoutPage = path.endsWith("/checkout.html") || path === "/checkout.html";
+    // Checkout runs local-first to avoid background hydration overwriting in-progress edits.
+    if (!isCheckoutPage) {
+      flexcaseSyncCartAfterAuth().catch(() => {});
+    }
     window.addEventListener("pagehide", () => {
       try {
         sessionStorage.setItem(LAST_PATH_KEY, window.location.pathname || "");

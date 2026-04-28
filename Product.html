@@ -812,10 +812,13 @@
           window.flexcaseUpdateCartBadges?.();
         }
 
+        let addToCartInFlight = false;
         addToCartBtn.addEventListener("click", async () => {
           if (!selectedVariant?.id) return;
+          if (addToCartInFlight) return;
           let sessionAuthed = false;
           try {
+            addToCartInFlight = true;
             addToCartBtn.disabled = true;
             addToCartBtn.textContent = "Adding...";
 
@@ -868,9 +871,11 @@
             setTimeout(() => {
               addToCartBtn.disabled = false;
               addToCartBtn.textContent = `Add to Cart — ${priceNowEl.textContent}`;
+              addToCartInFlight = false;
             }, 800);
           } catch (error) {
             addToCartBtn.disabled = false;
+            addToCartInFlight = false;
             if (sessionAuthed) {
               const msg = String(error?.message || "Cart sync unavailable").trim();
               addToCartBtn.textContent = msg.slice(0, 42);

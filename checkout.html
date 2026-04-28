@@ -1072,9 +1072,8 @@
         renderOrderLines(items);
         recalcTotals();
         window.flexcaseUpdateCartBadges?.();
-        // Persist quantity edits to Shopify cart for signed-in users without
-        // forcing a second full re-render (prevents visual jumpiness).
-        void window.flexcasePushLocalCartToServer?.();
+        // Keep checkout edits local-first; sync runs when user continues
+        // to Shipping or leaves checkout.
       }
 
       function setStep(step) {
@@ -1268,8 +1267,13 @@
         }
       });
 
-      document.getElementById("to-shipping").addEventListener("click", () => {
+      document.getElementById("to-shipping").addEventListener("click", async () => {
         if (!validateContact()) return;
+        try {
+          await window.flexcaseFlushCartSync?.({ force: true });
+        } catch (_) {
+          /* ignore sync failures and let checkout proceed */
+        }
         address1.setAttribute("required", "required");
         city.setAttribute("required", "required");
         setStep(2);
@@ -1366,35 +1370,11 @@
         recalcTotals();
         setStep(1);
 
-        // Pull Shopify truth only when returning from another page or local cache is empty.
-        void (async () => {
-          const lastPath = String(window.flexcaseGetLastVisitedPath?.() || "").trim();
-          const currentPath = String(window.location.pathname || "").trim();
-          const cameFromOtherPage = Boolean(lastPath) && lastPath !== currentPath;
-          const navEntry =
-            typeof performance !== "undefined" && performance.getEntriesByType
-              ? performance.getEntriesByType("navigation")[0]
-              : null;
-          const isReload = navEntry?.type === "reload";
-          if (cameFromOtherPage || isReload) {
-            const before = readCartItems();
-            const result =
-              (await window.flexcaseHydrateLocalCartQuantitiesFromServer?.()) ||
-              { ok: false, lines: [] };
-            const after = readCartItems();
-            const localHasRows = before.length > 0;
-            const serverHasRows = Array.isArray(result?.lines) && result.lines.length > 0;
-            const sameShape = before.length === after.length;
-            if (localHasRows && (serverHasRows || !result.ok) && sameShape) {
-              patchRenderedQuantities(after);
-            } else {
-              renderOrderLines(after);
-            }
-          }
-          if (checkoutCartDirty) return;
+        // Checkout stays local-first after sign-in hydration happens elsewhere.
+        if (!checkoutCartDirty) {
           patchRenderedQuantities(readCartItems());
           recalcTotals();
-        })();
+        }
       })();
     </script>
   </body>
