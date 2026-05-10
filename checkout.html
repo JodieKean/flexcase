@@ -1587,6 +1587,7 @@
             provinceCode: state.value.trim(),
             zip: postal.value.trim(),
             countryCode: String(country?.value || "").trim().toUpperCase(),
+            countryName: getCheckoutCountryDisplayName(),
           },
         };
       }

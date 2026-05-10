@@ -1636,6 +1636,51 @@ function pickShopifyCheckoutRedirectUrl(graphqlCheckoutUrl, fallbackLines) {
   return buildShopifyCartPermalink(fallbackLines);
 }
 
+/**
+ * Appends cart-permalink `checkout[...]` query params (see Shopify "Create cart permalinks")
+ * so Online Store checkout can prefill shipping and billing from flexcase.
+ * Mirrors the same address into billing so the payment step matches delivery details.
+ * Preserves existing query keys (e.g. checkout `key=`). PII in the URL is a known tradeoff.
+ */
+function mergeFlexcaseCheckoutPrefillQueryParams(checkoutUrl, checkout) {
+  const raw = String(checkoutUrl || "").trim();
+  if (!raw || !checkout) return raw;
+  try {
+    const u = new URL(raw);
+    const p = u.searchParams;
+    const email = String(checkout.email || "").trim();
+    const ship = checkout.shipping || {};
+    const phone = String(checkout.phone || ship.phone || "").trim();
+    const country =
+      String(ship.countryName || ship.country || "").trim() ||
+      String(ship.countryCode || "").trim().toUpperCase();
+    const fields = {
+      first_name: String(ship.firstName || "").trim(),
+      last_name: String(ship.lastName || "").trim(),
+      address1: String(ship.address1 || "").trim(),
+      address2: String(ship.address2 || "").trim(),
+      city: String(ship.city || "").trim(),
+      province: String(ship.provinceCode || ship.province || "").trim(),
+      zip: String(ship.zip || "").trim(),
+      country,
+      phone,
+    };
+    if (email) {
+      p.set("checkout[email]", email);
+    }
+    for (const scope of ["shipping_address", "billing_address"]) {
+      const base = `checkout[${scope}]`;
+      for (const [k, v] of Object.entries(fields)) {
+        if (!v) continue;
+        p.set(`${base}[${k}]`, v);
+      }
+    }
+    return u.toString();
+  } catch (_) {
+    return raw;
+  }
+}
+
 function buildCartDeliveryAddressInput(ship) {
   const firstName = String(ship?.firstName || "").trim();
   const lastName = String(ship?.lastName || "").trim();
@@ -2134,7 +2179,7 @@ async function handleCartReplace(req, res) {
 /**
  * Returns a Shopify-hosted checkout URL for the customer's headless cart (signed in)
  * or a one-off Storefront cart built from `lines` (guest).
- * Expects `body.checkout`: { email, phone?, shipping: { firstName, lastName, phone?, address1, city, provinceCode?, zip, countryCode } }.
+ * Expects `body.checkout`: { email, phone?, shipping: { firstName, lastName, phone?, address1, address2?, city, provinceCode?, zip, countryCode, countryName? } }.
  * Card data is never accepted (PCI); payment is completed on Shopify Checkout only.
  */
 async function handleShopifyCheckout(req, res) {
@@ -2185,7 +2230,10 @@ async function handleShopifyCheckout(req, res) {
           }
           const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
           const fallbackLines = mapStorefrontCartToClientLines(refreshed?.cart);
-          checkoutUrl = pickShopifyCheckoutRedirectUrl(refreshed?.cart?.checkoutUrl, fallbackLines);
+          checkoutUrl = mergeFlexcaseCheckoutPrefillQueryParams(
+            pickShopifyCheckoutRedirectUrl(refreshed?.cart?.checkoutUrl, fallbackLines),
+            checkout
+          );
           const totalQuantity = Number(refreshed?.cart?.totalQuantity || 0);
           if (!totalQuantity || !checkoutUrl) {
             errMsg =
@@ -2271,7 +2319,10 @@ async function handleShopifyCheckout(req, res) {
     const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
     const cart = refreshed?.cart;
     const fallbackLines = [...byVariant.entries()].map(([variantId, quantity]) => ({ variantId, quantity }));
-    const checkoutUrl = pickShopifyCheckoutRedirectUrl(cart?.checkoutUrl, fallbackLines);
+    const checkoutUrl = mergeFlexcaseCheckoutPrefillQueryParams(
+      pickShopifyCheckoutRedirectUrl(cart?.checkoutUrl, fallbackLines),
+      checkout
+    );
     const totalQuantity = Number(cart?.totalQuantity || 0);
     if (!totalQuantity || !checkoutUrl) {
       json(res, 400, {
