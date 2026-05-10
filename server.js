@@ -1552,6 +1552,38 @@ function findCartLineForVariant(cart, merchandiseId) {
   return null;
 }
 
+/** Serialize cart writes per customer so concurrent replaces cannot interleave. */
+const flexcaseCustomerCartMutationChains = new Map();
+
+async function runSerializedCustomerCartMutation(customerGid, task) {
+  const key = String(customerGid || "").trim();
+  if (!key) return task();
+  const prior = flexcaseCustomerCartMutationChains.get(key) ?? Promise.resolve();
+  const next = prior.then(() => task());
+  flexcaseCustomerCartMutationChains.set(key, next.catch(() => {}));
+  return next;
+}
+
+/** Remove every line (handles >100 lines via repeated passes). */
+async function removeAllStorefrontCartLines(cartId) {
+  const maxPasses = 12;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+    const lineIds = (data?.cart?.lines?.edges || []).map((e) => e?.node?.id).filter(Boolean);
+    if (!lineIds.length) return;
+    const rm = await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, { cartId, lineIds });
+    const rmErrs = rm?.cartLinesRemove?.userErrors?.filter((e) => e?.message) || [];
+    if (rmErrs.length) {
+      throw new Error(rmErrs.map((e) => e.message).join(", "));
+    }
+  }
+  const verify = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+  const remaining = (verify?.cart?.lines?.edges || []).length;
+  if (remaining > 0) {
+    throw new Error("Unable to clear all cart lines before rebuilding the cart.");
+  }
+}
+
 async function resolveAuthCustomerForCart(req) {
   const current = getCustomerSession(req);
   const sessionCustomer = current?.session?.customer || {};
@@ -1690,35 +1722,37 @@ async function handleCartAddLine(req, res) {
       json(res, 400, { error: "Invalid variant id." });
       return;
     }
-    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
-    const existing = findCartLineForVariant(cart, merchandiseId);
-    let data;
-    if (existing) {
-      data = await storefrontGraphql(STOREFRONT_CART_LINES_UPDATE, {
-        cartId,
-        lines: [{ id: existing.lineId, quantity: existing.quantity + quantity }],
-      });
-      const errs = data?.cartLinesUpdate?.userErrors?.filter((e) => e?.message) || [];
-      if (errs.length) {
-        json(res, 400, { error: errs.map((e) => e.message).join(", ") });
-        return;
+    await runSerializedCustomerCartMutation(customer.id, async () => {
+      let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+      const existing = findCartLineForVariant(cart, merchandiseId);
+      let data;
+      if (existing) {
+        data = await storefrontGraphql(STOREFRONT_CART_LINES_UPDATE, {
+          cartId,
+          lines: [{ id: existing.lineId, quantity: existing.quantity + quantity }],
+        });
+        const errs = data?.cartLinesUpdate?.userErrors?.filter((e) => e?.message) || [];
+        if (errs.length) {
+          json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+          return;
+        }
+        cart = data?.cartLinesUpdate?.cart;
+      } else {
+        data = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, {
+          cartId,
+          lines: [{ merchandiseId, quantity }],
+        });
+        const errs = data?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+        if (errs.length) {
+          json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+          return;
+        }
+        cart = data?.cartLinesAdd?.cart;
       }
-      cart = data?.cartLinesUpdate?.cart;
-    } else {
-      data = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, {
-        cartId,
-        lines: [{ merchandiseId, quantity }],
+      json(res, 200, {
+        lines: mapStorefrontCartToClientLines(cart),
+        totalQuantity: Number(cart?.totalQuantity || 0),
       });
-      const errs = data?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
-      if (errs.length) {
-        json(res, 400, { error: errs.map((e) => e.message).join(", ") });
-        return;
-      }
-      cart = data?.cartLinesAdd?.cart;
-    }
-    json(res, 200, {
-      lines: mapStorefrontCartToClientLines(cart),
-      totalQuantity: Number(cart?.totalQuantity || 0),
     });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -1734,49 +1768,43 @@ async function handleCartMerge(req, res) {
     }
     const body = await readJsonBody(req);
     const guestLines = Array.isArray(body.lines) ? body.lines : [];
-    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+    await runSerializedCustomerCartMutation(customer.id, async () => {
+      let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
 
-    const byVariant = new Map();
-    for (const edge of cart?.lines?.edges || []) {
-      const n = edge?.node;
-      const m = n?.merchandise;
-      if (m?.id) byVariant.set(m.id, Number(n.quantity || 0));
-    }
-    for (const gl of guestLines) {
-      const vid = String(gl.variantId || "").trim();
-      if (!vid.startsWith("gid://shopify/ProductVariant/")) continue;
-      const q = Math.max(1, Math.min(99, Number(gl.quantity || 1)));
-      byVariant.set(vid, (byVariant.get(vid) || 0) + q);
-    }
-
-    const lineIds = (cart?.lines?.edges || []).map((e) => e?.node?.id).filter(Boolean);
-    if (lineIds.length) {
-      const rm = await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, { cartId, lineIds });
-      const rmErrs = rm?.cartLinesRemove?.userErrors?.filter((e) => e?.message) || [];
-      if (rmErrs.length) {
-        json(res, 400, { error: rmErrs.map((e) => e.message).join(", ") });
-        return;
+      const byVariant = new Map();
+      for (const edge of cart?.lines?.edges || []) {
+        const n = edge?.node;
+        const m = n?.merchandise;
+        if (m?.id) byVariant.set(m.id, Number(n.quantity || 0));
       }
-    }
-
-    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, q]) => ({
-      merchandiseId,
-      quantity: q,
-    }));
-    if (linesToAdd.length) {
-      const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
-      const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
-      if (addErrs.length) {
-        json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
-        return;
+      for (const gl of guestLines) {
+        const vid = String(gl.variantId || "").trim();
+        if (!vid.startsWith("gid://shopify/ProductVariant/")) continue;
+        const q = Math.max(1, Math.min(99, Number(gl.quantity || 1)));
+        byVariant.set(vid, (byVariant.get(vid) || 0) + q);
       }
-    }
 
-    const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
-    const nextCart = refreshed?.cart;
-    json(res, 200, {
-      lines: mapStorefrontCartToClientLines(nextCart),
-      totalQuantity: Number(nextCart?.totalQuantity || 0),
+      await removeAllStorefrontCartLines(cartId);
+
+      const linesToAdd = [...byVariant.entries()].map(([merchandiseId, q]) => ({
+        merchandiseId,
+        quantity: q,
+      }));
+      if (linesToAdd.length) {
+        const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
+        const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+        if (addErrs.length) {
+          json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
+          return;
+        }
+      }
+
+      const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+      const nextCart = refreshed?.cart;
+      json(res, 200, {
+        lines: mapStorefrontCartToClientLines(nextCart),
+        totalQuantity: Number(nextCart?.totalQuantity || 0),
+      });
     });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -1792,45 +1820,39 @@ async function handleCartReplace(req, res) {
     }
     const body = await readJsonBody(req);
     const requestedLines = Array.isArray(body.lines) ? body.lines : [];
-    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+    await runSerializedCustomerCartMutation(customer.id, async () => {
+      const { cartId } = await ensureCustomerStorefrontCart(customer.id);
 
-    // Build exact cart state from the provided payload.
-    const byVariant = new Map();
-    for (const line of requestedLines) {
-      const variantId = String(line.variantId || "").trim();
-      if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
-      const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
-      byVariant.set(variantId, qty);
-    }
-
-    const lineIds = (cart?.lines?.edges || []).map((e) => e?.node?.id).filter(Boolean);
-    if (lineIds.length) {
-      const rm = await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, { cartId, lineIds });
-      const rmErrs = rm?.cartLinesRemove?.userErrors?.filter((e) => e?.message) || [];
-      if (rmErrs.length) {
-        json(res, 400, { error: rmErrs.map((e) => e.message).join(", ") });
-        return;
+      // Build exact cart state from the provided payload.
+      const byVariant = new Map();
+      for (const line of requestedLines) {
+        const variantId = String(line.variantId || "").trim();
+        if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
+        const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
+        byVariant.set(variantId, qty);
       }
-    }
 
-    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
-      merchandiseId,
-      quantity,
-    }));
-    if (linesToAdd.length) {
-      const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
-      const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
-      if (addErrs.length) {
-        json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
-        return;
+      await removeAllStorefrontCartLines(cartId);
+
+      const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
+        merchandiseId,
+        quantity,
+      }));
+      if (linesToAdd.length) {
+        const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
+        const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+        if (addErrs.length) {
+          json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
+          return;
+        }
       }
-    }
 
-    const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
-    const nextCart = refreshed?.cart;
-    json(res, 200, {
-      lines: mapStorefrontCartToClientLines(nextCart),
-      totalQuantity: Number(nextCart?.totalQuantity || 0),
+      const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+      const nextCart = refreshed?.cart;
+      json(res, 200, {
+        lines: mapStorefrontCartToClientLines(nextCart),
+        totalQuantity: Number(nextCart?.totalQuantity || 0),
+      });
     });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -1844,22 +1866,19 @@ async function handleCartClear(req, res) {
       json(res, 401, { error: "Not authenticated." });
       return;
     }
-    const cartId = await getCustomerHeadlessCartId(customer.id);
-    if (!cartId) {
-      json(res, 200, { ok: true });
-      return;
-    }
-    try {
-      const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
-      const cart = data?.cart;
-      const lineIds = (cart?.lines?.edges || []).map((e) => e?.node?.id).filter(Boolean);
-      if (lineIds.length) {
-        await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, { cartId, lineIds });
+    await runSerializedCustomerCartMutation(customer.id, async () => {
+      const cartId = await getCustomerHeadlessCartId(customer.id);
+      if (!cartId) {
+        json(res, 200, { ok: true });
+        return;
       }
-    } catch (_) {
-      /* ignore */
-    }
-    json(res, 200, { ok: true });
+      try {
+        await removeAllStorefrontCartLines(cartId);
+      } catch (_) {
+        /* ignore */
+      }
+      json(res, 200, { ok: true });
+    });
   } catch (error) {
     json(res, 500, { error: error.message });
   }
