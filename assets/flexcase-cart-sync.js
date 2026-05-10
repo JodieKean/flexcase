@@ -158,6 +158,7 @@
   }
 
   async function pullServerCartToLocal() {
+    const localBefore = readLocalLines();
     const r = await fetchApi("/api/cart");
     if (r.status === 401) return false;
     if (!r.ok) return false;
@@ -166,6 +167,11 @@
     // Checkout can set this flag while user is actively editing quantity,
     // so late hydration responses never stomp local optimistic state.
     if (window.__flexcaseSkipHydrateWrite) return true;
+    // Avoid wiping a non-empty local cart when the server is still empty because
+    // /api/cart/replace has not finished yet (e.g. user left checkout before Shopify caught up).
+    if (lines.length === 0 && localBefore.length > 0) {
+      return true;
+    }
     writeLocalLines(lines);
     return true;
   }
@@ -187,16 +193,21 @@
     if (accountSwitched || !local.length) {
       await pullServerCartToLocal().catch(() => false);
     } else if (local.length) {
-      void runReplaceSyncNow().catch(() => false);
+      await runReplaceSyncNow().catch(() => false);
     }
     if (currentIdentity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, currentIdentity);
     updateBadges();
   }
 
   async function flexcaseRefreshCartFromServer() {
-    // Explicit refresh should hydrate from Shopify truth.
+    // Push local cart first so Shopify matches the UI, then hydrate (avoids races
+    // when leaving checkout where quantities were local-only until pagehide).
     const session = await getSessionState();
     if (!session.authenticated) return false;
+    const local = readLocalLines();
+    if (local.length) {
+      await flexcaseFlushCartSync({ force: true }).catch(() => false);
+    }
     const ok = await pullServerCartToLocal().catch(() => false);
     if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
     updateBadges();
@@ -206,6 +217,10 @@
   async function flexcaseHydrateLocalCartFromServer() {
     const session = await getSessionState();
     if (!session.authenticated) return false;
+    const local = readLocalLines();
+    if (local.length) {
+      await flexcaseFlushCartSync({ force: true }).catch(() => false);
+    }
     const ok = await pullServerCartToLocal().catch(() => false);
     if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
     updateBadges();
