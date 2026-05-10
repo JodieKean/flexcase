@@ -774,6 +774,38 @@
 
               <h2 class="section-title">Shipping Address</h2>
 
+              <div class="row">
+                <div>
+                  <label for="shipFirstName">First name *</label>
+                  <input
+                    id="shipFirstName"
+                    name="shipFirstName"
+                    type="text"
+                    autocomplete="shipping given-name"
+                    placeholder="Enter first name"
+                  />
+                </div>
+                <div>
+                  <label for="shipLastName">Last name *</label>
+                  <input
+                    id="shipLastName"
+                    name="shipLastName"
+                    type="text"
+                    autocomplete="shipping family-name"
+                    placeholder="Enter last name"
+                  />
+                </div>
+              </div>
+
+              <label for="shipPhone">Contact number *</label>
+              <input
+                id="shipPhone"
+                name="shipPhone"
+                type="tel"
+                autocomplete="shipping tel"
+                placeholder="Enter phone number"
+              />
+
               <label for="address1">Street address *</label>
               <input
                 id="address1"
@@ -1083,14 +1115,21 @@
 
       function applyDefaultAddressToShippingForm(addr) {
         if (!addr) return;
+        const shipFirst = document.getElementById("shipFirstName");
+        const shipLast = document.getElementById("shipLastName");
+        const shipPhoneEl = document.getElementById("shipPhone");
+        if (shipFirst) shipFirst.value = String(addr.firstName || "").trim();
+        if (shipLast) shipLast.value = String(addr.lastName || "").trim();
+        if (shipPhoneEl) shipPhoneEl.value = String(addr.phone || "").trim();
         address1.value = String(addr.address1 || "").trim();
         city.value = String(addr.city || "").trim();
         state.value = String(addr.province || addr.provinceCode || "").trim();
         postal.value = String(addr.zip || "").trim();
         const iso = String(addr.country || "").trim().toUpperCase();
-        if (iso && country) {
-          const match = Array.from(country.options).find((o) => o.value === iso);
-          if (match) country.value = iso;
+        const countrySel = document.getElementById("country");
+        if (iso && countrySel) {
+          const match = Array.from(countrySel.options).find((o) => o.value === iso);
+          if (match) countrySel.value = iso;
         }
       }
 
@@ -1122,6 +1161,14 @@
       const state = document.getElementById("state");
       const postal = document.getElementById("postal");
       const country = document.getElementById("country");
+
+      function setShippingStepRequiredFields() {
+        ["shipFirstName", "shipLastName", "shipPhone"].forEach((id) => {
+          document.getElementById(id)?.setAttribute("required", "required");
+        });
+        address1.setAttribute("required", "required");
+        city.setAttribute("required", "required");
+      }
 
       const CHECKOUT_BOOTSTRAP_EMAIL_KEY = "flexcase.checkout.signedInBootstrapEmail";
       let contactSignInLoading = false;
@@ -1188,8 +1235,7 @@
             accountPayload.addresses.find((a) => a?.isDefault) || accountPayload.addresses[0];
           if (defaultAddr) applyDefaultAddressToShippingForm(defaultAddr);
         }
-        address1.setAttribute("required", "required");
-        city.setAttribute("required", "required");
+        setShippingStepRequiredFields();
       }
 
       const shippingMethodInput = document.getElementById("shippingMethod");
@@ -1448,8 +1494,17 @@
       }
 
       function validateShipping() {
-        if (!address1.value.trim() || !city.value.trim()) {
-          alert("Please complete your shipping address.");
+        const shipFirst = document.getElementById("shipFirstName");
+        const shipLast = document.getElementById("shipLastName");
+        const shipPhoneEl = document.getElementById("shipPhone");
+        if (
+          !String(shipFirst?.value || "").trim() ||
+          !String(shipLast?.value || "").trim() ||
+          !String(shipPhoneEl?.value || "").trim() ||
+          !address1.value.trim() ||
+          !city.value.trim()
+        ) {
+          alert("Please complete your shipping name, contact number, and address.");
           return false;
         }
         return true;
@@ -1480,11 +1535,17 @@
       }
 
       function buildShippingAddressText() {
+        const shipFirst = document.getElementById("shipFirstName");
+        const shipLast = document.getElementById("shipLastName");
+        const shipPhoneEl = document.getElementById("shipPhone");
+        const nameLine = `${String(shipFirst?.value || "").trim()} ${String(shipLast?.value || "").trim()}`.trim();
+        const phoneLine = String(shipPhoneEl?.value || "").trim();
         const statePart = state.value.trim();
         const zipPart = postal.value.trim();
         const line2 = [city.value.trim(), statePart].filter(Boolean).join(", ");
         const line3 = [zipPart, getCheckoutCountryDisplayName()].filter(Boolean).join(" ");
-        return `${address1.value.trim()}\n${line2}\n${line3}`.trim();
+        const parts = [nameLine, phoneLine, address1.value.trim(), line2, line3].filter(Boolean);
+        return parts.join("\n").trim();
       }
 
       function buildShippingMethodText() {
@@ -1562,8 +1623,7 @@
         } catch (_) {
           /* ignore sync failures and let checkout proceed */
         }
-        address1.setAttribute("required", "required");
-        city.setAttribute("required", "required");
+        setShippingStepRequiredFields();
         setStep(2);
       });
 
