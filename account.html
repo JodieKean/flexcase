@@ -333,6 +333,7 @@
         line-height: 1.2;
         padding: 0;
         text-transform: uppercase;
+        align-self: flex-start;
       }
 
       .order-side {
@@ -696,16 +697,12 @@
         text-underline-offset: 2px;
       }
 
-      .set-default.is-hidden {
-        visibility: hidden;
-        pointer-events: none;
-      }
-
       .address-footer {
         margin-top: 0.75rem;
         margin-top: 1lh;
         display: flex;
         align-items: flex-end;
+        justify-content: flex-start;
       }
 
       .modal-backdrop {
@@ -1560,34 +1557,33 @@
           const isDefault = card.classList.contains("default");
           // Ensure we only render DEFAULT badge in footer (never in title) to avoid jumpy transitions.
           card.querySelectorAll(".address-title .badge-default").forEach((node) => node.remove());
-          let badge = card.querySelector(".address-footer .badge-default");
           let footer = card.querySelector(".address-footer");
-          let setBtn = card.querySelector("[data-set-default]");
           if (!footer) {
             footer = document.createElement("div");
             footer.className = "address-footer";
             card.appendChild(footer);
           }
-          if (!setBtn) {
-            setBtn = document.createElement("button");
-            setBtn.type = "button";
-            setBtn.className = "set-default";
-            setBtn.dataset.setDefault = "";
-            setBtn.textContent = "Save as default";
-            footer.appendChild(setBtn);
-          }
+          let badge = card.querySelector(".address-footer .badge-default");
+          let setBtn = card.querySelector("[data-set-default]");
           if (isDefault) {
-            setBtn.classList.add("is-hidden");
+            // Remove the button so it cannot reserve flex space (visibility:hidden caused DEFAULT to sit to the right).
+            if (setBtn) setBtn.remove();
             if (!badge) {
               badge = document.createElement("span");
               badge.className = "badge-default";
               badge.textContent = "DEFAULT";
-              footer.appendChild(badge);
+              footer.prepend(badge);
             }
           } else {
             if (badge) badge.remove();
-            setBtn.classList.remove("is-hidden");
-            setBtn.textContent = "Save as default";
+            if (!setBtn) {
+              setBtn = document.createElement("button");
+              setBtn.type = "button";
+              setBtn.className = "set-default";
+              setBtn.dataset.setDefault = "";
+              setBtn.textContent = "Save as default";
+              footer.appendChild(setBtn);
+            }
           }
         });
       }
