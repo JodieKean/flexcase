@@ -62,6 +62,14 @@ const SESSION_SIGNING_SECRET =
   CUSTOMER_ACCOUNT_CLIENT_SECRET ||
   CLIENT_SECRET_FROM_ENV ||
   "flexcase-dev-session-secret";
+/** Session cookie + signed payload ceiling when "Keep me logged in" is unchecked. */
+const SESSION_MAX_AGE_SHORT_SEC = 60 * 60 * 12;
+/** When "Keep me logged in" is checked (cookie Max-Age + signed `expiresAt`). Capped at ~400d (browser norms). */
+const _KEEP_ENV = Number(process.env.FLEXCASE_SESSION_KEEP_MAX_AGE_SEC);
+const SESSION_MAX_AGE_KEEP_SEC =
+  Number.isFinite(_KEEP_ENV) && _KEEP_ENV > 0
+    ? Math.min(60 * 60 * 24 * 400, _KEEP_ENV)
+    : 60 * 60 * 24 * 400;
 const DEPLOY_COMMIT_SHA =
   process.env.RAILWAY_GIT_COMMIT_SHA ||
   process.env.VERCEL_GIT_COMMIT_SHA ||
@@ -314,6 +322,14 @@ function createSessionCookie(sessionPayload, maxAgeSeconds = 60 * 60 * 24 * 30) 
   return `flexcase_customer_session=${encodeURIComponent(
     token
   )}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAgeSeconds}${secureSuffix}`;
+}
+
+/** Cookie Max-Age for Set-Cookie refresh (e.g. profile update) without shortening an existing session. */
+function sessionRemainingMaxAgeSec(session) {
+  const exp = Number(session?.expiresAt || 0);
+  if (!exp) return 60 * 60 * 24 * 30;
+  const sec = Math.floor((exp - Date.now()) / 1000);
+  return Math.max(60, Math.min(sec, SESSION_MAX_AGE_KEEP_SEC));
 }
 
 function clearSessionCookie() {
@@ -682,23 +698,28 @@ async function handleCustomerOauthCallback(req, res) {
       res.end();
       return;
     }
-    const expiresAtMs = payload.expires_in
+    const oauthAccessExpiryMs = payload.expires_in
       ? Date.now() + Number(payload.expires_in) * 1000
-      : Date.now() + 12 * 60 * 60 * 1000;
+      : Date.now() + SESSION_MAX_AGE_SHORT_SEC * 1000;
+    const shortSessionExpiryMs = Math.min(
+      oauthAccessExpiryMs,
+      Date.now() + SESSION_MAX_AGE_SHORT_SEC * 1000
+    );
+    const keepSessionExpiryMs = Date.now() + SESSION_MAX_AGE_KEEP_SEC * 1000;
+    const sessionExpiresAtMs = stateValue.keep ? keepSessionExpiryMs : shortSessionExpiryMs;
+    const cookieMaxAgeSec = stateValue.keep ? SESSION_MAX_AGE_KEEP_SEC : SESSION_MAX_AGE_SHORT_SEC;
     const sessionPayload = {
       customer,
       idToken: String(payload.id_token || ""),
       mode: stateValue.mode,
+      keep: stateValue.keep === true,
       createdAt: Date.now(),
-      expiresAt: expiresAtMs,
+      expiresAt: sessionExpiresAtMs,
     };
 
     res.writeHead(302, {
       Location: `${FRONTEND_ORIGIN}/account.html?auth=success`,
-      "Set-Cookie": createSessionCookie(
-        sessionPayload,
-        stateValue.keep ? 60 * 60 * 24 * 30 : 60 * 60 * 12
-      ),
+      "Set-Cookie": createSessionCookie(sessionPayload, cookieMaxAgeSec),
     });
     res.end();
   } catch (error) {
@@ -1228,7 +1249,7 @@ async function handleCustomerProfileUpdate(req, res) {
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
       "Content-Length": Buffer.byteLength(responseBody),
-      "Set-Cookie": createSessionCookie(updatedSession, 60 * 60 * 24 * 30),
+      "Set-Cookie": createSessionCookie(updatedSession, sessionRemainingMaxAgeSec(current.session)),
     });
     res.end(responseBody);
   } catch (error) {
