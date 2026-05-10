@@ -1788,9 +1788,13 @@
           const checkoutUrl = String(data.checkoutUrl || "").trim();
           try {
             const u = new URL(checkoutUrl);
-            if ((u.pathname || "/").replace(/\/+$/, "") === "/") {
+            const p = (u.pathname || "/").replace(/\/+$/, "") || "/";
+            const low = p.toLowerCase();
+            const okCheckout = low.includes("/checkouts/") || low.includes("/cart/c/");
+            const okCartPermalink = /^\/cart\/[\w.:,-]+$/i.test(p);
+            if (p === "/" || (!okCheckout && !okCartPermalink)) {
               alert(
-                "Shopify returned your storefront home instead of checkout. Check shipping/country and that checkout is enabled, then try again."
+                "Shopify returned an invalid link (not checkout or cart). Check shipping/country and that checkout is enabled, then try again."
               );
               return;
             }

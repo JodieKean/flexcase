@@ -1579,6 +1579,42 @@ function resolveStorefrontCheckoutUrl(raw) {
   }
 }
 
+/** True for real web checkout URLs, not /cart browse, /collections, etc. */
+function isStorefrontGraphqlCheckoutUrl(url) {
+  try {
+    const u = new URL(url);
+    const low = (u.pathname || "").toLowerCase();
+    return low.includes("/checkouts/") || low.includes("/cart/c/");
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Shopify Online Store permalink: https://{shop}.myshopify.com/cart/VARIANT_ID:qty,...
+ * (numeric variant id from ProductVariant gid). Opens cart with lines so buyer can proceed to checkout.
+ */
+function buildShopifyCartPermalink(lines) {
+  const segs = [];
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const gid = String(line?.variantId || "").trim();
+    const m = gid.match(/ProductVariant\/(\d+)/);
+    if (!m) continue;
+    const q = Math.max(1, Math.min(99, Number(line?.quantity || 1)));
+    segs.push(`${m[1]}:${q}`);
+  }
+  if (!segs.length) return "";
+  return `https://${SHOP_FROM_ENV}.myshopify.com/cart/${segs.join(",")}`;
+}
+
+function pickShopifyCheckoutRedirectUrl(graphqlCheckoutUrl, fallbackLines) {
+  const resolved = resolveStorefrontCheckoutUrl(graphqlCheckoutUrl);
+  if (resolved && isStorefrontGraphqlCheckoutUrl(resolved)) {
+    return resolved;
+  }
+  return buildShopifyCartPermalink(fallbackLines);
+}
+
 function buildCartDeliveryAddressInput(ship) {
   const firstName = String(ship?.firstName || "").trim();
   const lastName = String(ship?.lastName || "").trim();
@@ -2042,7 +2078,8 @@ async function handleShopifyCheckout(req, res) {
             return;
           }
           const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
-          checkoutUrl = resolveStorefrontCheckoutUrl(refreshed?.cart?.checkoutUrl);
+          const fallbackLines = mapStorefrontCartToClientLines(refreshed?.cart);
+          checkoutUrl = pickShopifyCheckoutRedirectUrl(refreshed?.cart?.checkoutUrl, fallbackLines);
           const totalQuantity = Number(refreshed?.cart?.totalQuantity || 0);
           if (!totalQuantity || !checkoutUrl) {
             errMsg =
@@ -2127,7 +2164,8 @@ async function handleShopifyCheckout(req, res) {
 
     const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
     const cart = refreshed?.cart;
-    const checkoutUrl = resolveStorefrontCheckoutUrl(cart?.checkoutUrl);
+    const fallbackLines = [...byVariant.entries()].map(([variantId, quantity]) => ({ variantId, quantity }));
+    const checkoutUrl = pickShopifyCheckoutRedirectUrl(cart?.checkoutUrl, fallbackLines);
     const totalQuantity = Number(cart?.totalQuantity || 0);
     if (!totalQuantity || !checkoutUrl) {
       json(res, 400, {
