@@ -425,6 +425,19 @@
         gap: 10px;
       }
 
+      .pay-hint {
+        margin: 0 0 12px;
+        font-size: 0.88rem;
+        line-height: 1.45;
+        color: #6e6e73;
+      }
+
+      .optional {
+        font-weight: 400;
+        color: #86868b;
+        font-size: 0.85em;
+      }
+
       .ssl-note {
         margin-top: 10px;
         display: flex;
@@ -920,33 +933,37 @@
                     <button type="button" class="edit" id="edit-payment">Edit</button>
                   </header>
 
-                  <label for="cardName">Name on Card</label>
+                  <p class="pay-hint">
+                    Payment is completed on Shopify’s secure checkout. Card details are not collected on this page.
+                  </p>
+
+                  <label for="cardName">Name on Card <span class="optional">(optional preview)</span></label>
                   <input
                     id="cardName"
                     name="cardName"
                     type="text"
                     autocomplete="cc-name"
-                    placeholder="Name as shown on card"
+                    placeholder="For your reference only"
                   />
 
-                  <label for="cardNumber">Card number</label>
-                  <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Enter card number" />
+                  <label for="cardNumber">Card number <span class="optional">(optional preview)</span></label>
+                  <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Entered on Shopify Checkout" />
 
                   <div class="pay-row" style="margin-top: 10px">
                     <div>
-                      <label for="cardExp">MM / YY</label>
-                      <input id="cardExp" name="cardExp" autocomplete="cc-exp" placeholder="MM/YY" />
+                      <label for="cardExp">MM / YY <span class="optional">(optional)</span></label>
+                      <input id="cardExp" name="cardExp" autocomplete="cc-exp" placeholder="—" />
                     </div>
                     <div>
-                      <label for="cardCvv">CVV</label>
-                      <input id="cardCvv" name="cardCvv" autocomplete="cc-csc" placeholder="CVV" />
+                      <label for="cardCvv">CVV <span class="optional">(optional)</span></label>
+                      <input id="cardCvv" name="cardCvv" autocomplete="cc-csc" placeholder="—" />
                     </div>
                     <div aria-hidden="true"></div>
                   </div>
 
-                  <div class="ssl-note" aria-hidden="true">
+                  <div class="ssl-note">
                     <span>🔒</span>
-                    <span>Payments are SSL encrypted and secure</span>
+                    <span>Your contact and shipping details are sent to Shopify to prefill checkout. Card data never touches this site.</span>
                   </div>
                 </div>
               </div>
@@ -1580,16 +1597,29 @@
       }
 
       function validatePayment() {
-        if (
-          !String(cardName?.value || "").trim() ||
-          !cardNumber.value.trim() ||
-          !cardExp.value.trim() ||
-          !cardCvv.value.trim()
-        ) {
-          alert("Please enter the name on card and your full card details to place the order.");
-          return false;
-        }
+        // Card data cannot be sent to Shopify from a custom storefront (PCI). Payment runs on Shopify Checkout only.
         return true;
+      }
+
+      function buildShopifyCheckoutPayload() {
+        const shipFirst = document.getElementById("shipFirstName");
+        const shipLast = document.getElementById("shipLastName");
+        const shipPhoneEl = document.getElementById("shipPhone");
+        const phone = String(shipPhoneEl?.value || "").trim();
+        return {
+          email: getContactEmail(),
+          phone,
+          shipping: {
+            firstName: String(shipFirst?.value || "").trim(),
+            lastName: String(shipLast?.value || "").trim(),
+            phone,
+            address1: address1.value.trim(),
+            city: city.value.trim(),
+            provinceCode: state.value.trim(),
+            zip: postal.value.trim(),
+            countryCode: String(country?.value || "").trim().toUpperCase(),
+          },
+        };
       }
 
       function selectShipping(method) {
@@ -1719,14 +1749,58 @@
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         if (!validatePayment()) return;
-        alert("Thanks — demo order placed. Connect this form to your payment provider next.");
-        localStorage.removeItem(cartStorageKey);
-        try {
-          await window.flexcaseClearServerCart?.();
-        } catch (_) {
-          /* ignore */
+        const placeBtn = document.getElementById("place-order");
+        const lines = readCartItems()
+          .map((l) => ({
+            variantId: String(l?.variantId || "").trim(),
+            quantity: Math.max(1, Math.min(99, Number(l?.quantity) || 1)),
+          }))
+          .filter((l) => l.variantId.startsWith("gid://shopify/ProductVariant/"));
+        if (!lines.length) {
+          alert("Your cart is empty. Add items before placing an order.");
+          return;
         }
-        window.flexcaseUpdateCartBadges?.();
+        placeBtn.disabled = true;
+        placeBtn.setAttribute("aria-busy", "true");
+        try {
+          await window.flexcaseFlushCartSync?.({ force: true });
+          const res = await fetchCheckoutApi("/api/checkout/shopify", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lines, checkout: buildShopifyCheckoutPayload() }),
+          });
+          let data = {};
+          try {
+            data = await res.json();
+          } catch (_) {
+            data = {};
+          }
+          if (!res.ok) {
+            alert(data.error || "Checkout could not be started. Try again.");
+            placeBtn.disabled = false;
+            placeBtn.removeAttribute("aria-busy");
+            return;
+          }
+          const checkoutUrl = String(data.checkoutUrl || "").trim();
+          if (!checkoutUrl) {
+            alert("Checkout could not be started. Try again.");
+            placeBtn.disabled = false;
+            placeBtn.removeAttribute("aria-busy");
+            return;
+          }
+          localStorage.removeItem(cartStorageKey);
+          try {
+            await window.flexcaseClearServerCart?.();
+          } catch (_) {
+            /* ignore */
+          }
+          window.flexcaseUpdateCartBadges?.();
+          window.location.assign(checkoutUrl);
+        } catch (_) {
+          alert("Checkout could not be started. Try again.");
+          placeBtn.disabled = false;
+          placeBtn.removeAttribute("aria-busy");
+        }
       });
 
       (async function initCheckoutCartInstantly() {

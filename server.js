@@ -1423,6 +1423,7 @@ const FLEXCASE_HEADLESS_CART_METAFIELD = {
 
 const STOREFRONT_CART_FRAGMENT = `
   id
+  checkoutUrl
   totalQuantity
   lines(first: 100) {
     edges {
@@ -1516,6 +1517,177 @@ const STOREFRONT_CART_LINES_REMOVE = `
     }
   }
 `;
+
+const STOREFRONT_CART_CREATE_WITH_INPUT = `
+  mutation FlexcaseCartCreateWithInput($input: CartInput!) {
+    cartCreate(input: $input) {
+      cart {
+        ${STOREFRONT_CART_FRAGMENT}
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_BUYER_IDENTITY_UPDATE = `
+  mutation FlexcaseCartBuyerIdentityUpdate($cartId: ID!, $buyerIdentity: CartBuyerIdentityInput!) {
+    cartBuyerIdentityUpdate(cartId: $cartId, buyerIdentity: $buyerIdentity) {
+      cart {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_DELIVERY_IDS = `
+  query FlexcaseCartDeliveryAddressIds($id: ID!) {
+    cart(id: $id) {
+      id
+      delivery {
+        addresses {
+          id
+        }
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_DELIVERY_ADD = `
+  mutation FlexcaseCartDeliveryAddressesAdd($cartId: ID!, $addresses: [CartSelectableAddressInput!]!) {
+    cartDeliveryAddressesAdd(cartId: $cartId, addresses: $addresses) {
+      cart {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_DELIVERY_UPDATE = `
+  mutation FlexcaseCartDeliveryAddressesUpdate($cartId: ID!, $addresses: [CartSelectableAddressUpdateInput!]!) {
+    cartDeliveryAddressesUpdate(cartId: $cartId, addresses: $addresses) {
+      cart {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+function buildCartDeliveryAddressInput(ship) {
+  const firstName = String(ship?.firstName || "").trim();
+  const lastName = String(ship?.lastName || "").trim();
+  const address1 = String(ship?.address1 || "").trim();
+  const city = String(ship?.city || "").trim();
+  const zip = String(ship?.zip || "").trim();
+  const countryCode = String(ship?.countryCode || "").trim().toUpperCase();
+  const deliveryAddress = {
+    firstName,
+    lastName,
+    address1,
+    city,
+    zip,
+  };
+  const phone = String(ship?.phone || "").trim();
+  if (phone) deliveryAddress.phone = phone;
+  const provinceCode = String(ship?.provinceCode || "").trim();
+  if (provinceCode) deliveryAddress.provinceCode = provinceCode;
+  if (countryCode) deliveryAddress.countryCode = countryCode;
+  return deliveryAddress;
+}
+
+function validateFlexcaseCheckoutPayload(checkout) {
+  const email = String(checkout?.email || "").trim();
+  if (!email) return "Email is required.";
+  const ship = checkout?.shipping || {};
+  const missing = (label, val) => (!String(val || "").trim() ? `${label} is required.` : "");
+  let err = missing("Shipping first name", ship.firstName);
+  if (err) return err;
+  err = missing("Shipping last name", ship.lastName);
+  if (err) return err;
+  err = missing("Street address", ship.address1);
+  if (err) return err;
+  err = missing("City", ship.city);
+  if (err) return err;
+  err = missing("ZIP or postal code", ship.zip);
+  if (err) return err;
+  err = missing("Country", ship.countryCode);
+  if (err) return err;
+  return "";
+}
+
+async function applyFlexcaseCheckoutToStorefrontCart(cartId, checkout) {
+  const email = String(checkout?.email || "").trim();
+  const phone = String(checkout?.phone || "").trim();
+  const ship = checkout?.shipping || {};
+  const countryCode = String(ship.countryCode || "").trim().toUpperCase();
+  const buyerIdentity = { email };
+  if (phone) buyerIdentity.phone = phone;
+  if (countryCode) buyerIdentity.countryCode = countryCode;
+
+  const buyerRes = await storefrontGraphql(STOREFRONT_CART_BUYER_IDENTITY_UPDATE, {
+    cartId,
+    buyerIdentity,
+  });
+  const buyerErrs = buyerRes?.cartBuyerIdentityUpdate?.userErrors?.filter((e) => e?.message) || [];
+  if (buyerErrs.length) {
+    throw new Error(buyerErrs.map((e) => e.message).join(", "));
+  }
+
+  const deliveryAddress = buildCartDeliveryAddressInput(ship);
+  const selectable = {
+    selected: true,
+    oneTimeUse: true,
+    address: {
+      deliveryAddress,
+    },
+  };
+
+  const idData = await storefrontGraphql(STOREFRONT_CART_DELIVERY_IDS, { id: cartId });
+  const existingIds = (idData?.cart?.delivery?.addresses || []).map((a) => a?.id).filter(Boolean);
+
+  if (existingIds.length) {
+    const upd = await storefrontGraphql(STOREFRONT_CART_DELIVERY_UPDATE, {
+      cartId,
+      addresses: [
+        {
+          id: existingIds[0],
+          selected: true,
+          oneTimeUse: true,
+          address: {
+            deliveryAddress,
+          },
+        },
+      ],
+    });
+    const updErrs = upd?.cartDeliveryAddressesUpdate?.userErrors?.filter((e) => e?.message) || [];
+    if (updErrs.length) {
+      throw new Error(updErrs.map((e) => e.message).join(", "));
+    }
+  } else {
+    const add = await storefrontGraphql(STOREFRONT_CART_DELIVERY_ADD, {
+      cartId,
+      addresses: [selectable],
+    });
+    const addErrs = add?.cartDeliveryAddressesAdd?.userErrors?.filter((e) => e?.message) || [];
+    if (addErrs.length) {
+      throw new Error(addErrs.map((e) => e.message).join(", "));
+    }
+  }
+}
 
 function mapStorefrontCartToClientLines(cart) {
   if (!cart?.lines?.edges) return [];
@@ -1859,6 +2031,128 @@ async function handleCartReplace(req, res) {
   }
 }
 
+/**
+ * Returns a Shopify-hosted checkout URL for the customer's headless cart (signed in)
+ * or a one-off Storefront cart built from `lines` (guest).
+ * Expects `body.checkout`: { email, phone?, shipping: { firstName, lastName, phone?, address1, city, provinceCode?, zip, countryCode } }.
+ * Card data is never accepted (PCI); payment is completed on Shopify Checkout only.
+ */
+async function handleShopifyCheckout(req, res) {
+  try {
+    if (!STOREFRONT_ACCESS_TOKEN || !SHOP_FROM_ENV) {
+      json(res, 503, { error: "Storefront checkout is not configured on the server." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const checkout = body.checkout || {};
+    const checkoutErr = validateFlexcaseCheckoutPayload(checkout);
+    if (checkoutErr) {
+      json(res, 400, { error: checkoutErr });
+      return;
+    }
+
+    const customer = await resolveAuthCustomerForCart(req);
+
+    if (customer) {
+      let checkoutUrl = "";
+      let errMsg = "";
+      try {
+        await runSerializedCustomerCartMutation(customer.id, async () => {
+          const { cartId } = await ensureCustomerStorefrontCart(customer.id);
+          const refreshed0 = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+          const totalQuantity0 = Number(refreshed0?.cart?.totalQuantity || 0);
+          if (!totalQuantity0) {
+            errMsg = "Your cart is empty. Add items before checkout.";
+            return;
+          }
+          try {
+            await applyFlexcaseCheckoutToStorefrontCart(cartId, checkout);
+          } catch (e) {
+            errMsg = e.message || "Unable to apply checkout details.";
+            return;
+          }
+          const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+          checkoutUrl = String(refreshed?.cart?.checkoutUrl || "").trim();
+          const totalQuantity = Number(refreshed?.cart?.totalQuantity || 0);
+          if (!totalQuantity || !checkoutUrl) {
+            errMsg = errMsg || "Shopify did not return a checkout URL. Try again.";
+            checkoutUrl = "";
+          }
+        });
+      } catch (error) {
+        json(res, 500, { error: error.message });
+        return;
+      }
+      if (errMsg) {
+        json(res, 400, { error: errMsg });
+        return;
+      }
+      json(res, 200, { checkoutUrl });
+      return;
+    }
+
+    const requestedLines = Array.isArray(body.lines) ? body.lines : [];
+    const byVariant = new Map();
+    for (const line of requestedLines) {
+      const variantId = String(line.variantId || "").trim();
+      if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
+      const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
+      const prev = byVariant.get(variantId) || 0;
+      byVariant.set(variantId, Math.min(99, prev + qty));
+    }
+    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
+      merchandiseId,
+      quantity: Math.floor(Number(quantity)),
+    }));
+    if (!linesToAdd.length) {
+      json(res, 400, { error: "Your cart is empty. Add items before checkout." });
+      return;
+    }
+
+    const countryCode = String(checkout.shipping?.countryCode || "")
+      .trim()
+      .toUpperCase();
+    const phone = String(checkout.phone || "").trim();
+    const input = {
+      lines: linesToAdd,
+      buyerIdentity: {
+        email: String(checkout.email || "").trim(),
+        ...(phone ? { phone } : {}),
+        ...(countryCode ? { countryCode } : {}),
+      },
+      delivery: {
+        addresses: [
+          {
+            selected: true,
+            oneTimeUse: true,
+            address: {
+              deliveryAddress: buildCartDeliveryAddressInput(checkout.shipping || {}),
+            },
+          },
+        ],
+      },
+    };
+
+    const created = await storefrontGraphql(STOREFRONT_CART_CREATE_WITH_INPUT, { input });
+    const payload = created?.cartCreate;
+    const createErrs = payload?.userErrors?.filter((e) => e?.message) || [];
+    if (createErrs.length) {
+      json(res, 400, { error: createErrs.map((e) => e.message).join(", ") });
+      return;
+    }
+    const cart = payload?.cart;
+    const checkoutUrl = cart?.checkoutUrl ? String(cart.checkoutUrl).trim() : "";
+    const totalQuantity = Number(cart?.totalQuantity || 0);
+    if (!totalQuantity || !checkoutUrl) {
+      json(res, 500, { error: "Shopify did not return a checkout URL. Try again." });
+      return;
+    }
+    json(res, 200, { checkoutUrl });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
 async function handleCartClear(req, res) {
   try {
     const customer = await resolveAuthCustomerForCart(req);
@@ -2108,6 +2402,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && reqUrl.pathname === "/api/cart/clear") {
     await handleCartClear(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/checkout/shopify") {
+    await handleShopifyCheckout(req, res);
     return;
   }
 
