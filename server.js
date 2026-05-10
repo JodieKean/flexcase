@@ -2021,6 +2021,35 @@ async function handleCartMerge(req, res) {
   }
 }
 
+/**
+ * Rebuilds the customer's Storefront cart from browser line payloads (signed-in headless cart).
+ * Used by /api/cart/replace and /api/checkout/shopify so checkout always matches localStorage.
+ */
+async function replaceCustomerCartLinesFromPayload(cartId, requestedLines) {
+  const byVariant = new Map();
+  for (const line of Array.isArray(requestedLines) ? requestedLines : []) {
+    const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
+    if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
+    const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
+    byVariant.set(variantId, Math.min(99, (byVariant.get(variantId) || 0) + qty));
+  }
+
+  await removeAllStorefrontCartLines(cartId);
+
+  const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
+    merchandiseId,
+    quantity,
+  }));
+  if (!linesToAdd.length) {
+    return;
+  }
+  const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
+  const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+  if (addErrs.length) {
+    throw new Error(addErrs.map((e) => e.message).join(", "));
+  }
+}
+
 async function handleCartReplace(req, res) {
   try {
     const customer = await resolveAuthCustomerForCart(req);
@@ -2033,28 +2062,11 @@ async function handleCartReplace(req, res) {
     await runSerializedCustomerCartMutation(customer.id, async () => {
       const { cartId } = await ensureCustomerStorefrontCart(customer.id);
 
-      // Build exact cart state from the provided payload (sum qty if duplicate variant rows).
-      const byVariant = new Map();
-      for (const line of requestedLines) {
-        const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
-        if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
-        const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
-        byVariant.set(variantId, Math.min(99, (byVariant.get(variantId) || 0) + qty));
-      }
-
-      await removeAllStorefrontCartLines(cartId);
-
-      const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
-        merchandiseId,
-        quantity,
-      }));
-      if (linesToAdd.length) {
-        const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
-        const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
-        if (addErrs.length) {
-          json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
-          return;
-        }
+      try {
+        await replaceCustomerCartLinesFromPayload(cartId, requestedLines);
+      } catch (e) {
+        json(res, 400, { error: e.message || "Cart replace failed." });
+        return;
       }
 
       const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
@@ -2097,6 +2109,15 @@ async function handleShopifyCheckout(req, res) {
       try {
         await runSerializedCustomerCartMutation(customer.id, async () => {
           const { cartId } = await ensureCustomerStorefrontCart(customer.id);
+          const syncLines = Array.isArray(body.lines) ? body.lines : [];
+          if (syncLines.length) {
+            try {
+              await replaceCustomerCartLinesFromPayload(cartId, syncLines);
+            } catch (e) {
+              errMsg = e.message || "Unable to sync your cart before checkout.";
+              return;
+            }
+          }
           const refreshed0 = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
           const totalQuantity0 = Number(refreshed0?.cart?.totalQuantity || 0);
           if (!totalQuantity0) {
