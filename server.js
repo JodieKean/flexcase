@@ -1716,6 +1716,17 @@ async function applyFlexcaseCheckoutToStorefrontCart(cartId, checkout) {
   }
 }
 
+/** Coerce numeric or partial IDs to Storefront ProductVariant GID. */
+function normalizeStorefrontVariantGid(id) {
+  const s = String(id || "").trim();
+  if (!s) return "";
+  if (s.startsWith("gid://shopify/ProductVariant/")) return s;
+  const m = s.match(/ProductVariant\/(\d+)/i);
+  if (m?.[1]) return `gid://shopify/ProductVariant/${m[1]}`;
+  if (/^\d+$/.test(s)) return `gid://shopify/ProductVariant/${s}`;
+  return "";
+}
+
 function mapStorefrontCartToClientLines(cart) {
   if (!cart?.lines?.edges) return [];
   const out = [];
@@ -1915,7 +1926,7 @@ async function handleCartAddLine(req, res) {
       return;
     }
     const body = await readJsonBody(req);
-    const merchandiseId = String(body.merchandiseId || "").trim();
+    const merchandiseId = normalizeStorefrontVariantGid(String(body.merchandiseId || "").trim());
     const quantity = Math.max(1, Math.min(99, Number(body.quantity || 1)));
     if (!merchandiseId.startsWith("gid://shopify/ProductVariant/")) {
       json(res, 400, { error: "Invalid variant id." });
@@ -1977,7 +1988,7 @@ async function handleCartMerge(req, res) {
         if (m?.id) byVariant.set(m.id, Number(n.quantity || 0));
       }
       for (const gl of guestLines) {
-        const vid = String(gl.variantId || "").trim();
+        const vid = normalizeStorefrontVariantGid(String(gl.variantId || "").trim());
         if (!vid.startsWith("gid://shopify/ProductVariant/")) continue;
         const q = Math.max(1, Math.min(99, Number(gl.quantity || 1)));
         byVariant.set(vid, (byVariant.get(vid) || 0) + q);
@@ -2025,7 +2036,7 @@ async function handleCartReplace(req, res) {
       // Build exact cart state from the provided payload (sum qty if duplicate variant rows).
       const byVariant = new Map();
       for (const line of requestedLines) {
-        const variantId = String(line.variantId || "").trim();
+        const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
         if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
         const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
         byVariant.set(variantId, Math.min(99, (byVariant.get(variantId) || 0) + qty));
@@ -2124,7 +2135,7 @@ async function handleShopifyCheckout(req, res) {
     const requestedLines = Array.isArray(body.lines) ? body.lines : [];
     const byVariant = new Map();
     for (const line of requestedLines) {
-      const variantId = String(line.variantId || "").trim();
+      const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
       if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
       const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
       const prev = byVariant.get(variantId) || 0;

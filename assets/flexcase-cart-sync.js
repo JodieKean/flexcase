@@ -67,9 +67,22 @@
     window.dispatchEvent(new CustomEvent("flexcase-cart-updated"));
   }
 
+  /** Storefront cart + checkout require this GID shape; numeric IDs must be coerced. */
+  function normalizeStorefrontVariantGid(raw) {
+    const s = String(raw ?? "").trim();
+    if (!s) return "";
+    if (s.startsWith("gid://shopify/ProductVariant/")) return s;
+    const m = s.match(/ProductVariant\/(\d+)/i);
+    if (m?.[1]) return `gid://shopify/ProductVariant/${m[1]}`;
+    if (/^\d+$/.test(s)) return `gid://shopify/ProductVariant/${s}`;
+    return "";
+  }
+
   function lineIdentity(line) {
-    const variantId = String(line?.variantId || "").trim();
-    if (variantId) return `variant:${variantId}`;
+    const norm = normalizeStorefrontVariantGid(line?.variantId);
+    if (norm) return `variant:${norm}`;
+    const raw = String(line?.variantId || "").trim();
+    if (raw) return `variant:${raw}`;
     const fallback = `${String(line?.productTitle || "").trim()}|${String(line?.variantTitle || "").trim()}`;
     return `title:${fallback}`;
   }
@@ -82,11 +95,14 @@
   function dedupeByIdentity(lines) {
     const byKey = new Map();
     for (const line of Array.isArray(lines) ? lines : []) {
-      const key = lineIdentity(line);
+      const normVid = normalizeStorefrontVariantGid(line?.variantId);
+      const storedLine =
+        normVid.startsWith("gid://shopify/ProductVariant/") ? { ...line, variantId: normVid } : { ...line };
+      const key = lineIdentity(storedLine);
       if (!key) continue;
       const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
       if (!byKey.has(key)) {
-        byKey.set(key, { ...line, quantity: qty });
+        byKey.set(key, { ...storedLine, quantity: qty });
       } else {
         const prev = byKey.get(key);
         byKey.set(key, {
@@ -251,9 +267,9 @@
       serverLines.map((line) => [String(line?.variantId || "").trim(), Math.max(1, Number(line?.quantity || 1))])
     );
     const merged = local.map((line) => {
-      const key = String(line?.variantId || "").trim();
+      const key = normalizeStorefrontVariantGid(line?.variantId) || String(line?.variantId || "").trim();
       if (!key || !byVariantId.has(key)) return line;
-      return { ...line, quantity: byVariantId.get(key) };
+      return { ...line, quantity: byVariantId.get(key), variantId: key };
     });
     writeLocalLines(merged);
     if (session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
@@ -273,9 +289,16 @@
     // UI-first: update local cart immediately and persist later.
     const current = readLocalLines();
     const next = dedupeByIdentity(current);
-    const targetId = String(merchandiseId || "").trim();
+    const targetId = normalizeStorefrontVariantGid(merchandiseId) || String(merchandiseId || "").trim();
     const addQty = Math.max(1, Math.min(99, Number(quantity || 1)));
-    const idx = next.findIndex((line) => String(line?.variantId || "").trim() === targetId);
+    const idx = next.findIndex((line) => {
+      const id = String(line?.variantId || "").trim();
+      return (
+        id === targetId ||
+        normalizeStorefrontVariantGid(id) === targetId ||
+        id === normalizeStorefrontVariantGid(merchandiseId)
+      );
+    });
     if (idx >= 0) {
       const q = Math.max(1, Number(next[idx].quantity || 1));
       next[idx].quantity = Math.min(99, q + addQty);

@@ -1225,23 +1225,35 @@
       const removeItemConfirm = document.getElementById("remove-item-confirm");
       let pendingRemoveResolve = null;
 
+      /** Same GID shape Storefront API expects (numeric-only IDs from older carts must coerce). */
+      function normalizeStorefrontVariantGid(raw) {
+        const s = String(raw ?? "").trim();
+        if (!s) return "";
+        if (s.startsWith("gid://shopify/ProductVariant/")) return s;
+        const m = s.match(/ProductVariant\/(\d+)/i);
+        if (m?.[1]) return `gid://shopify/ProductVariant/${m[1]}`;
+        if (/^\d+$/.test(s)) return `gid://shopify/ProductVariant/${s}`;
+        return "";
+      }
+
       /** Merge duplicate Storefront variant lines so qty is not lost or stuck at 1. */
       function collapseDuplicateGidLines(lines) {
         const byVariant = new Map();
         const ordered = [];
         for (const line of Array.isArray(lines) ? lines : []) {
-          const id = String(line?.variantId || "").trim();
-          if (!id.startsWith("gid://shopify/ProductVariant/")) {
-            ordered.push({ kind: "other", line });
+          const normId = normalizeStorefrontVariantGid(line?.variantId);
+          const lineNorm = normId ? { ...line, variantId: normId } : { ...line };
+          if (!normId || !normId.startsWith("gid://shopify/ProductVariant/")) {
+            ordered.push({ kind: "other", line: lineNorm });
             continue;
           }
           const qty = Math.max(1, Math.min(99, Number(line?.quantity || 1)));
-          if (!byVariant.has(id)) {
-            byVariant.set(id, { ...line, quantity: qty });
-            ordered.push({ kind: "gid", id });
+          if (!byVariant.has(normId)) {
+            byVariant.set(normId, { ...lineNorm, quantity: qty });
+            ordered.push({ kind: "gid", id: normId });
           } else {
-            const prev = byVariant.get(id);
-            byVariant.set(id, {
+            const prev = byVariant.get(normId);
+            byVariant.set(normId, {
               ...prev,
               quantity: Math.min(99, Number(prev.quantity || 1) + qty),
             });
@@ -1708,12 +1720,15 @@
         flexcasePlaceOrderInFlight = true;
         const lines = readCartItems()
           .map((l) => ({
-            variantId: String(l?.variantId || "").trim(),
+            variantId:
+              normalizeStorefrontVariantGid(l?.variantId) || String(l?.variantId || "").trim(),
             quantity: Math.max(1, Math.min(99, Number(l?.quantity) || 1)),
           }))
           .filter((l) => l.variantId.startsWith("gid://shopify/ProductVariant/"));
         if (!lines.length) {
-          alert("Your cart is empty. Add items before placing an order.");
+          alert(
+            "Checkout could not read your cart lines. Clear the cart, add the product again from the product page, then try once more."
+          );
           flexcasePlaceOrderInFlight = false;
           return;
         }
