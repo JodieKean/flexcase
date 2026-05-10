@@ -228,13 +228,24 @@
   }
 
   async function flexcaseRefreshCartFromServer() {
-    // Push local cart first so Shopify matches the UI, then hydrate (avoids races
-    // when leaving checkout where quantities were local-only until pagehide).
+    // Push local first. Do not immediately GET /api/cart after a successful replace:
+    // Shopify can briefly return a stale cart (e.g. qty 1), which pullServerCartToLocal
+    // would write over the buyer's localStorage and undo checkout/product edits.
     const session = await getSessionState();
     if (!session.authenticated) return false;
     const local = readLocalLines();
+    let flushOk = true;
     if (local.length) {
-      await flexcaseFlushCartSync({ force: true }).catch(() => false);
+      flushOk = Boolean(await flexcaseFlushCartSync({ force: true }).catch(() => false));
+    }
+    if (!flushOk) {
+      updateBadges();
+      return false;
+    }
+    if (local.length) {
+      if (session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
+      updateBadges();
+      return true;
     }
     const ok = await pullServerCartToLocal().catch(() => false);
     if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
@@ -246,8 +257,18 @@
     const session = await getSessionState();
     if (!session.authenticated) return false;
     const local = readLocalLines();
+    let flushOk = true;
     if (local.length) {
-      await flexcaseFlushCartSync({ force: true }).catch(() => false);
+      flushOk = Boolean(await flexcaseFlushCartSync({ force: true }).catch(() => false));
+    }
+    if (!flushOk) {
+      updateBadges();
+      return false;
+    }
+    if (local.length) {
+      if (session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
+      updateBadges();
+      return true;
     }
     const ok = await pullServerCartToLocal().catch(() => false);
     if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
@@ -357,7 +378,7 @@
     const session = await getSessionState();
     if (!session.authenticated) return false;
     const requestId = ++latestReplaceSyncRequestId;
-    const local = readLocalLines();
+    const local = dedupeByIdentity(readLocalLines());
     try {
       const r = await fetchApi("/api/cart/replace", {
         method: "POST",
