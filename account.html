@@ -1105,7 +1105,7 @@
             id="auth-mismatch-continue"
             class="auth-message-action auth-hidden"
           >
-            Continue with this account
+            Continue with previous account
           </button>
         </div>
       </section>
@@ -2106,7 +2106,7 @@
         mismatchSuggestedEmail = "";
         if (!authMismatchContinueBtn) return;
         authMismatchContinueBtn.classList.add("auth-hidden");
-        authMismatchContinueBtn.textContent = "Continue with this account";
+        authMismatchContinueBtn.textContent = "Continue with previous account";
         if (!isError) return message;
         const msg = String(message || "");
         const m = msg.match(
@@ -2123,11 +2123,10 @@
         if (!signedInEmail || !signedInEmail.includes("@") || !enteredEmail || !enteredEmail.includes("@")) {
           return message;
         }
-        mismatchSuggestedEmail = enteredEmail;
-        if (authSignInEmail) authSignInEmail.value = enteredEmail;
-        authMismatchContinueBtn.textContent = `Continue with account ${enteredEmail}`;
+        mismatchSuggestedEmail = signedInEmail;
+        authMismatchContinueBtn.textContent = `Continue as ${signedInEmail}`;
         authMismatchContinueBtn.classList.remove("auth-hidden");
-        return `Previously signed into ${signedInEmail}, but you are signing in with ${enteredEmail} now, would you like to proceed?`;
+        return `You were last signed in as ${signedInEmail}. To use ${enteredEmail}, click Continue with email. To sign in again with ${signedInEmail}, use the button below.`;
       }
 
       function setGateMessage(message, isError = false) {
@@ -2658,11 +2657,12 @@
 
       authMismatchContinueBtn?.addEventListener("click", () => {
         const keepLoggedIn = !!authSignInKeep?.checked;
-        const email = String(mismatchSuggestedEmail || authSignInEmail?.value || "")
+        const email = String(mismatchSuggestedEmail || "")
           .trim()
           .toLowerCase();
         if (!email) return;
-        // Use provider logout sequence first, then restart OAuth with the new email.
+        if (authSignInEmail) authSignInEmail.value = email;
+        // Logout hint + OAuth with the previous Shopify account email (not the newly typed address).
         beginCustomerOauth("signin", keepLoggedIn, email, true, true);
       });
 
