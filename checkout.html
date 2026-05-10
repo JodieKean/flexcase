@@ -1746,10 +1746,14 @@
           .then(() => adjustLineQuantity(variantId, plusBtn ? 1 : -1));
       });
 
+      let flexcasePlaceOrderInFlight = false;
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
         e.preventDefault();
+        if (flexcasePlaceOrderInFlight) return;
         if (!validatePayment()) return;
         const placeBtn = document.getElementById("place-order");
+        if (placeBtn?.disabled) return;
+        flexcasePlaceOrderInFlight = true;
         const lines = readCartItems()
           .map((l) => ({
             variantId: String(l?.variantId || "").trim(),
@@ -1758,10 +1762,12 @@
           .filter((l) => l.variantId.startsWith("gid://shopify/ProductVariant/"));
         if (!lines.length) {
           alert("Your cart is empty. Add items before placing an order.");
+          flexcasePlaceOrderInFlight = false;
           return;
         }
         placeBtn.disabled = true;
         placeBtn.setAttribute("aria-busy", "true");
+        let navigatingToCheckout = false;
         try {
           await window.flexcaseFlushCartSync?.({ force: true });
           const res = await fetchCheckoutApi("/api/checkout/shopify", {
@@ -1777,15 +1783,19 @@
           }
           if (!res.ok) {
             alert(data.error || "Checkout could not be started. Try again.");
-            placeBtn.disabled = false;
-            placeBtn.removeAttribute("aria-busy");
             return;
           }
           const checkoutUrl = String(data.checkoutUrl || "").trim();
-          if (!checkoutUrl) {
+          try {
+            const u = new URL(checkoutUrl);
+            if ((u.pathname || "/").replace(/\/+$/, "") === "/") {
+              alert(
+                "Shopify returned your storefront home instead of checkout. Check shipping/country and that checkout is enabled, then try again."
+              );
+              return;
+            }
+          } catch (_) {
             alert("Checkout could not be started. Try again.");
-            placeBtn.disabled = false;
-            placeBtn.removeAttribute("aria-busy");
             return;
           }
           localStorage.removeItem(cartStorageKey);
@@ -1795,11 +1805,16 @@
             /* ignore */
           }
           window.flexcaseUpdateCartBadges?.();
+          navigatingToCheckout = true;
           window.location.assign(checkoutUrl);
         } catch (_) {
           alert("Checkout could not be started. Try again.");
-          placeBtn.disabled = false;
-          placeBtn.removeAttribute("aria-busy");
+        } finally {
+          if (!navigatingToCheckout) {
+            flexcasePlaceOrderInFlight = false;
+            placeBtn.disabled = false;
+            placeBtn.removeAttribute("aria-busy");
+          }
         }
       });
 

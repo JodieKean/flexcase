@@ -1546,22 +1546,9 @@ const STOREFRONT_CART_BUYER_IDENTITY_UPDATE = `
   }
 `;
 
-const STOREFRONT_CART_DELIVERY_IDS = `
-  query FlexcaseCartDeliveryAddressIds($id: ID!) {
-    cart(id: $id) {
-      id
-      delivery {
-        addresses {
-          id
-        }
-      }
-    }
-  }
-`;
-
-const STOREFRONT_CART_DELIVERY_ADD = `
-  mutation FlexcaseCartDeliveryAddressesAdd($cartId: ID!, $addresses: [CartSelectableAddressInput!]!) {
-    cartDeliveryAddressesAdd(cartId: $cartId, addresses: $addresses) {
+const STOREFRONT_CART_DELIVERY_REPLACE = `
+  mutation FlexcaseCartDeliveryAddressesReplace($cartId: ID!, $addresses: [CartSelectableAddressInput!]!) {
+    cartDeliveryAddressesReplace(cartId: $cartId, addresses: $addresses) {
       cart {
         id
       }
@@ -1573,19 +1560,24 @@ const STOREFRONT_CART_DELIVERY_ADD = `
   }
 `;
 
-const STOREFRONT_CART_DELIVERY_UPDATE = `
-  mutation FlexcaseCartDeliveryAddressesUpdate($cartId: ID!, $addresses: [CartSelectableAddressUpdateInput!]!) {
-    cartDeliveryAddressesUpdate(cartId: $cartId, addresses: $addresses) {
-      cart {
-        id
-      }
-      userErrors {
-        field
-        message
-      }
-    }
+/** Absolute URL; rejects storefront home (/) which Shopify returns when checkout is not ready. */
+function resolveStorefrontCheckoutUrl(raw) {
+  let s = String(raw || "").trim();
+  if (!s) return "";
+  if (s.startsWith("/")) {
+    s = `https://${SHOP_FROM_ENV}.myshopify.com${s}`;
   }
-`;
+  try {
+    const u = new URL(s);
+    const pathOnly = (u.pathname || "/").replace(/\/+$/, "") || "/";
+    if (pathOnly === "/") {
+      return "";
+    }
+    return s;
+  } catch (_) {
+    return "";
+  }
+}
 
 function buildCartDeliveryAddressInput(ship) {
   const firstName = String(ship?.firstName || "").trim();
@@ -1651,41 +1643,19 @@ async function applyFlexcaseCheckoutToStorefrontCart(cartId, checkout) {
   const selectable = {
     selected: true,
     oneTimeUse: true,
+    validationStrategy: "COUNTRY_CODE_ONLY",
     address: {
       deliveryAddress,
     },
   };
 
-  const idData = await storefrontGraphql(STOREFRONT_CART_DELIVERY_IDS, { id: cartId });
-  const existingIds = (idData?.cart?.delivery?.addresses || []).map((a) => a?.id).filter(Boolean);
-
-  if (existingIds.length) {
-    const upd = await storefrontGraphql(STOREFRONT_CART_DELIVERY_UPDATE, {
-      cartId,
-      addresses: [
-        {
-          id: existingIds[0],
-          selected: true,
-          oneTimeUse: true,
-          address: {
-            deliveryAddress,
-          },
-        },
-      ],
-    });
-    const updErrs = upd?.cartDeliveryAddressesUpdate?.userErrors?.filter((e) => e?.message) || [];
-    if (updErrs.length) {
-      throw new Error(updErrs.map((e) => e.message).join(", "));
-    }
-  } else {
-    const add = await storefrontGraphql(STOREFRONT_CART_DELIVERY_ADD, {
-      cartId,
-      addresses: [selectable],
-    });
-    const addErrs = add?.cartDeliveryAddressesAdd?.userErrors?.filter((e) => e?.message) || [];
-    if (addErrs.length) {
-      throw new Error(addErrs.map((e) => e.message).join(", "));
-    }
+  const rep = await storefrontGraphql(STOREFRONT_CART_DELIVERY_REPLACE, {
+    cartId,
+    addresses: [selectable],
+  });
+  const repErrs = rep?.cartDeliveryAddressesReplace?.userErrors?.filter((e) => e?.message) || [];
+  if (repErrs.length) {
+    throw new Error(repErrs.map((e) => e.message).join(", "));
   }
 }
 
@@ -2072,10 +2042,12 @@ async function handleShopifyCheckout(req, res) {
             return;
           }
           const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
-          checkoutUrl = String(refreshed?.cart?.checkoutUrl || "").trim();
+          checkoutUrl = resolveStorefrontCheckoutUrl(refreshed?.cart?.checkoutUrl);
           const totalQuantity = Number(refreshed?.cart?.totalQuantity || 0);
           if (!totalQuantity || !checkoutUrl) {
-            errMsg = errMsg || "Shopify did not return a checkout URL. Try again.";
+            errMsg =
+              errMsg ||
+              "Shopify did not return a valid checkout link. Check your shipping address and that checkout is enabled for this store.";
             checkoutUrl = "";
           }
         });
@@ -2113,38 +2085,55 @@ async function handleShopifyCheckout(req, res) {
       .trim()
       .toUpperCase();
     const phone = String(checkout.phone || "").trim();
-    const input = {
+    const inputLinesOnly = {
       lines: linesToAdd,
       buyerIdentity: {
         email: String(checkout.email || "").trim(),
         ...(phone ? { phone } : {}),
         ...(countryCode ? { countryCode } : {}),
       },
-      delivery: {
-        addresses: [
-          {
-            selected: true,
-            oneTimeUse: true,
-            address: {
-              deliveryAddress: buildCartDeliveryAddressInput(checkout.shipping || {}),
-            },
-          },
-        ],
-      },
     };
 
-    const created = await storefrontGraphql(STOREFRONT_CART_CREATE_WITH_INPUT, { input });
+    const created = await storefrontGraphql(STOREFRONT_CART_CREATE_WITH_INPUT, { input: inputLinesOnly });
     const payload = created?.cartCreate;
     const createErrs = payload?.userErrors?.filter((e) => e?.message) || [];
     if (createErrs.length) {
       json(res, 400, { error: createErrs.map((e) => e.message).join(", ") });
       return;
     }
-    const cart = payload?.cart;
-    const checkoutUrl = cart?.checkoutUrl ? String(cart.checkoutUrl).trim() : "";
+    const cartId = payload?.cart?.id;
+    if (!cartId) {
+      json(res, 500, { error: "Unable to create checkout cart." });
+      return;
+    }
+
+    const deliveryAddress = buildCartDeliveryAddressInput(checkout.shipping || {});
+    const replaceRes = await storefrontGraphql(STOREFRONT_CART_DELIVERY_REPLACE, {
+      cartId,
+      addresses: [
+        {
+          selected: true,
+          oneTimeUse: true,
+          validationStrategy: "COUNTRY_CODE_ONLY",
+          address: { deliveryAddress },
+        },
+      ],
+    });
+    const repErrs = replaceRes?.cartDeliveryAddressesReplace?.userErrors?.filter((e) => e?.message) || [];
+    if (repErrs.length) {
+      json(res, 400, { error: repErrs.map((e) => e.message).join(", ") });
+      return;
+    }
+
+    const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+    const cart = refreshed?.cart;
+    const checkoutUrl = resolveStorefrontCheckoutUrl(cart?.checkoutUrl);
     const totalQuantity = Number(cart?.totalQuantity || 0);
     if (!totalQuantity || !checkoutUrl) {
-      json(res, 500, { error: "Shopify did not return a checkout URL. Try again." });
+      json(res, 400, {
+        error:
+          "Shopify did not return a valid checkout link. Check your shipping address, country, and that Online Store checkout is enabled.",
+      });
       return;
     }
     json(res, 200, { checkoutUrl });
