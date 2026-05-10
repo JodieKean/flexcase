@@ -392,11 +392,13 @@
         margin-bottom: 8px;
       }
 
+      /* Match account profile "Write a Review" (.review-link): gold accent, sans-serif */
       .review-card h3 {
         margin: 0;
-        font-size: 0.72rem;
-        letter-spacing: 0.12em;
-        color: #6e6e73;
+        font-size: 0.92rem;
+        font-weight: 700;
+        letter-spacing: normal;
+        color: #b08d57;
       }
 
       .review-card .edit {
@@ -404,7 +406,7 @@
         background: transparent;
         padding: 0;
         font-size: 0.86rem;
-        color: #0071e3;
+        color: #b08d57;
         cursor: pointer;
         border-radius: 0;
       }
@@ -918,6 +920,15 @@
                     <button type="button" class="edit" id="edit-payment">Edit</button>
                   </header>
 
+                  <label for="cardName">Name on Card</label>
+                  <input
+                    id="cardName"
+                    name="cardName"
+                    type="text"
+                    autocomplete="cc-name"
+                    placeholder="Name as shown on card"
+                  />
+
                   <label for="cardNumber">Card number</label>
                   <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Enter card number" />
 
@@ -1247,6 +1258,7 @@
       const reviewAddressBody = document.getElementById("review-address-body");
       const reviewShipBody = document.getElementById("review-ship-body");
 
+      const cardName = document.getElementById("cardName");
       const cardNumber = document.getElementById("cardNumber");
       const cardExp = document.getElementById("cardExp");
       const cardCvv = document.getElementById("cardCvv");
@@ -1568,8 +1580,13 @@
       }
 
       function validatePayment() {
-        if (!cardNumber.value.trim() || !cardExp.value.trim() || !cardCvv.value.trim()) {
-          alert("Please enter your card details to place the order.");
+        if (
+          !String(cardName?.value || "").trim() ||
+          !cardNumber.value.trim() ||
+          !cardExp.value.trim() ||
+          !cardCvv.value.trim()
+        ) {
+          alert("Please enter the name on card and your full card details to place the order.");
           return false;
         }
         return true;
@@ -1681,7 +1698,7 @@
       });
 
       document.getElementById("edit-payment").addEventListener("click", () => {
-        cardNumber.focus();
+        cardName?.focus();
       });
 
       orderLineItems.addEventListener("click", (event) => {
