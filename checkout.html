@@ -6,6 +6,15 @@
     <title>Flex Case — Checkout</title>
     <link rel="stylesheet" href="assets/navbar.css" />
     <script src="assets/flexcase-cart-sync.js"></script>
+    <script>
+      try {
+        if (sessionStorage.getItem("flexcase.checkout.signedInBootstrapEmail")) {
+          document.documentElement.classList.add("checkout-bootstrap-pending");
+        }
+      } catch (e) {
+        /* ignore */
+      }
+    </script>
     <style>
       :root {
         color-scheme: light;
@@ -219,6 +228,28 @@
 
       .hidden {
         display: none !important;
+      }
+
+      /* Before JS runs: hide guest UI if this tab already completed signed-in checkout bootstrap */
+      html.checkout-bootstrap-pending #contact-standard-form,
+      html.checkout-bootstrap-pending #contact-logged-in-wrap {
+        display: none !important;
+      }
+
+      html.checkout-bootstrap-pending #contact-lede {
+        display: none !important;
+      }
+
+      html.checkout-bootstrap-pending #contact-loading {
+        display: flex !important;
+      }
+
+      html.checkout-bootstrap-pending #contact-loading.hidden {
+        display: flex !important;
+      }
+
+      html.checkout-bootstrap-pending #contact-actions {
+        visibility: hidden;
       }
 
       .actions {
@@ -1625,19 +1656,41 @@
         selectShipping("standard");
         recalcTotals();
 
+        let bootEarly = "";
         try {
-          checkoutCountryRows = await loadCheckoutCountryRows();
-          fillCheckoutCountrySelect(checkoutCountryRows);
+          bootEarly = sessionStorage.getItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY) || "";
         } catch (_) {
-          fillCheckoutCountrySelect([
-            { name: "Malaysia", iso2: "MY", dial: "+60" },
-            { name: "Singapore", iso2: "SG", dial: "+65" },
-            { name: "United Kingdom", iso2: "GB", dial: "+44" },
-            { name: "United States", iso2: "US", dial: "+1" },
-          ]);
+          bootEarly = "";
+        }
+        if (bootEarly) {
+          contactSignInLoading = true;
+          setStep(1);
+          syncContactStep1Panels();
         }
 
-        const sessionRes = await fetchCheckoutApi("/api/customer/session");
+        const fallbackCountryRows = [
+          { name: "Malaysia", iso2: "MY", dial: "+60" },
+          { name: "Singapore", iso2: "SG", dial: "+65" },
+          { name: "United Kingdom", iso2: "GB", dial: "+44" },
+          { name: "United States", iso2: "US", dial: "+1" },
+        ];
+
+        const [countryRowsResult, sessionRes] = await Promise.all([
+          loadCheckoutCountryRows().catch(() => null),
+          fetchCheckoutApi("/api/customer/session"),
+        ]);
+
+        try {
+          if (countryRowsResult?.length) {
+            checkoutCountryRows = countryRowsResult;
+            fillCheckoutCountrySelect(checkoutCountryRows);
+          } else {
+            throw new Error("no country rows");
+          }
+        } catch (_) {
+          fillCheckoutCountrySelect(fallbackCountryRows);
+        }
+
         let sessionPayload = {};
         try {
           sessionPayload = await sessionRes.json();
@@ -1651,17 +1704,34 @@
         if (!isAuthed) {
           checkoutSessionCustomer = null;
           contactSignInLoading = false;
+          try {
+            sessionStorage.removeItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY);
+          } catch (_) {
+            /* ignore */
+          }
           setStep(1);
+          syncContactStep1Panels();
         } else {
           const c = sessionPayload.customer;
+          const emailRaw = String(c.email || "").trim();
+          const emailLower = emailRaw.toLowerCase();
+          const customerGid = String(c.id || "").trim();
+          const bootstrapIdentity =
+            emailLower ||
+            (customerGid.startsWith("gid://shopify/Customer/")
+              ? customerGid
+              : customerGid
+              ? `id:${customerGid}`
+              : "");
+
           checkoutSessionCustomer = {
             firstName: String(c.firstName || "").trim(),
             lastName: String(c.lastName || "").trim(),
-            email: String(c.email || "").trim(),
+            email: emailRaw,
           };
-          const emailLower = String(checkoutSessionCustomer.email || "").trim().toLowerCase();
-          const bootEmail = sessionStorage.getItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY) || "";
-          const alreadyBootstrapped = Boolean(emailLower && bootEmail === emailLower);
+
+          const bootStored = sessionStorage.getItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY) || "";
+          const alreadyBootstrapped = Boolean(bootstrapIdentity && bootStored === bootstrapIdentity);
 
           if (alreadyBootstrapped) {
             contactSignInLoading = false;
@@ -1671,16 +1741,20 @@
               /* ignore */
             }
             setStep(2);
+            syncContactStep1Panels();
           } else {
             contactSignInLoading = true;
             setStep(1);
+            syncContactStep1Panels();
             try {
               await hydrateSignedInShippingFromAccount();
             } catch (_) {
               /* ignore */
             }
             try {
-              sessionStorage.setItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY, emailLower);
+              if (bootstrapIdentity) {
+                sessionStorage.setItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY, bootstrapIdentity);
+              }
             } catch (_) {
               /* ignore */
             }
@@ -1693,6 +1767,12 @@
         if (!checkoutCartDirty) {
           patchRenderedQuantities(readCartItems());
           recalcTotals();
+        }
+
+        try {
+          document.documentElement.classList.remove("checkout-bootstrap-pending");
+        } catch (_) {
+          /* ignore */
         }
       })();
     </script>
