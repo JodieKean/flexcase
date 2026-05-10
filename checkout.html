@@ -821,18 +821,18 @@
                   <input id="city" name="city" type="text" autocomplete="address-level2" placeholder="Enter city" />
                 </div>
                 <div>
-                  <label for="state">State</label>
+                  <label for="state">State *</label>
                   <input id="state" name="state" type="text" autocomplete="address-level1" placeholder="Enter state" />
                 </div>
               </div>
 
               <div class="row">
                 <div>
-                  <label for="postal">ZIP code</label>
+                  <label for="postal">ZIP code *</label>
                   <input id="postal" name="postal" type="text" autocomplete="postal-code" placeholder="Enter ZIP/postal code" />
                 </div>
                 <div>
-                  <label for="country">Country / region</label>
+                  <label for="country">Country / region *</label>
                   <select id="country" name="country" autocomplete="country" aria-label="Country or region">
                     <option value="" selected disabled>Loading countries…</option>
                   </select>
@@ -1163,11 +1163,11 @@
       const country = document.getElementById("country");
 
       function setShippingStepRequiredFields() {
-        ["shipFirstName", "shipLastName", "shipPhone"].forEach((id) => {
-          document.getElementById(id)?.setAttribute("required", "required");
-        });
-        address1.setAttribute("required", "required");
-        city.setAttribute("required", "required");
+        ["shipFirstName", "shipLastName", "shipPhone", "address1", "city", "state", "postal", "country"].forEach(
+          (id) => {
+            document.getElementById(id)?.setAttribute("required", "required");
+          }
+        );
       }
 
       const CHECKOUT_BOOTSTRAP_EMAIL_KEY = "flexcase.checkout.signedInBootstrapEmail";
@@ -1502,9 +1502,12 @@
           !String(shipLast?.value || "").trim() ||
           !String(shipPhoneEl?.value || "").trim() ||
           !address1.value.trim() ||
-          !city.value.trim()
+          !city.value.trim() ||
+          !state.value.trim() ||
+          !postal.value.trim() ||
+          !String(country?.value || "").trim()
         ) {
-          alert("Please complete your shipping name, contact number, and address.");
+          alert("Please complete every shipping address field before continuing.");
           return false;
         }
         return true;
