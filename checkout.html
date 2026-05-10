@@ -1802,12 +1802,9 @@
             alert("Checkout could not be started. Try again.");
             return;
           }
+          // Do not call flexcaseClearServerCart() here: Shopify checkout is bound to the same
+          // headless Storefront cart; clearing it before navigation invalidates the session (skeleton → home).
           localStorage.removeItem(cartStorageKey);
-          try {
-            await window.flexcaseClearServerCart?.();
-          } catch (_) {
-            /* ignore */
-          }
           window.flexcaseUpdateCartBadges?.();
           navigatingToCheckout = true;
           window.location.assign(checkoutUrl);
