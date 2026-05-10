@@ -295,7 +295,7 @@
         variantTitle: String(lineDetails.variantTitle || "Default"),
         quantity: addQty,
         price: Number.isFinite(normalizedPrice) ? normalizedPrice : 0,
-        currencyCode: String(lineDetails.currencyCode || "USD"),
+        currencyCode: String(lineDetails.currencyCode || "MYR"),
         image: String(lineDetails.image || ""),
       });
     }

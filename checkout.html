@@ -419,34 +419,6 @@
         white-space: pre-line;
       }
 
-      .pay-row {
-        display: grid;
-        grid-template-columns: 1.6fr 0.7fr 0.7fr;
-        gap: 10px;
-      }
-
-      .pay-hint {
-        margin: 0 0 12px;
-        font-size: 0.88rem;
-        line-height: 1.45;
-        color: #6e6e73;
-      }
-
-      .optional {
-        font-weight: 400;
-        color: #86868b;
-        font-size: 0.85em;
-      }
-
-      .ssl-note {
-        margin-top: 10px;
-        display: flex;
-        gap: 8px;
-        align-items: center;
-        font-size: 0.82rem;
-        color: #6e6e73;
-      }
-
       .summary {
         position: sticky;
         top: 18px;
@@ -629,6 +601,14 @@
         font-size: 1rem;
       }
 
+      .totals .row-total.tax-row span:last-child {
+        max-width: 62%;
+        text-align: right;
+        font-size: 0.85rem;
+        line-height: 1.35;
+        color: #6e6e73;
+      }
+
       .trust {
         margin-top: 14px;
         display: grid;
@@ -655,10 +635,6 @@
         }
 
         .ship-method-row {
-          grid-template-columns: 1fr;
-        }
-
-        .pay-row {
           grid-template-columns: 1fr;
         }
       }
@@ -867,10 +843,10 @@
                   data-ship="standard"
                 >
                   <h3>Standard Shipping</h3>
-                  <p>5–7 business days · Orders over $50 ship free</p>
+                  <p>5–7 business days · Orders over RM200 ship free</p>
                   <div class="rowline">
                     <span>Delivery</span>
-                    <span class="price" id="standardShipLabel">$5.99</span>
+                    <span class="price" id="standardShipLabel">RM10.00</span>
                   </div>
                 </div>
 
@@ -886,7 +862,7 @@
                   <p>2 business days · Guaranteed by Friday</p>
                   <div class="rowline">
                     <span>Delivery</span>
-                    <span class="price">$9.99</span>
+                    <span class="price" id="expressShipLabel">RM30.00</span>
                   </div>
                 </div>
               </div>
@@ -900,7 +876,7 @@
             <!-- Step 3 -->
             <div id="step-review" class="hidden">
               <h1>Review Order</h1>
-              <p class="lede">Confirm your contact, shipping, and payment details.</p>
+              <p class="lede">Confirm your contact and shipping details.</p>
 
               <div class="review-stack">
                 <div class="review-card" id="review-contact-card">
@@ -926,51 +902,11 @@
                   </header>
                   <p class="body" id="review-ship-body"></p>
                 </div>
-
-                <div class="review-card" id="review-pay-card">
-                  <header>
-                    <h3>Payment</h3>
-                    <button type="button" class="edit" id="edit-payment">Edit</button>
-                  </header>
-
-                  <p class="pay-hint">
-                    Payment is completed on Shopify’s secure checkout. Card details are not collected on this page.
-                  </p>
-
-                  <label for="cardName">Name on Card <span class="optional">(optional preview)</span></label>
-                  <input
-                    id="cardName"
-                    name="cardName"
-                    type="text"
-                    autocomplete="cc-name"
-                    placeholder="For your reference only"
-                  />
-
-                  <label for="cardNumber">Card number <span class="optional">(optional preview)</span></label>
-                  <input id="cardNumber" name="cardNumber" inputmode="numeric" autocomplete="cc-number" placeholder="Entered on Shopify Checkout" />
-
-                  <div class="pay-row" style="margin-top: 10px">
-                    <div>
-                      <label for="cardExp">MM / YY <span class="optional">(optional)</span></label>
-                      <input id="cardExp" name="cardExp" autocomplete="cc-exp" placeholder="—" />
-                    </div>
-                    <div>
-                      <label for="cardCvv">CVV <span class="optional">(optional)</span></label>
-                      <input id="cardCvv" name="cardCvv" autocomplete="cc-csc" placeholder="—" />
-                    </div>
-                    <div aria-hidden="true"></div>
-                  </div>
-
-                  <div class="ssl-note">
-                    <span>🔒</span>
-                    <span>Your contact and shipping details are sent to Shopify to prefill checkout. Card data never touches this site.</span>
-                  </div>
-                </div>
               </div>
 
               <div class="actions">
                 <button type="button" class="btn-secondary" id="back-to-shipping">← Back</button>
-                <button type="submit" class="btn-primary" id="place-order">🔒 Place Order</button>
+                <button type="submit" class="btn-primary" id="place-order">🔒 Proceed to Pay</button>
               </div>
             </div>
           </form>
@@ -988,16 +924,16 @@
           <p id="promoMessage" class="note"></p>
 
           <div class="totals">
-            <div class="row-total"><span>Subtotal</span><span id="subtotalDisplay">$43.98</span></div>
-            <div class="row-total"><span>Shipping</span><span id="shippingDisplay">$5.99</span></div>
-            <div class="row-total"><span>Tax (8%)</span><span id="taxDisplay">$3.52</span></div>
-            <div class="row-total grand"><span>Total</span><span id="totalDisplay">$53.49</span></div>
+            <div class="row-total"><span>Subtotal</span><span id="subtotalDisplay">RM0.00</span></div>
+            <div class="row-total"><span>Shipping</span><span id="shippingDisplay">RM10.00</span></div>
+            <div class="row-total tax-row"><span>Tax</span><span id="taxDisplay">Tax is estimated on the payment page.</span></div>
+            <div class="row-total grand"><span>Total</span><span id="totalDisplay">RM0.00</span></div>
           </div>
 
           <div class="trust">
             <span>🔒 SSL encrypted &amp; secure</span>
             <span>↩︎ 30-day returns</span>
-            <span>📦 Free shipping over $50</span>
+            <span>📦 Free shipping over RM200</span>
           </div>
         </aside>
       </div>
@@ -1015,13 +951,14 @@
     </div>
 
     <script>
-      const money = (n, currency = "USD") =>
-        Number(n || 0).toLocaleString(undefined, { style: "currency", currency });
+      const SITE_LOCALE = "ms-MY";
+      const SITE_CURRENCY = "MYR";
+      const money = (n, currency = SITE_CURRENCY) =>
+        Number(n || 0).toLocaleString(SITE_LOCALE, { style: "currency", currency: currency || SITE_CURRENCY });
 
       const cartStorageKey = "flexcase.local.cart";
-      const standardRate = 5.99;
-      const expressRate = 9.99;
-      const taxRate = 0.08;
+      const standardRate = 10;
+      const expressRate = 30;
 
       const CHECKOUT_API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
       async function fetchCheckoutApi(path, options = {}) {
@@ -1274,11 +1211,7 @@
       const reviewContactBody = document.getElementById("review-contact-body");
       const reviewAddressBody = document.getElementById("review-address-body");
       const reviewShipBody = document.getElementById("review-ship-body");
-
-      const cardName = document.getElementById("cardName");
-      const cardNumber = document.getElementById("cardNumber");
-      const cardExp = document.getElementById("cardExp");
-      const cardCvv = document.getElementById("cardCvv");
+      const expressShipLabel = document.getElementById("expressShipLabel");
 
       const subtotalDisplay = document.getElementById("subtotalDisplay");
       const shippingDisplay = document.getElementById("shippingDisplay");
@@ -1325,7 +1258,7 @@
                 <div class="name">Your cart is empty</div>
                 <div class="meta">Add a product from the Product page.</div>
               </div>
-              <div class="price">$0.00</div>
+              <div class="price">${money(0)}</div>
             </div>
           `;
           return;
@@ -1334,7 +1267,7 @@
         orderLineItems.innerHTML = items
           .map((line) => {
             const lineTotal = lineSubtotal(line);
-            const currency = line.currencyCode || "USD";
+            const currency = line.currencyCode || SITE_CURRENCY;
             const imageStyle = line.image
               ? `style="background-image:url('${line.image}');background-size:cover;background-position:center;"`
               : "";
@@ -1369,7 +1302,7 @@
           const qtyEl = row.querySelector(".qty-value");
           if (qtyEl) qtyEl.textContent = String(Math.max(1, Number(line?.quantity || 1)));
           const priceEl = row.querySelector(".price");
-          if (priceEl) priceEl.textContent = money(lineSubtotal(line), line.currencyCode || "USD");
+          if (priceEl) priceEl.textContent = money(lineSubtotal(line), line.currencyCode || SITE_CURRENCY);
         });
       }
 
@@ -1477,13 +1410,14 @@
       }
 
       function getStandardShippingCost(subtotal) {
-        return subtotal >= 50 ? 0 : standardRate;
+        return subtotal >= 200 ? 0 : standardRate;
       }
 
-      function updateStandardMethodLabel() {
+      function updateShippingMethodLabels() {
         const subtotal = getSubtotal();
         const std = getStandardShippingCost(subtotal);
         standardShipLabel.textContent = std === 0 ? "Free" : money(std);
+        if (expressShipLabel) expressShipLabel.textContent = money(expressRate);
       }
 
       function getSelectedShippingCost() {
@@ -1496,14 +1430,13 @@
       function recalcTotals() {
         const subtotal = getSubtotal();
         const shipping = getSelectedShippingCost();
-        const tax = subtotal * taxRate;
-        const total = subtotal + shipping + tax;
+        const total = subtotal + shipping;
 
         subtotalDisplay.textContent = money(subtotal);
         shippingDisplay.textContent = shipping === 0 ? "Free" : money(shipping);
-        taxDisplay.textContent = money(tax);
+        taxDisplay.textContent = "Tax is estimated on the payment page.";
         totalDisplay.textContent = money(total);
-        updateStandardMethodLabel();
+        updateShippingMethodLabels();
       }
 
       function validateContact() {
@@ -1583,7 +1516,7 @@
       function buildShippingMethodText() {
         const method = shippingMethodInput.value;
         if (method === "express") {
-          return "Express Shipping (2 days)\n$9.99";
+          return `Express Shipping (2 days)\n${money(expressRate)}`;
         }
         const subtotal = getSubtotal();
         const std = getStandardShippingCost(subtotal);
@@ -1594,11 +1527,6 @@
         reviewContactBody.textContent = `${getContactName()}\n${getContactEmail()}`;
         reviewAddressBody.textContent = buildShippingAddressText();
         reviewShipBody.textContent = buildShippingMethodText();
-      }
-
-      function validatePayment() {
-        // Card data cannot be sent to Shopify from a custom storefront (PCI). Payment runs on Shopify Checkout only.
-        return true;
       }
 
       function buildShopifyCheckoutPayload() {
@@ -1698,7 +1626,7 @@
         }
         if (code === "FLEX10") {
           discount = 10;
-          promoMessage.textContent = "Promo applied: $10 off your subtotal.";
+          promoMessage.textContent = `Promo applied: ${money(10)} off your subtotal.`;
         } else {
           promoMessage.textContent = "Promo code not recognized.";
         }
@@ -1727,10 +1655,6 @@
         });
       });
 
-      document.getElementById("edit-payment").addEventListener("click", () => {
-        cardName?.focus();
-      });
-
       orderLineItems.addEventListener("click", (event) => {
         const raw = event.target;
         const el =
@@ -1750,7 +1674,6 @@
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         if (flexcasePlaceOrderInFlight) return;
-        if (!validatePayment()) return;
         const placeBtn = document.getElementById("place-order");
         if (placeBtn?.disabled) return;
         flexcasePlaceOrderInFlight = true;

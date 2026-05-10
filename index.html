@@ -499,10 +499,10 @@
         const grid = document.getElementById("catalogGrid");
         if (!grid) return;
 
-        const money = (amount, currencyCode = "USD") =>
-          new Intl.NumberFormat("en-US", {
+        const money = (amount, currencyCode = "MYR") =>
+          new Intl.NumberFormat("ms-MY", {
             style: "currency",
-            currency: currencyCode,
+            currency: currencyCode || "MYR",
           }).format(Number(amount || 0));
 
         function renderCatalogCards(products) {

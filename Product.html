@@ -555,7 +555,7 @@
 
           <div class="trust-inline">
             <span>Secure Checkout</span>
-            <span>Free Shipping $50+</span>
+            <span>Free Shipping RM200+</span>
             <span>30-Day Returns</span>
           </div>
 
@@ -569,13 +569,13 @@
           </details>
           <details>
             <summary>Shipping &amp; Returns</summary>
-            <p>Ships in 1-2 business days. Free shipping above $50. 30-day hassle-free returns for unopened and defect-related cases.</p>
+            <p>Ships in 1-2 business days. Free shipping above RM200. 30-day hassle-free returns for unopened and defect-related cases.</p>
           </details>
         </div>
       </section>
 
       <section class="feature-strip" aria-label="Shipping and protection highlights">
-        <div class="feature-item"><strong>Free Shipping</strong>On all orders over $50</div>
+        <div class="feature-item"><strong>Free Shipping</strong>On all orders over RM200</div>
         <div class="feature-item"><strong>99.9% UV Protection</strong>Tested to collector standards</div>
         <div class="feature-item"><strong>30-Day Returns</strong>Hassle-free, no questions</div>
         <div class="feature-item"><strong>Secure Checkout</strong>SSL encrypted payments</div>
@@ -642,10 +642,10 @@
         const buyNowBtn = document.getElementById("buy-now-btn");
         const qtyValueEl = document.getElementById("qty-value");
         const cartStorageKey = "flexcase.local.cart";
-        const money = (amount, currencyCode = "USD") =>
-          new Intl.NumberFormat("en-US", {
+        const money = (amount, currencyCode = "MYR") =>
+          new Intl.NumberFormat("ms-MY", {
             style: "currency",
-            currency: currencyCode,
+            currency: currencyCode || "MYR",
           }).format(Number(amount || 0));
 
         const params = new URLSearchParams(window.location.search);
@@ -804,7 +804,7 @@
               currencyCode:
                 selectedVariant.price?.currencyCode ||
                 product.priceRange?.minVariantPrice?.currencyCode ||
-                "USD",
+                "MYR",
               image: product.featuredImage?.url || "",
             });
           }
@@ -853,7 +853,7 @@
                 currencyCode:
                   selectedVariant.price?.currencyCode ||
                   product.priceRange?.minVariantPrice?.currencyCode ||
-                  "USD",
+                  "MYR",
                 image: product.featuredImage?.url || "",
               };
               await withTimeout(

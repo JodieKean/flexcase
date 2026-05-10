@@ -237,13 +237,13 @@ function mapProduct(node) {
     priceRange: {
       minVariantPrice: {
         amount: variants[0]?.price || "0",
-        currencyCode: variants[0]?.inventoryItem?.unitCost?.currencyCode || "USD",
+        currencyCode: variants[0]?.inventoryItem?.unitCost?.currencyCode || "MYR",
       },
     },
     compareAtPriceRange: {
       minVariantPrice: {
         amount: variants[0]?.compareAtPrice || null,
-        currencyCode: variants[0]?.inventoryItem?.unitCost?.currencyCode || "USD",
+        currencyCode: variants[0]?.inventoryItem?.unitCost?.currencyCode || "MYR",
       },
     },
     variants: {
@@ -254,12 +254,12 @@ function mapProduct(node) {
         quantityAvailable: Number(variant.inventoryQuantity || 0),
         price: {
           amount: variant.price || "0",
-          currencyCode: variant.inventoryItem?.unitCost?.currencyCode || "USD",
+          currencyCode: variant.inventoryItem?.unitCost?.currencyCode || "MYR",
         },
         compareAtPrice: variant.compareAtPrice
           ? {
               amount: variant.compareAtPrice,
-              currencyCode: variant.inventoryItem?.unitCost?.currencyCode || "USD",
+              currencyCode: variant.inventoryItem?.unitCost?.currencyCode || "MYR",
             }
           : null,
       })),
@@ -1733,7 +1733,7 @@ function mapStorefrontCartToClientLines(cart) {
       variantTitle: m.title || "",
       quantity: Number(n.quantity || 0),
       price: String(price.amount ?? "0"),
-      currencyCode: price.currencyCode || "USD",
+      currencyCode: price.currencyCode || "MYR",
       image: m.product?.featuredImage?.url || "",
     });
   }

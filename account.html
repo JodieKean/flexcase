@@ -2394,10 +2394,10 @@
         return "Sign in completed, but your account session was not detected. Check FRONTEND_ORIGIN/CORS_ALLOWED_ORIGINS and cookie settings, then try again.";
       }
 
-      function money(amount, currencyCode = "USD") {
-        return new Intl.NumberFormat("en-US", {
+      function money(amount, currencyCode = "MYR") {
+        return new Intl.NumberFormat("ms-MY", {
           style: "currency",
-          currency: currencyCode || "USD",
+          currency: currencyCode || "MYR",
         }).format(Number(amount || 0));
       }
 
