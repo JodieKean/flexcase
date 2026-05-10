@@ -5,6 +5,8 @@
   const LAST_AUTH_IDENTITY_KEY = "flexcase.last.auth.identity";
   let latestReplaceSyncRequestId = 0;
   const REPLACE_SYNC_DEBOUNCE_MS = Number(window.FLEXCASE_CART_SYNC_DEBOUNCE_MS || 800);
+  /** Brief pause before GET /api/cart after replace so Shopify read-your-writes can settle. */
+  const PULL_AFTER_REPLACE_MS = 350;
   let replaceSyncTimer = null;
   let replaceSyncPendingResolvers = [];
   const SYNC_ONLY_ON_EXIT = false;
@@ -222,30 +224,26 @@
       await pullServerCartToLocal().catch(() => false);
     } else if (local.length) {
       await runReplaceSyncNow().catch(() => false);
+      await new Promise((resolve) => setTimeout(resolve, PULL_AFTER_REPLACE_MS));
+      await pullServerCartToLocal().catch(() => false);
     }
     if (currentIdentity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, currentIdentity);
     updateBadges();
   }
 
   async function flexcaseRefreshCartFromServer() {
-    // Push local first. Do not immediately GET /api/cart after a successful replace:
-    // Shopify can briefly return a stale cart (e.g. qty 1), which pullServerCartToLocal
-    // would write over the buyer's localStorage and undo checkout/product edits.
+    // Push local to Shopify, apply replace response to storage, then pull after a short delay
+    // so other devices / tabs converge without relying on a possibly immediate stale GET.
     const session = await getSessionState();
     if (!session.authenticated) return false;
-    const local = readLocalLines();
-    let flushOk = true;
-    if (local.length) {
-      flushOk = Boolean(await flexcaseFlushCartSync({ force: true }).catch(() => false));
-    }
-    if (!flushOk) {
-      updateBadges();
-      return false;
-    }
-    if (local.length) {
-      if (session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
-      updateBadges();
-      return true;
+    const hadLocal = readLocalLines().length > 0;
+    if (hadLocal) {
+      const flushOk = Boolean(await flexcaseFlushCartSync({ force: true }).catch(() => false));
+      if (!flushOk) {
+        updateBadges();
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, PULL_AFTER_REPLACE_MS));
     }
     const ok = await pullServerCartToLocal().catch(() => false);
     if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
@@ -256,19 +254,14 @@
   async function flexcaseHydrateLocalCartFromServer() {
     const session = await getSessionState();
     if (!session.authenticated) return false;
-    const local = readLocalLines();
-    let flushOk = true;
-    if (local.length) {
-      flushOk = Boolean(await flexcaseFlushCartSync({ force: true }).catch(() => false));
-    }
-    if (!flushOk) {
-      updateBadges();
-      return false;
-    }
-    if (local.length) {
-      if (session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
-      updateBadges();
-      return true;
+    const hadLocal = readLocalLines().length > 0;
+    if (hadLocal) {
+      const flushOk = Boolean(await flexcaseFlushCartSync({ force: true }).catch(() => false));
+      if (!flushOk) {
+        updateBadges();
+        return false;
+      }
+      await new Promise((resolve) => setTimeout(resolve, PULL_AFTER_REPLACE_MS));
     }
     const ok = await pullServerCartToLocal().catch(() => false);
     if (ok && session.identity) sessionStorage.setItem(LAST_AUTH_IDENTITY_KEY, session.identity);
@@ -390,7 +383,16 @@
       if (!r.ok) return false;
       // Ignore stale responses so older requests never overwrite newer edits.
       if (requestId !== latestReplaceSyncRequestId) return true;
-      // Push-only path: never rewrite local state from sync responses.
+      // Signed-in carts: treat the replace response as Shopify truth (same as a normal hosted cart).
+      let data = {};
+      try {
+        data = await r.json();
+      } catch (_) {
+        data = {};
+      }
+      if (Array.isArray(data.lines)) {
+        writeLocalLines(data.lines);
+      }
       return true;
     } catch (_) {
       return false;
