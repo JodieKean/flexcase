@@ -601,12 +601,13 @@
         font-size: 1rem;
       }
 
-      .totals .row-total.tax-row span:last-child {
-        max-width: 62%;
-        text-align: right;
+      .totals .totals-tax-note {
+        margin: 6px 0 0;
+        padding: 0;
         font-size: 0.85rem;
         line-height: 1.35;
         color: #6e6e73;
+        text-align: left;
       }
 
       .trust {
@@ -859,7 +860,7 @@
                   data-ship="express"
                 >
                   <h3>Express Shipping</h3>
-                  <p>2 business days · Guaranteed by Friday</p>
+                  <p>2–3 days</p>
                   <div class="rowline">
                     <span>Delivery</span>
                     <span class="price" id="expressShipLabel">RM30.00</span>
@@ -926,7 +927,7 @@
           <div class="totals">
             <div class="row-total"><span>Subtotal</span><span id="subtotalDisplay">RM0.00</span></div>
             <div class="row-total"><span>Shipping</span><span id="shippingDisplay">RM10.00</span></div>
-            <div class="row-total tax-row"><span>Tax</span><span id="taxDisplay">Tax is estimated on the payment page.</span></div>
+            <p class="totals-tax-note" id="taxDisplay">Tax is estimated on the payment page.</p>
             <div class="row-total grand"><span>Total</span><span id="totalDisplay">RM0.00</span></div>
           </div>
 
@@ -1224,18 +1225,46 @@
       const removeItemConfirm = document.getElementById("remove-item-confirm");
       let pendingRemoveResolve = null;
 
+      /** Merge duplicate Storefront variant lines so qty is not lost or stuck at 1. */
+      function collapseDuplicateGidLines(lines) {
+        const byVariant = new Map();
+        const ordered = [];
+        for (const line of Array.isArray(lines) ? lines : []) {
+          const id = String(line?.variantId || "").trim();
+          if (!id.startsWith("gid://shopify/ProductVariant/")) {
+            ordered.push({ kind: "other", line });
+            continue;
+          }
+          const qty = Math.max(1, Math.min(99, Number(line?.quantity || 1)));
+          if (!byVariant.has(id)) {
+            byVariant.set(id, { ...line, quantity: qty });
+            ordered.push({ kind: "gid", id });
+          } else {
+            const prev = byVariant.get(id);
+            byVariant.set(id, {
+              ...prev,
+              quantity: Math.min(99, Number(prev.quantity || 1) + qty),
+            });
+          }
+        }
+        return ordered.map((entry) =>
+          entry.kind === "other" ? entry.line : byVariant.get(entry.id)
+        );
+      }
+
       function readCartItems() {
         try {
           const raw = localStorage.getItem(cartStorageKey) || "[]";
           const parsed = JSON.parse(raw);
-          return Array.isArray(parsed) ? parsed : [];
+          return Array.isArray(parsed) ? collapseDuplicateGidLines(parsed) : [];
         } catch (_) {
           return [];
         }
       }
 
       function writeCartItems(items) {
-        localStorage.setItem(cartStorageKey, JSON.stringify(Array.isArray(items) ? items : []));
+        const cleaned = collapseDuplicateGidLines(Array.isArray(items) ? items : []);
+        localStorage.setItem(cartStorageKey, JSON.stringify(cleaned));
         try {
           window.dispatchEvent(new CustomEvent("flexcase-cart-updated"));
         } catch (_) {
@@ -1516,7 +1545,7 @@
       function buildShippingMethodText() {
         const method = shippingMethodInput.value;
         if (method === "express") {
-          return `Express Shipping (2 days)\n${money(expressRate)}`;
+          return `Express Shipping (2–3 days)\n${money(expressRate)}`;
         }
         const subtotal = getSubtotal();
         const std = getStandardShippingCost(subtotal);
@@ -1744,6 +1773,7 @@
 
       (async function initCheckoutCartInstantly() {
         window.__flexcaseSkipHydrateWrite = false;
+        writeCartItems(readCartItems());
         renderOrderLines(readCartItems());
         selectMode("guest");
         selectShipping("standard");

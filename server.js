@@ -2022,13 +2022,13 @@ async function handleCartReplace(req, res) {
     await runSerializedCustomerCartMutation(customer.id, async () => {
       const { cartId } = await ensureCustomerStorefrontCart(customer.id);
 
-      // Build exact cart state from the provided payload.
+      // Build exact cart state from the provided payload (sum qty if duplicate variant rows).
       const byVariant = new Map();
       for (const line of requestedLines) {
         const variantId = String(line.variantId || "").trim();
         if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
         const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
-        byVariant.set(variantId, qty);
+        byVariant.set(variantId, Math.min(99, (byVariant.get(variantId) || 0) + qty));
       }
 
       await removeAllStorefrontCartLines(cartId);

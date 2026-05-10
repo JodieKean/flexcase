@@ -74,16 +74,28 @@
     return `title:${fallback}`;
   }
 
+  /**
+   * One row per lineIdentity; duplicate rows (same variant) merge by summing quantity.
+   * Previously the first row won and later rows were dropped, which could freeze qty at 1
+   * if a stale duplicate appeared first in localStorage.
+   */
   function dedupeByIdentity(lines) {
-    const out = [];
-    const seen = new Set();
+    const byKey = new Map();
     for (const line of Array.isArray(lines) ? lines : []) {
       const key = lineIdentity(line);
-      if (!key || seen.has(key)) continue;
-      seen.add(key);
-      out.push(line);
+      if (!key) continue;
+      const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
+      if (!byKey.has(key)) {
+        byKey.set(key, { ...line, quantity: qty });
+      } else {
+        const prev = byKey.get(key);
+        byKey.set(key, {
+          ...prev,
+          quantity: Math.min(99, Number(prev.quantity || 1) + qty),
+        });
+      }
     }
-    return out;
+    return [...byKey.values()];
   }
 
   function mergeWithStableOrder(nextLines, previousLines, newItemsOnTop = false) {
