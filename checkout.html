@@ -255,6 +255,39 @@
         color: #8e8e93;
       }
 
+      .contact-loading {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 28px 16px 8px;
+        color: #6e6e73;
+        font-size: 0.98rem;
+      }
+
+      .contact-spinner {
+        width: 28px;
+        height: 28px;
+        border: 2px solid #e6e6eb;
+        border-top-color: #1d1d1f;
+        border-radius: 50%;
+        animation: flexcase-spin 0.7s linear infinite;
+      }
+
+      @keyframes flexcase-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .contact-logged-in-msg {
+        margin: 0 0 8px;
+        font-size: 0.98rem;
+        line-height: 1.45;
+        color: #424245;
+      }
+
       .section-title {
         margin: 18px 0 10px;
         font-size: 1.05rem;
@@ -631,63 +664,74 @@
             <!-- Step 1 -->
             <div id="step-contact">
               <h1>Contact</h1>
-              <p class="lede">Choose how you would like to check out.</p>
+              <p class="lede" id="contact-lede">Choose how you would like to check out.</p>
 
-              <div class="mode-row" role="radiogroup" aria-label="Checkout mode">
-                <div
-                  class="mode-card selected"
-                  id="mode-guest-card"
-                  tabindex="0"
-                  role="radio"
-                  aria-checked="true"
-                  data-mode="guest"
-                >
-                  <h3>Continue as Guest</h3>
-                  <p>No account needed. Quick checkout with just your email.</p>
-                </div>
-                <div
-                  class="mode-card"
-                  id="mode-user-card"
-                  tabindex="0"
-                  role="radio"
-                  aria-checked="false"
-                  data-mode="user"
-                >
-                  <h3>Sign In / Register</h3>
-                  <p>Save addresses, track orders, and manage your wishlist.</p>
-                </div>
+              <div id="contact-loading" class="contact-loading hidden" aria-live="polite" aria-busy="false">
+                <div class="contact-spinner" aria-hidden="true"></div>
+                <p class="contact-loading-text">Loading your details</p>
               </div>
-              <input type="hidden" id="checkoutMode" name="checkoutMode" value="guest" />
 
-              <div id="guest-fields">
-                <label for="email">Email address *</label>
-                <input id="email" name="email" type="email" autocomplete="email" placeholder="Enter email address" required />
+              <div id="contact-logged-in-wrap" class="hidden">
+                <p class="contact-logged-in-msg" id="contact-logged-in-msg"></p>
+              </div>
 
-                <div class="row">
-                  <div>
-                    <label for="firstName">First name *</label>
-                    <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Enter first name" required />
+              <div id="contact-standard-form">
+                <div class="mode-row" role="radiogroup" aria-label="Checkout mode">
+                  <div
+                    class="mode-card selected"
+                    id="mode-guest-card"
+                    tabindex="0"
+                    role="radio"
+                    aria-checked="true"
+                    data-mode="guest"
+                  >
+                    <h3>Continue as Guest</h3>
+                    <p>No account needed. Quick checkout with just your email.</p>
                   </div>
-                  <div>
-                    <label for="lastName">Last name</label>
-                    <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Enter last name" />
+                  <div
+                    class="mode-card"
+                    id="mode-user-card"
+                    tabindex="0"
+                    role="radio"
+                    aria-checked="false"
+                    data-mode="user"
+                  >
+                    <h3>Sign In / Register</h3>
+                    <p>Save addresses, track orders, and manage your wishlist.</p>
                   </div>
                 </div>
+                <input type="hidden" id="checkoutMode" name="checkoutMode" value="guest" />
+
+                <div id="guest-fields">
+                  <label for="email">Email address *</label>
+                  <input id="email" name="email" type="email" autocomplete="email" placeholder="Enter email address" required />
+
+                  <div class="row">
+                    <div>
+                      <label for="firstName">First name *</label>
+                      <input id="firstName" name="firstName" type="text" autocomplete="given-name" placeholder="Enter first name" required />
+                    </div>
+                    <div>
+                      <label for="lastName">Last name</label>
+                      <input id="lastName" name="lastName" type="text" autocomplete="family-name" placeholder="Enter last name" />
+                    </div>
+                  </div>
+                </div>
+
+                <div id="user-fields" class="hidden">
+                  <label for="userEmail">Email *</label>
+                  <input id="userEmail" name="userEmail" type="email" autocomplete="username" placeholder="Enter account email" />
+
+                  <label for="password">Password *</label>
+                  <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter password" />
+
+                  <p class="note">
+                    Demo only: no accounts are created. In production this would authenticate with your store backend.
+                  </p>
+                </div>
               </div>
 
-              <div id="user-fields" class="hidden">
-                <label for="userEmail">Email *</label>
-                <input id="userEmail" name="userEmail" type="email" autocomplete="username" placeholder="Enter account email" />
-
-                <label for="password">Password *</label>
-                <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter password" />
-
-                <p class="note">
-                  Demo only: no accounts are created. In production this would authenticate with your store backend.
-                </p>
-              </div>
-
-              <div class="actions">
+              <div class="actions" id="contact-actions">
                 <button type="button" class="btn-primary" id="to-shipping">Continue to Shipping →</button>
               </div>
             </div>
@@ -1006,14 +1050,6 @@
         sel.value = "";
       }
 
-      function applySessionCustomerToGuestFields() {
-        if (!checkoutSessionCustomer) return;
-        email.value = checkoutSessionCustomer.email || "";
-        firstName.value = checkoutSessionCustomer.firstName || "";
-        lastName.value = checkoutSessionCustomer.lastName || "";
-        selectMode("guest");
-      }
-
       function applyDefaultAddressToShippingForm(addr) {
         if (!addr) return;
         address1.value = String(addr.address1 || "").trim();
@@ -1025,45 +1061,6 @@
           const match = Array.from(country.options).find((o) => o.value === iso);
           if (match) country.value = iso;
         }
-      }
-
-      async function tryCheckoutSignedInFastPath() {
-        const sessionRes = await fetchCheckoutApi("/api/customer/session");
-        let sessionPayload = {};
-        try {
-          sessionPayload = await sessionRes.json();
-        } catch (_) {
-          sessionPayload = {};
-        }
-        if (!sessionRes.ok || !sessionPayload.authenticated || !sessionPayload.customer) {
-          return false;
-        }
-        const c = sessionPayload.customer;
-        checkoutSessionCustomer = {
-          firstName: String(c.firstName || "").trim(),
-          lastName: String(c.lastName || "").trim(),
-          email: String(c.email || "").trim(),
-        };
-        try {
-          await window.flexcaseFlushCartSync?.({ force: true });
-        } catch (_) {
-          /* ignore */
-        }
-        const accountRes = await fetchCheckoutApi("/api/customer/account-data");
-        let accountPayload = {};
-        try {
-          accountPayload = await accountRes.json();
-        } catch (_) {
-          accountPayload = {};
-        }
-        if (accountRes.ok && Array.isArray(accountPayload.addresses)) {
-          const defaultAddr = accountPayload.addresses.find((a) => a?.isDefault) || accountPayload.addresses[0];
-          if (defaultAddr) applyDefaultAddressToShippingForm(defaultAddr);
-        }
-        address1.setAttribute("required", "required");
-        city.setAttribute("required", "required");
-        setStep(2);
-        return true;
       }
 
       let discount = 0;
@@ -1094,6 +1091,75 @@
       const state = document.getElementById("state");
       const postal = document.getElementById("postal");
       const country = document.getElementById("country");
+
+      const CHECKOUT_BOOTSTRAP_EMAIL_KEY = "flexcase.checkout.signedInBootstrapEmail";
+      let contactSignInLoading = false;
+
+      function syncContactStep1Panels() {
+        const elLoad = document.getElementById("contact-loading");
+        const elLogged = document.getElementById("contact-logged-in-wrap");
+        const elStd = document.getElementById("contact-standard-form");
+        const elLede = document.getElementById("contact-lede");
+        const toShipping = document.getElementById("to-shipping");
+        if (!elStd || !elLede) return;
+
+        if (contactSignInLoading) {
+          elLoad?.classList.remove("hidden");
+          elLoad?.setAttribute("aria-busy", "true");
+          elLogged?.classList.add("hidden");
+          elStd.classList.add("hidden");
+          elLede.classList.add("hidden");
+          if (toShipping) {
+            toShipping.disabled = true;
+            toShipping.setAttribute("aria-busy", "true");
+          }
+          return;
+        }
+
+        elLoad?.classList.add("hidden");
+        elLoad?.setAttribute("aria-busy", "false");
+        if (toShipping) {
+          toShipping.disabled = false;
+          toShipping.removeAttribute("aria-busy");
+        }
+
+        if (checkoutSessionCustomer) {
+          elStd.classList.add("hidden");
+          elLogged?.classList.remove("hidden");
+          elLede.classList.add("hidden");
+          const msg = document.getElementById("contact-logged-in-msg");
+          if (msg) {
+            msg.textContent = `You're logged in as ${checkoutSessionCustomer.email}`;
+          }
+        } else {
+          elLogged?.classList.add("hidden");
+          elStd.classList.remove("hidden");
+          elLede.classList.remove("hidden");
+          elLede.textContent = "Choose how you would like to check out.";
+        }
+      }
+
+      async function hydrateSignedInShippingFromAccount() {
+        try {
+          await window.flexcaseFlushCartSync?.({ force: true });
+        } catch (_) {
+          /* ignore */
+        }
+        const accountRes = await fetchCheckoutApi("/api/customer/account-data");
+        let accountPayload = {};
+        try {
+          accountPayload = await accountRes.json();
+        } catch (_) {
+          accountPayload = {};
+        }
+        if (accountRes.ok && Array.isArray(accountPayload.addresses)) {
+          const defaultAddr =
+            accountPayload.addresses.find((a) => a?.isDefault) || accountPayload.addresses[0];
+          if (defaultAddr) applyDefaultAddressToShippingForm(defaultAddr);
+        }
+        address1.setAttribute("required", "required");
+        city.setAttribute("required", "required");
+      }
 
       const shippingMethodInput = document.getElementById("shippingMethod");
       const shipStandardCard = document.getElementById("ship-standard-card");
@@ -1264,8 +1330,8 @@
             dot.textContent = n < step ? "✓" : String(n);
           }
         });
-        if (step === 1 && checkoutSessionCustomer) {
-          applySessionCustomerToGuestFields();
+        if (step === 1) {
+          syncContactStep1Panels();
         }
       }
 
@@ -1571,13 +1637,58 @@
           ]);
         }
 
-        let skippedContact = false;
+        const sessionRes = await fetchCheckoutApi("/api/customer/session");
+        let sessionPayload = {};
         try {
-          skippedContact = await tryCheckoutSignedInFastPath();
+          sessionPayload = await sessionRes.json();
         } catch (_) {
-          skippedContact = false;
+          sessionPayload = {};
         }
-        if (!skippedContact) setStep(1);
+
+        const isAuthed =
+          sessionRes.ok && sessionPayload.authenticated && Boolean(sessionPayload.customer);
+
+        if (!isAuthed) {
+          checkoutSessionCustomer = null;
+          contactSignInLoading = false;
+          setStep(1);
+        } else {
+          const c = sessionPayload.customer;
+          checkoutSessionCustomer = {
+            firstName: String(c.firstName || "").trim(),
+            lastName: String(c.lastName || "").trim(),
+            email: String(c.email || "").trim(),
+          };
+          const emailLower = String(checkoutSessionCustomer.email || "").trim().toLowerCase();
+          const bootEmail = sessionStorage.getItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY) || "";
+          const alreadyBootstrapped = Boolean(emailLower && bootEmail === emailLower);
+
+          if (alreadyBootstrapped) {
+            contactSignInLoading = false;
+            try {
+              await hydrateSignedInShippingFromAccount();
+            } catch (_) {
+              /* ignore */
+            }
+            setStep(2);
+          } else {
+            contactSignInLoading = true;
+            setStep(1);
+            try {
+              await hydrateSignedInShippingFromAccount();
+            } catch (_) {
+              /* ignore */
+            }
+            try {
+              sessionStorage.setItem(CHECKOUT_BOOTSTRAP_EMAIL_KEY, emailLower);
+            } catch (_) {
+              /* ignore */
+            }
+            contactSignInLoading = false;
+            setStep(2);
+            syncContactStep1Panels();
+          }
+        }
 
         if (!checkoutCartDirty) {
           patchRenderedQuantities(readCartItems());
