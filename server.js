@@ -2074,13 +2074,30 @@ async function replaceCustomerCartLinesFromPayload(cartId, requestedLines) {
   if (addErrs.length) {
     throw new Error(addErrs.map((e) => e.message).join(", "));
   }
-  const cartAfter = addData?.cartLinesAdd?.cart;
-  const tq = Number(cartAfter?.totalQuantity ?? 0);
-  if (tq < 1) {
-    throw new Error(
-      "Shopify accepted the request but the cart has no items (check product availability and variant IDs)."
-    );
+
+  function cartHasBuyableLines(cart) {
+    if (!cart) return false;
+    if (Number(cart.totalQuantity ?? 0) > 0) return true;
+    for (const edge of cart.lines?.edges || []) {
+      if (Number(edge?.node?.quantity ?? 0) > 0) return true;
+    }
+    return false;
   }
+
+  const cartAfter = addData?.cartLinesAdd?.cart;
+  if (cartHasBuyableLines(cartAfter)) {
+    return;
+  }
+
+  const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+  const cartLive = refreshed?.cart;
+  if (cartHasBuyableLines(cartLive)) {
+    return;
+  }
+
+  throw new Error(
+    "Shopify did not keep any cart lines after add (check product is published to Online Store, variant is available for sale, and variant IDs match this shop)."
+  );
 }
 
 async function handleCartReplace(req, res) {
