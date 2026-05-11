@@ -2361,11 +2361,13 @@
             const ok = await loadCustomerAccountData();
             return ok;
           }
-          clearClientSessionState();
+          // Guests visiting the sign-in screen must keep their local cart.
+          // Cart only clears via the explicit logout flow or an order-completion signal.
+          clearClientSessionState({ clearCart: false });
           void clearServerSessionCookieSilently();
           return false;
         } catch (_) {
-          clearClientSessionState();
+          clearClientSessionState({ clearCart: false });
           return false;
         }
       }
