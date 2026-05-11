@@ -1289,6 +1289,33 @@
       const removeItemConfirm = document.getElementById("remove-item-confirm");
       let pendingRemoveResolve = null;
 
+      /**
+       * True only for URLs that hand off into Shopify checkout (not browse /cart, not arbitrary sites).
+       * Note: A completed *order* does not exist yet — payment happens on Shopify after redirect.
+       * We gate local cart clear on a credible checkout session URL from our API.
+       */
+      function isTrustedShopifyCheckoutHandoffUrl(raw) {
+        try {
+          const u = new URL(String(raw || "").trim());
+          if (u.protocol !== "https:") return false;
+          const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+          const low = path.toLowerCase();
+          if (low.includes("/cart/c/")) return true;
+          const segs = path.split("/").filter(Boolean);
+          const ci = segs.findIndex((s) => s.toLowerCase() === "checkouts");
+          if (ci >= 0 && segs.length >= ci + 3) return true;
+          if (
+            /^\/cart\/[\w.:,-]+$/i.test(path) &&
+            u.hostname.toLowerCase().endsWith(".myshopify.com")
+          ) {
+            return true;
+          }
+          return false;
+        } catch (_) {
+          return false;
+        }
+      }
+
       /** Same GID shape Storefront API expects (numeric-only IDs from older carts must coerce). */
       function normalizeStorefrontVariantGid(raw) {
         const s = String(raw ?? "").trim();
@@ -1794,7 +1821,7 @@
 
       // Back/forward cache: leaving for Shopify then pressing Back restores the tab in a frozen
       // state (overlay still visible, submit locked). Recover Review step and dismiss the spinner.
-      window.addEventListener("pageshow", (ev) => {
+      window.addEventListener("pageshow", async (ev) => {
         if (!ev.persisted) return;
         setCheckoutRedirectLoading(false);
         flexcasePlaceOrderInFlight = false;
@@ -1804,6 +1831,10 @@
           placeBtnRecover.removeAttribute("aria-busy");
         }
         setStep(3);
+        await window.flexcaseReconcileAfterShopifyCheckoutReturn?.().catch(() => {});
+        writeCartItems(readCartItems());
+        renderOrderLines(readCartItems());
+        recalcTotals();
       });
 
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
@@ -1848,26 +1879,17 @@
             return;
           }
           const checkoutUrl = String(data.checkoutUrl || "").trim();
-          try {
-            const u = new URL(checkoutUrl);
-            const p = (u.pathname || "/").replace(/\/+$/, "") || "/";
-            const low = p.toLowerCase();
-            const okCheckout = low.includes("/checkouts/") || low.includes("/cart/c/");
-            const okCartPermalink = /^\/cart\/[\w.:,-]+$/i.test(p);
-            if (p === "/" || (!okCheckout && !okCartPermalink)) {
-              alert(
-                "Shopify returned an invalid link (not checkout or cart). Check shipping/country and that checkout is enabled, then try again."
-              );
-              return;
-            }
-          } catch (_) {
-            alert("Checkout could not be started. Try again.");
+          if (!isTrustedShopifyCheckoutHandoffUrl(checkoutUrl)) {
+            alert(
+              "Shopify returned an invalid checkout link. Check shipping/country and that checkout is enabled, then try again."
+            );
             return;
           }
           // Do not call flexcaseClearServerCart() here: Shopify checkout is bound to the same
           // headless Storefront cart; clearing it before navigation invalidates the session (skeleton → home).
-          localStorage.removeItem(cartStorageKey);
-          window.flexcaseUpdateCartBadges?.();
+          // Keep the browser cart until the buyer finishes on Shopify or returns: guests keep localStorage;
+          // signed-in users get local cleared when /api/cart is empty after handoff (see flexcase-cart-sync).
+          window.flexcaseMarkShopifyCheckoutHandoff?.();
           navigatingToCheckout = true;
           window.location.assign(checkoutUrl);
         } catch (_) {

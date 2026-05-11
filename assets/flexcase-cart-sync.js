@@ -3,6 +3,8 @@
   const MERGED_KEY = "flexcase_guest_cart_merged";
   const LAST_PATH_KEY = "flexcase.last.path";
   const LAST_AUTH_IDENTITY_KEY = "flexcase.last.auth.identity";
+  /** Set when redirecting to Shopify checkout; cleared on next reconcile (load or bfcache pageshow). */
+  const CHECKOUT_HANDOFF_KEY = "flexcase.checkout_handoff_pending";
   let latestReplaceSyncRequestId = 0;
   const REPLACE_SYNC_DEBOUNCE_MS = Number(window.FLEXCASE_CART_SYNC_DEBOUNCE_MS || 800);
   /** Brief pause before GET /api/cart after replace so Shopify read-your-writes can settle. */
@@ -185,6 +187,44 @@
     const lines = Array.isArray(j?.lines) ? j.lines : [];
     if (lines.length) writeLocalLines(lines);
     return true;
+  }
+
+  function flexcaseMarkShopifyCheckoutHandoff() {
+    try {
+      sessionStorage.setItem(CHECKOUT_HANDOFF_KEY, "1");
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  /**
+   * After returning from Shopify (or any navigation back), if the buyer had left for checkout:
+   * signed-in users sync local from server — empty server clears local (order completed or cart cleared);
+   * non-empty server restores lines (abandoned checkout). Guests keep localStorage (no /api/cart).
+   */
+  async function flexcaseReconcileAfterShopifyCheckoutReturn() {
+    let pending = false;
+    try {
+      pending = sessionStorage.getItem(CHECKOUT_HANDOFF_KEY) === "1";
+      if (!pending) return;
+      sessionStorage.removeItem(CHECKOUT_HANDOFF_KEY);
+    } catch (_) {
+      return;
+    }
+    const session = await getSessionState();
+    if (!session.authenticated) return;
+    if (window.__flexcaseSkipHydrateWrite) return;
+    const r = await fetchApi("/api/cart");
+    if (!r.ok) return;
+    const j = await r.json().catch(() => ({}));
+    const lines = Array.isArray(j?.lines) ? j.lines : [];
+    const totalQ = Number(j?.totalQuantity || 0);
+    if (lines.length === 0 && totalQ === 0) {
+      writeLocalLines([]);
+    } else if (lines.length) {
+      writeLocalLines(lines);
+    }
+    updateBadges();
   }
 
   async function pullServerCartToLocal() {
@@ -456,9 +496,12 @@
   window.flexcasePushLocalCartToServer = flexcasePushLocalCartToServer;
   window.flexcaseFlushCartSync = flexcaseFlushCartSync;
   window.flexcaseOnLogoutClearMergeFlag = flexcaseOnLogoutClearMergeFlag;
+  window.flexcaseMarkShopifyCheckoutHandoff = flexcaseMarkShopifyCheckoutHandoff;
+  window.flexcaseReconcileAfterShopifyCheckoutReturn = flexcaseReconcileAfterShopifyCheckoutReturn;
 
-  function boot() {
+  async function boot() {
     updateBadges();
+    await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
     const path = String(window.location.pathname || "").toLowerCase();
     const isCheckoutPage = path.endsWith("/checkout.html") || path === "/checkout.html";
     // Checkout runs local-first to avoid background hydration overwriting in-progress edits.
@@ -479,9 +522,14 @@
     });
   }
 
+  window.addEventListener("pageshow", (ev) => {
+    if (!ev.persisted) return;
+    void flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
+  });
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", boot);
+    document.addEventListener("DOMContentLoaded", () => void boot().catch(() => {}));
   } else {
-    boot();
+    void boot().catch(() => {});
   }
 })();
