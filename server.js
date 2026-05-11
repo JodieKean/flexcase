@@ -2356,13 +2356,10 @@ async function handleStorefrontCartStatus(req, res) {
       json(res, 400, { error: "Invalid cart id." });
       return;
     }
-    let cart = null;
-    try {
-      const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: rawId });
-      cart = data?.cart || null;
-    } catch (_) {
-      cart = null;
-    }
+    // Bubble up errors so the client treats it as "unknown" and does not clear the cart.
+    // A successful response with cart=null is Shopify's reliable "cart was completed" signal.
+    const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: rawId });
+    const cart = data?.cart || null;
     if (!cart) {
       json(res, 200, { exists: false, totalQuantity: 0, completed: true });
       return;
@@ -2371,10 +2368,10 @@ async function handleStorefrontCartStatus(req, res) {
     json(res, 200, {
       exists: true,
       totalQuantity,
-      completed: totalQuantity === 0,
+      completed: false,
     });
   } catch (error) {
-    json(res, 500, { error: error.message });
+    json(res, 502, { error: error.message || "Storefront cart status unavailable." });
   }
 }
 

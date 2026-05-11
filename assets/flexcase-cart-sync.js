@@ -193,6 +193,15 @@
     return true;
   }
 
+  /** Canonical signature of the current local cart so we can detect post-handoff edits. */
+  function computeLocalCartSignature() {
+    try {
+      return JSON.stringify(readLocalLines());
+    } catch (_) {
+      return "";
+    }
+  }
+
   function flexcaseMarkShopifyCheckoutHandoff(cartId) {
     try {
       sessionStorage.setItem(CHECKOUT_HANDOFF_KEY, "1");
@@ -204,7 +213,7 @@
       try {
         localStorage.setItem(
           LAST_CHECKOUT_CART_KEY,
-          JSON.stringify({ cartId: trimmed, ts: Date.now() })
+          JSON.stringify({ cartId: trimmed, ts: Date.now(), signature: computeLocalCartSignature() })
         );
       } catch (_) {
         /* ignore */
@@ -219,8 +228,9 @@
       const parsed = JSON.parse(raw);
       const cartId = String(parsed?.cartId || "").trim();
       const ts = Number(parsed?.ts || 0);
+      const signature = typeof parsed?.signature === "string" ? parsed.signature : "";
       if (!cartId.startsWith("gid://shopify/Cart/")) return null;
-      return { cartId, ts: Number.isFinite(ts) ? ts : 0 };
+      return { cartId, ts: Number.isFinite(ts) ? ts : 0, signature };
     } catch (_) {
       return null;
     }
@@ -244,6 +254,13 @@
     const tracker = readLastCheckoutCartTracker();
     if (!tracker) return false;
     if (tracker.ts && Date.now() - tracker.ts > LAST_CHECKOUT_CART_TTL_MS) {
+      clearLastCheckoutCartTracker();
+      return false;
+    }
+    // If the buyer modified the local cart after handing off (e.g. added new items), the tracker
+    // is stale: do NOT poll and do NOT clear. This protects against an old/expired Shopify cart
+    // returning "completed" and wiping fresh items.
+    if (tracker.signature && tracker.signature !== computeLocalCartSignature()) {
       clearLastCheckoutCartTracker();
       return false;
     }
