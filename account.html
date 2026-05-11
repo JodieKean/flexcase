@@ -2185,13 +2185,15 @@
         sessionStorage.removeItem(authStorageKey);
       }
 
-      function clearBrowserFlexcaseStorage() {
+      function clearBrowserFlexcaseStorage(preserveKeys) {
+        const preserveSet = new Set(Array.isArray(preserveKeys) ? preserveKeys : []);
         const purge = (store) => {
           try {
             const toDelete = [];
             for (let i = 0; i < store.length; i += 1) {
               const key = String(store.key(i) || "");
               if (!key) continue;
+              if (preserveSet.has(key)) continue;
               if (key.startsWith("flexcase.") || key.startsWith("flexcase_") || key === "checkout-demo-order") {
                 toDelete.push(key);
               }
@@ -2220,10 +2222,15 @@
         const clearCart = options?.clearCart !== false;
         // Remove known Flexcase client-side session/cart caches.
         clearAuthSession();
-        clearBrowserFlexcaseStorage();
+        // When preserving the cart, also keep cart-adjacent state (checkout handoff tracker,
+        // guest-merge flag) so an in-progress flow isn't silently broken.
+        const preserveKeys = clearCart
+          ? []
+          : [cartStorageKey, "flexcase.last_checkout_cart", "flexcase.checkout_handoff_pending", cartMergedKey];
+        clearBrowserFlexcaseStorage(preserveKeys);
         if (clearCart) localStorage.removeItem(cartStorageKey);
-        sessionStorage.removeItem(cartMergedKey);
-        window.flexcaseOnLogoutClearMergeFlag?.();
+        if (clearCart) sessionStorage.removeItem(cartMergedKey);
+        if (clearCart) window.flexcaseOnLogoutClearMergeFlag?.();
 
         // Reset in-memory view model state.
         latestShopifyCustomerProfile = { firstName: "", lastName: "", phone: "" };
