@@ -2313,7 +2313,7 @@
       function setLoggedOutUI(message = "You are currently signed out.", isError = false) {
         accountApp.classList.add("auth-hidden");
         authGate.classList.remove("auth-hidden");
-        switchAuthTab("signin");
+        switchAuthTab(requestedAuthMode === "signup" ? "signup" : "signin");
         if (headerOrderCountEl) headerOrderCountEl.textContent = "0 orders";
         setGateMessage(message, isError);
         hideAuthRedirectOverlay();
@@ -2814,6 +2814,8 @@
       const authUrl = new URL(window.location.href);
       const authStatus = authUrl.searchParams.get("auth");
       const authMessage = authUrl.searchParams.get("message");
+      const requestedAuthMode =
+        authUrl.searchParams.get("auth_mode") === "signup" ? "signup" : null;
       let pendingGateMessage = "You are currently signed out.";
       let pendingGateError = false;
       if (authStatus === "error" && authMessage) {
@@ -2823,9 +2825,10 @@
         pendingGateMessage = "Completing sign in...";
         pendingGateError = false;
       }
-      if (authStatus) {
+      if (authStatus || requestedAuthMode) {
         authUrl.searchParams.delete("auth");
         authUrl.searchParams.delete("message");
+        authUrl.searchParams.delete("auth_mode");
         window.history.replaceState({}, "", authUrl.pathname + authUrl.search + authUrl.hash);
       }
 

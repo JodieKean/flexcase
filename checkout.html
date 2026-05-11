@@ -286,21 +286,6 @@
         color: #8e8e93;
       }
 
-      .checkout-signin-keep {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        margin: 8px 0 12px;
-        font-size: 0.9rem;
-        color: #1d1d1f;
-        cursor: pointer;
-      }
-
-      .checkout-signin-keep input {
-        margin: 0;
-        cursor: pointer;
-      }
-
       .checkout-signin-message {
         margin: 6px 0 10px;
         min-height: 1.1em;
@@ -851,11 +836,6 @@
                     placeholder="Enter your email"
                   />
 
-                  <label class="checkout-signin-keep">
-                    <input id="checkoutSignInKeep" type="checkbox" />
-                    <span>Keep me logged in</span>
-                  </label>
-
                   <p id="checkoutSignInMessage" class="checkout-signin-message" role="status" aria-live="polite"></p>
 
                   <div class="actions" id="user-fields-actions">
@@ -865,7 +845,7 @@
                   </div>
 
                   <p class="note checkout-signin-helper">
-                    Don't have an account yet? <a href="account.html">Create one on your account page</a>.
+                    Don't have an account yet? <a href="account.html?auth_mode=signup">Create one now</a>.
                   </p>
                 </div>
               </div>
@@ -1236,7 +1216,6 @@
       const firstName = document.getElementById("firstName");
       const lastName = document.getElementById("lastName");
       const checkoutSignInEmailInput = document.getElementById("checkoutSignInEmail");
-      const checkoutSignInKeepInput = document.getElementById("checkoutSignInKeep");
       const checkoutSignInSubmitBtn = document.getElementById("checkoutSignInSubmit");
       const checkoutSignInMessageEl = document.getElementById("checkoutSignInMessage");
       const contactActions = document.getElementById("contact-actions");
@@ -1934,7 +1913,6 @@
       async function handleCheckoutSignInSubmit() {
         if (checkoutOauthInFlight) return;
         const rawEmail = String(checkoutSignInEmailInput?.value || "").trim().toLowerCase();
-        const keepLoggedIn = !!checkoutSignInKeepInput?.checked;
         if (!rawEmail) {
           setCheckoutSignInMessage("Enter your email to continue.", true);
           checkoutSignInEmailInput?.focus();
@@ -1972,7 +1950,7 @@
           return;
         }
         setCheckoutSignInMessage("Redirecting you to sign in…", false);
-        void beginCheckoutCustomerOauth("signin", keepLoggedIn, rawEmail);
+        void beginCheckoutCustomerOauth("signin", false, rawEmail);
       }
 
       if (checkoutSignInSubmitBtn) {
