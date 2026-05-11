@@ -1791,6 +1791,21 @@
       }
 
       let flexcasePlaceOrderInFlight = false;
+
+      // Back/forward cache: leaving for Shopify then pressing Back restores the tab in a frozen
+      // state (overlay still visible, submit locked). Recover Review step and dismiss the spinner.
+      window.addEventListener("pageshow", (ev) => {
+        if (!ev.persisted) return;
+        setCheckoutRedirectLoading(false);
+        flexcasePlaceOrderInFlight = false;
+        const placeBtnRecover = document.getElementById("place-order");
+        if (placeBtnRecover) {
+          placeBtnRecover.disabled = false;
+          placeBtnRecover.removeAttribute("aria-busy");
+        }
+        setStep(3);
+      });
+
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
         e.preventDefault();
         if (flexcasePlaceOrderInFlight) return;
