@@ -639,6 +639,55 @@
           grid-template-columns: 1fr;
         }
       }
+
+      /* Full-screen loading while creating Shopify checkout session */
+      .checkout-redirect-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 10000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(245, 245, 247, 0.92);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+      }
+
+      .checkout-redirect-card {
+        max-width: 340px;
+        text-align: center;
+        padding: 32px 28px;
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 18px;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+      }
+
+      .checkout-redirect-spinner {
+        width: 36px;
+        height: 36px;
+        margin: 0 auto 18px;
+        border: 3px solid #e6e6eb;
+        border-top-color: #1d1d1f;
+        border-radius: 50%;
+        animation: flexcase-spin 0.75s linear infinite;
+      }
+
+      .checkout-redirect-title {
+        margin: 0 0 8px;
+        font-size: 1.05rem;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: #1d1d1f;
+      }
+
+      .checkout-redirect-sub {
+        margin: 0;
+        font-size: 0.9rem;
+        line-height: 1.4;
+        color: #6e6e73;
+      }
     </style>
   </head>
   <body>
@@ -662,6 +711,21 @@
         </div>
       </div>
     </nav>
+
+    <div
+      id="checkout-redirect-overlay"
+      class="checkout-redirect-overlay hidden"
+      aria-hidden="true"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="checkout-redirect-title"
+    >
+      <div class="checkout-redirect-card">
+        <div class="checkout-redirect-spinner" aria-hidden="true"></div>
+        <p id="checkout-redirect-title" class="checkout-redirect-title">Sending you to Shopify checkout…</p>
+        <p class="checkout-redirect-sub">This usually takes a few seconds.</p>
+      </div>
+    </div>
 
     <main>
       <p class="back-link"><a href="index.html">← Back to Add More</a></p>
@@ -1712,6 +1776,20 @@
           .then(() => adjustLineQuantity(variantId, plusBtn ? 1 : -1));
       });
 
+      const checkoutRedirectOverlay = document.getElementById("checkout-redirect-overlay");
+      function setCheckoutRedirectLoading(on) {
+        if (!checkoutRedirectOverlay) return;
+        if (on) {
+          checkoutRedirectOverlay.classList.remove("hidden");
+          checkoutRedirectOverlay.setAttribute("aria-hidden", "false");
+          document.documentElement.style.overflow = "hidden";
+        } else {
+          checkoutRedirectOverlay.classList.add("hidden");
+          checkoutRedirectOverlay.setAttribute("aria-hidden", "true");
+          document.documentElement.style.overflow = "";
+        }
+      }
+
       let flexcasePlaceOrderInFlight = false;
       document.getElementById("checkout-form").addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -1735,6 +1813,7 @@
         }
         placeBtn.disabled = true;
         placeBtn.setAttribute("aria-busy", "true");
+        setCheckoutRedirectLoading(true);
         let navigatingToCheckout = false;
         try {
           await window.flexcaseFlushCartSync?.({ force: true });
@@ -1780,6 +1859,7 @@
           alert("Checkout could not be started. Try again.");
         } finally {
           if (!navigatingToCheckout) {
+            setCheckoutRedirectLoading(false);
             flexcasePlaceOrderInFlight = false;
             placeBtn.disabled = false;
             placeBtn.removeAttribute("aria-busy");
