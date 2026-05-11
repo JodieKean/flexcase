@@ -286,6 +286,42 @@
         color: #8e8e93;
       }
 
+      .checkout-signin-keep {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 0 12px;
+        font-size: 0.9rem;
+        color: #1d1d1f;
+        cursor: pointer;
+      }
+
+      .checkout-signin-keep input {
+        margin: 0;
+        cursor: pointer;
+      }
+
+      .checkout-signin-message {
+        margin: 6px 0 10px;
+        min-height: 1.1em;
+        font-size: 0.88rem;
+        color: #6e6e73;
+      }
+
+      .checkout-signin-message.error {
+        color: #c0392b;
+      }
+
+      .checkout-signin-helper {
+        margin-top: 12px;
+      }
+
+      .checkout-signin-helper a {
+        color: #1d1d1f;
+        font-weight: 600;
+        text-decoration: underline;
+      }
+
       .contact-loading {
         display: flex;
         flex-direction: column;
@@ -806,14 +842,31 @@
                 </div>
 
                 <div id="user-fields" class="hidden">
-                  <p class="note" id="user-fields-lede">
-                    Sign in with your Flex Case account to use your saved addresses and track this order.
-                  </p>
+                  <label for="checkoutSignInEmail">Email *</label>
+                  <input
+                    id="checkoutSignInEmail"
+                    name="checkoutSignInEmail"
+                    type="email"
+                    autocomplete="email"
+                    placeholder="Enter your email"
+                  />
+
+                  <label class="checkout-signin-keep">
+                    <input id="checkoutSignInKeep" type="checkbox" />
+                    <span>Keep me logged in</span>
+                  </label>
+
+                  <p id="checkoutSignInMessage" class="checkout-signin-message" role="status" aria-live="polite"></p>
+
                   <div class="actions" id="user-fields-actions">
-                    <button type="button" class="btn-primary" id="user-sign-in-btn">
-                      Sign in with Flex Case →
+                    <button type="button" class="btn-primary" id="checkoutSignInSubmit">
+                      Continue with email
                     </button>
                   </div>
+
+                  <p class="note checkout-signin-helper">
+                    Don't have an account yet? <a href="account.html">Create one on your account page</a>.
+                  </p>
                 </div>
               </div>
 
@@ -1182,7 +1235,10 @@
       const email = document.getElementById("email");
       const firstName = document.getElementById("firstName");
       const lastName = document.getElementById("lastName");
-      const userSignInBtn = document.getElementById("user-sign-in-btn");
+      const checkoutSignInEmailInput = document.getElementById("checkoutSignInEmail");
+      const checkoutSignInKeepInput = document.getElementById("checkoutSignInKeep");
+      const checkoutSignInSubmitBtn = document.getElementById("checkoutSignInSubmit");
+      const checkoutSignInMessageEl = document.getElementById("checkoutSignInMessage");
       const contactActions = document.getElementById("contact-actions");
 
       const address1 = document.getElementById("address1");
@@ -1822,14 +1878,27 @@
         }
       }
 
+      function setCheckoutSignInMessage(text, isError) {
+        if (!checkoutSignInMessageEl) return;
+        checkoutSignInMessageEl.textContent = text || "";
+        checkoutSignInMessageEl.classList.toggle("error", !!isError && !!text);
+      }
+
+      function setCheckoutSignInBusy(busy) {
+        if (!checkoutSignInSubmitBtn) return;
+        checkoutSignInSubmitBtn.disabled = !!busy;
+        if (busy) {
+          checkoutSignInSubmitBtn.setAttribute("aria-busy", "true");
+        } else {
+          checkoutSignInSubmitBtn.removeAttribute("aria-busy");
+        }
+      }
+
       let checkoutOauthInFlight = false;
-      async function beginCheckoutCustomerOauth(mode = "signin", keepLoggedIn = true) {
+      async function beginCheckoutCustomerOauth(mode = "signin", keepLoggedIn = true, email = "") {
         if (checkoutOauthInFlight) return;
         checkoutOauthInFlight = true;
-        if (userSignInBtn) {
-          userSignInBtn.disabled = true;
-          userSignInBtn.setAttribute("aria-busy", "true");
-        }
+        setCheckoutSignInBusy(true);
         try {
           try {
             await window.flexcaseFlushCartSync?.({ force: true });
@@ -1840,6 +1909,10 @@
           const params = new URLSearchParams();
           params.set("mode", mode);
           params.set("keep", keepLoggedIn ? "1" : "0");
+          const normalizedEmail = String(email || "").trim().toLowerCase();
+          if (normalizedEmail) params.set("email", normalizedEmail);
+          // Bring the customer back to the checkout page (preserving step) after OAuth.
+          params.set("return_to", `${window.location.origin}/checkout.html`);
           const target = `${CHECKOUT_API_BASE}/api/customer/oauth/start?${params.toString()}`;
           setCheckoutRedirectMessage(
             "Sending you to sign in…",
@@ -1847,19 +1920,78 @@
           );
           setCheckoutRedirectLoading(true);
           window.setTimeout(() => window.location.assign(target), 120);
-        } catch (_) {
+        } catch (error) {
           checkoutOauthInFlight = false;
-          if (userSignInBtn) {
-            userSignInBtn.disabled = false;
-            userSignInBtn.removeAttribute("aria-busy");
-          }
+          setCheckoutSignInBusy(false);
           setCheckoutRedirectLoading(false);
+          setCheckoutSignInMessage(
+            error?.message || "Unable to start sign in. Please try again.",
+            true
+          );
         }
       }
 
-      if (userSignInBtn) {
-        userSignInBtn.addEventListener("click", () => {
-          void beginCheckoutCustomerOauth("signin", true);
+      async function handleCheckoutSignInSubmit() {
+        if (checkoutOauthInFlight) return;
+        const rawEmail = String(checkoutSignInEmailInput?.value || "").trim().toLowerCase();
+        const keepLoggedIn = !!checkoutSignInKeepInput?.checked;
+        if (!rawEmail) {
+          setCheckoutSignInMessage("Enter your email to continue.", true);
+          checkoutSignInEmailInput?.focus();
+          return;
+        }
+        setCheckoutSignInMessage("Checking your account…", false);
+        setCheckoutSignInBusy(true);
+        try {
+          const response = await fetchCheckoutApi(
+            `/api/customer/check-email?email=${encodeURIComponent(rawEmail)}`,
+            { credentials: "include" }
+          );
+          const raw = await response.text();
+          let payload = {};
+          try {
+            payload = raw ? JSON.parse(raw) : {};
+          } catch (_) {
+            payload = {};
+          }
+          if (!response.ok) {
+            throw new Error(payload.error || "Unable to verify email right now.");
+          }
+          if (!payload.exists) {
+            setCheckoutSignInMessage("This email has not been registered.", true);
+            setCheckoutSignInBusy(false);
+            return;
+          }
+        } catch (error) {
+          const message =
+            error?.message === "Failed to fetch"
+              ? "Unable to reach authentication server. Please try again in a moment."
+              : error?.message || "Unable to verify email.";
+          setCheckoutSignInMessage(message, true);
+          setCheckoutSignInBusy(false);
+          return;
+        }
+        setCheckoutSignInMessage("Redirecting you to sign in…", false);
+        void beginCheckoutCustomerOauth("signin", keepLoggedIn, rawEmail);
+      }
+
+      if (checkoutSignInSubmitBtn) {
+        checkoutSignInSubmitBtn.addEventListener("click", (e) => {
+          e.preventDefault();
+          void handleCheckoutSignInSubmit();
+        });
+      }
+      if (checkoutSignInEmailInput) {
+        checkoutSignInEmailInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            void handleCheckoutSignInSubmit();
+          }
+        });
+        checkoutSignInEmailInput.addEventListener("input", () => {
+          if (checkoutSignInMessageEl?.classList.contains("error")) {
+            setCheckoutSignInMessage("", false);
+          }
         });
       }
 
@@ -1872,10 +2004,8 @@
         setCheckoutRedirectLoading(false);
         flexcasePlaceOrderInFlight = false;
         checkoutOauthInFlight = false;
-        if (userSignInBtn) {
-          userSignInBtn.disabled = false;
-          userSignInBtn.removeAttribute("aria-busy");
-        }
+        setCheckoutSignInBusy(false);
+        setCheckoutSignInMessage("", false);
         const placeBtnRecover = document.getElementById("place-order");
         if (placeBtnRecover) {
           placeBtnRecover.disabled = false;

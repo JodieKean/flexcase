@@ -362,13 +362,14 @@ function getCustomerSession(req) {
   return { session };
 }
 
-function createOAuthState(mode, keep, expectedEmail = "") {
+function createOAuthState(mode, keep, expectedEmail = "", returnTo = "") {
   return encodeSignedPayload({
     mode,
     keep,
     expectedEmail: String(expectedEmail || "")
       .trim()
       .toLowerCase(),
+    returnTo: String(returnTo || ""),
     expiresAt: Date.now() + 10 * 60_000,
     nonce: crypto.randomBytes(8).toString("hex"),
   });
@@ -384,8 +385,37 @@ function parseOAuthState(state) {
     expectedEmail: String(payload.expectedEmail || "")
       .trim()
       .toLowerCase(),
+    returnTo: String(payload.returnTo || ""),
     expiresAt: Number(payload.expiresAt) || 0,
   };
+}
+
+// Whitelist post-OAuth return targets to the configured frontend origin to avoid
+// open-redirect issues. Accepts absolute URLs or paths; returns "" when invalid.
+function sanitizeOAuthReturnTo(input) {
+  try {
+    const raw = String(input || "").trim();
+    if (!raw) return "";
+    const candidate = new URL(raw, FRONTEND_ORIGIN);
+    const frontend = new URL(FRONTEND_ORIGIN);
+    if (candidate.origin !== frontend.origin) return "";
+    return `${candidate.origin}${candidate.pathname}${candidate.search}`;
+  } catch (_) {
+    return "";
+  }
+}
+
+function appendOAuthCallbackParams(base, params) {
+  try {
+    const url = new URL(base);
+    Object.entries(params || {}).forEach(([key, value]) => {
+      if (value === undefined || value === null) return;
+      url.searchParams.set(key, String(value));
+    });
+    return url.toString();
+  } catch (_) {
+    return base;
+  }
 }
 
 function applyCors(req, res) {
@@ -552,6 +582,7 @@ function handleCustomerOauthStart(req, res) {
   const emailHint = String(reqUrl.searchParams.get("email") || "")
     .trim()
     .toLowerCase();
+  const returnTo = sanitizeOAuthReturnTo(reqUrl.searchParams.get("return_to"));
 
   // Force a Shopify-side logout once before each new OAuth start so account selection
   // starts from a clean state instead of silently reusing prior Shopify sessions.
@@ -563,6 +594,7 @@ function handleCustomerOauthStart(req, res) {
     resumeUrl.searchParams.set("keep", keep ? "1" : "0");
     if (forceSelect) resumeUrl.searchParams.set("force_select", "1");
     if (emailHint) resumeUrl.searchParams.set("email", emailHint);
+    if (returnTo) resumeUrl.searchParams.set("return_to", returnTo);
     resumeUrl.searchParams.set("shopify_cleared", "1");
 
     const logoutUrl = new URL(CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT);
@@ -577,7 +609,7 @@ function handleCustomerOauthStart(req, res) {
     return;
   }
 
-  const state = createOAuthState(mode, keep, emailHint);
+  const state = createOAuthState(mode, keep, emailHint, returnTo);
 
   const authorizeUrl = new URL(CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT);
   authorizeUrl.searchParams.set("client_id", CUSTOMER_ACCOUNT_CLIENT_ID);
@@ -607,13 +639,17 @@ function handleCustomerOauthStart(req, res) {
 }
 
 async function handleCustomerOauthCallback(req, res) {
+  let returnToBase = `${FRONTEND_ORIGIN}/account.html`;
   try {
     const reqUrl = new URL(req.url, "http://localhost");
     const code = String(reqUrl.searchParams.get("code") || "");
     const state = String(reqUrl.searchParams.get("state") || "");
     if (!code || !state) {
       res.writeHead(302, {
-        Location: `${FRONTEND_ORIGIN}/account.html?auth=error&message=Missing%20OAuth%20code.`,
+        Location: appendOAuthCallbackParams(returnToBase, {
+          auth: "error",
+          message: "Missing OAuth code.",
+        }),
       });
       res.end();
       return;
@@ -622,11 +658,17 @@ async function handleCustomerOauthCallback(req, res) {
     const stateValue = parseOAuthState(state);
     if (!stateValue) {
       res.writeHead(302, {
-        Location: `${FRONTEND_ORIGIN}/account.html?auth=error&message=Invalid%20OAuth%20state.`,
+        Location: appendOAuthCallbackParams(returnToBase, {
+          auth: "error",
+          message: "Invalid OAuth state.",
+        }),
       });
       res.end();
       return;
     }
+
+    const validatedReturnTo = sanitizeOAuthReturnTo(stateValue.returnTo);
+    if (validatedReturnTo) returnToBase = validatedReturnTo;
 
     const tokenBody = new URLSearchParams({
       grant_type: "authorization_code",
@@ -657,10 +699,11 @@ async function handleCustomerOauthCallback(req, res) {
       payload = {};
     }
     if (!tokenResp.ok) {
-      const message = encodeURIComponent(
-        payload.error_description || payload.error || `Token exchange failed (${tokenResp.status}).`
-      );
-      res.writeHead(302, { Location: `${FRONTEND_ORIGIN}/account.html?auth=error&message=${message}` });
+      const message =
+        payload.error_description || payload.error || `Token exchange failed (${tokenResp.status}).`;
+      res.writeHead(302, {
+        Location: appendOAuthCallbackParams(returnToBase, { auth: "error", message }),
+      });
       res.end();
       return;
     }
@@ -679,10 +722,8 @@ async function handleCustomerOauthCallback(req, res) {
       .trim()
       .toLowerCase();
     if (expectedEmail && returnedEmail && returnedEmail !== expectedEmail) {
-      const message = encodeURIComponent(
-        `Signed in as ${returnedEmail}, but you entered ${expectedEmail}. Please choose the correct Shopify account and try again.`
-      );
-      let location = `${FRONTEND_ORIGIN}/account.html?auth=error&message=${message}`;
+      const message = `Signed in as ${returnedEmail}, but you entered ${expectedEmail}. Please choose the correct Shopify account and try again.`;
+      let location = appendOAuthCallbackParams(returnToBase, { auth: "error", message });
       const mismatchIdToken = String(payload.id_token || "").trim();
       if (CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT && mismatchIdToken) {
         // Clear Shopify account context immediately on mismatch while we still have a valid id_token.
@@ -718,13 +759,17 @@ async function handleCustomerOauthCallback(req, res) {
     };
 
     res.writeHead(302, {
-      Location: `${FRONTEND_ORIGIN}/account.html?auth=success`,
+      Location: appendOAuthCallbackParams(returnToBase, { auth: "success" }),
       "Set-Cookie": createSessionCookie(sessionPayload, cookieMaxAgeSec),
     });
     res.end();
   } catch (error) {
-    const message = encodeURIComponent(error.message || "OAuth callback failed.");
-    res.writeHead(302, { Location: `${FRONTEND_ORIGIN}/account.html?auth=error&message=${message}` });
+    res.writeHead(302, {
+      Location: appendOAuthCallbackParams(returnToBase, {
+        auth: "error",
+        message: error.message || "OAuth callback failed.",
+      }),
+    });
     res.end();
   }
 }
