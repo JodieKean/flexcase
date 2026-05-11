@@ -1887,9 +1887,10 @@
           }
           // Do not call flexcaseClearServerCart() here: Shopify checkout is bound to the same
           // headless Storefront cart; clearing it before navigation invalidates the session (skeleton → home).
-          // Keep the browser cart until the buyer finishes on Shopify or returns: guests keep localStorage;
-          // signed-in users get local cleared when /api/cart is empty after handoff (see flexcase-cart-sync).
-          window.flexcaseMarkShopifyCheckoutHandoff?.();
+          // Keep the browser cart until Shopify confirms the order: cart-sync polls
+          // /api/cart/storefront-status by the Storefront cart id we save here (works for guests too).
+          const handoffCartId = String(data.cartId || "").trim();
+          window.flexcaseMarkShopifyCheckoutHandoff?.(handoffCartId);
           navigatingToCheckout = true;
           window.location.assign(checkoutUrl);
         } catch (_) {

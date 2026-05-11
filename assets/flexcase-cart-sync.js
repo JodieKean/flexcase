@@ -5,6 +5,10 @@
   const LAST_AUTH_IDENTITY_KEY = "flexcase.last.auth.identity";
   /** Set when redirecting to Shopify checkout; cleared on next reconcile (load or bfcache pageshow). */
   const CHECKOUT_HANDOFF_KEY = "flexcase.checkout_handoff_pending";
+  /** Last Shopify Storefront cart id handed to checkout. Polled to detect order completion. */
+  const LAST_CHECKOUT_CART_KEY = "flexcase.last_checkout_cart";
+  /** Stop polling the same handed-off cart after this long (e.g. abandoned indefinitely). */
+  const LAST_CHECKOUT_CART_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   let latestReplaceSyncRequestId = 0;
   const REPLACE_SYNC_DEBOUNCE_MS = Number(window.FLEXCASE_CART_SYNC_DEBOUNCE_MS || 800);
   /** Brief pause before GET /api/cart after replace so Shopify read-your-writes can settle. */
@@ -189,12 +193,91 @@
     return true;
   }
 
-  function flexcaseMarkShopifyCheckoutHandoff() {
+  function flexcaseMarkShopifyCheckoutHandoff(cartId) {
     try {
       sessionStorage.setItem(CHECKOUT_HANDOFF_KEY, "1");
     } catch (_) {
       /* ignore */
     }
+    const trimmed = String(cartId || "").trim();
+    if (trimmed && trimmed.startsWith("gid://shopify/Cart/")) {
+      try {
+        localStorage.setItem(
+          LAST_CHECKOUT_CART_KEY,
+          JSON.stringify({ cartId: trimmed, ts: Date.now() })
+        );
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
+  function readLastCheckoutCartTracker() {
+    try {
+      const raw = localStorage.getItem(LAST_CHECKOUT_CART_KEY) || "";
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const cartId = String(parsed?.cartId || "").trim();
+      const ts = Number(parsed?.ts || 0);
+      if (!cartId.startsWith("gid://shopify/Cart/")) return null;
+      return { cartId, ts: Number.isFinite(ts) ? ts : 0 };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function clearLastCheckoutCartTracker() {
+    try {
+      localStorage.removeItem(LAST_CHECKOUT_CART_KEY);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  /**
+   * After Shopify checkout handoff: ask the server whether the Storefront cart still exists.
+   * Shopify deletes the Cart object when an order is created from it, so a missing/empty cart
+   * means the order completed (or the cart expired). Either way, clear the local cart.
+   * Works for both guest and signed-in flows.
+   */
+  async function flexcaseCheckLastCheckoutCartStatus() {
+    const tracker = readLastCheckoutCartTracker();
+    if (!tracker) return false;
+    if (tracker.ts && Date.now() - tracker.ts > LAST_CHECKOUT_CART_TTL_MS) {
+      clearLastCheckoutCartTracker();
+      return false;
+    }
+    const path = `/api/cart/storefront-status?cartId=${encodeURIComponent(tracker.cartId)}`;
+    let payload = null;
+    try {
+      const r = await fetchApi(path);
+      if (!r.ok) return false;
+      payload = await r.json();
+    } catch (_) {
+      return false;
+    }
+    if (!payload || typeof payload !== "object") return false;
+    if (payload.completed === true) {
+      writeLocalLines([]);
+      updateBadges();
+      clearLastCheckoutCartTracker();
+      try {
+        sessionStorage.removeItem(CHECKOUT_HANDOFF_KEY);
+      } catch (_) {
+        /* ignore */
+      }
+      // Best-effort signed-in cleanup so other devices/tabs see the empty cart too.
+      try {
+        const session = await getSessionState();
+        if (session.authenticated) {
+          await flexcaseClearServerCart().catch(() => {});
+        }
+      } catch (_) {
+        /* ignore */
+      }
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -246,6 +329,7 @@
     } catch (_) {
       /* ignore */
     }
+    clearLastCheckoutCartTracker();
     writeLocalLines([]);
     updateBadges();
     stripOrderCompleteQueryParams();
@@ -562,13 +646,20 @@
   window.flexcaseMarkShopifyCheckoutHandoff = flexcaseMarkShopifyCheckoutHandoff;
   window.flexcaseReconcileAfterShopifyCheckoutReturn = flexcaseReconcileAfterShopifyCheckoutReturn;
   window.flexcaseHandleOrderCompleteUrl = flexcaseHandleOrderCompleteUrl;
+  window.flexcaseCheckLastCheckoutCartStatus = flexcaseCheckLastCheckoutCartStatus;
 
   async function boot() {
     updateBadges();
-    // Thank-you landing wins over reconcile so a successful order always clears the cart.
+    // Thank-you landing wins over everything else so a successful order always clears the cart.
     const orderCompleted = await flexcaseHandleOrderCompleteUrl().catch(() => false);
-    if (!orderCompleted) {
-      await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
+    if (orderCompleted) {
+      // Skip reconcile / status poll: cart is already cleared.
+    } else {
+      // Storefront cart deletion is Shopify's "order completed" signal — covers guests too.
+      const clearedByStatus = await flexcaseCheckLastCheckoutCartStatus().catch(() => false);
+      if (!clearedByStatus) {
+        await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
+      }
     }
     const path = String(window.location.pathname || "").toLowerCase();
     const isCheckoutPage = path.endsWith("/checkout.html") || path === "/checkout.html";
@@ -594,9 +685,10 @@
     if (!ev.persisted) return;
     void (async () => {
       const orderCompleted = await flexcaseHandleOrderCompleteUrl().catch(() => false);
-      if (!orderCompleted) {
-        await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
-      }
+      if (orderCompleted) return;
+      const clearedByStatus = await flexcaseCheckLastCheckoutCartStatus().catch(() => false);
+      if (clearedByStatus) return;
+      await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
     })();
   });
 

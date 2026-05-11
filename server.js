@@ -2200,10 +2200,12 @@ async function handleShopifyCheckout(req, res) {
 
     if (customer) {
       let checkoutUrl = "";
+      let customerCartIdForResponse = "";
       let errMsg = "";
       try {
         await runSerializedCustomerCartMutation(customer.id, async () => {
           const { cartId } = await ensureCustomerStorefrontCart(customer.id);
+          customerCartIdForResponse = cartId;
           const syncLines = extractCheckoutLinesFromBody(body);
           if (syncLines.length) {
             try {
@@ -2250,7 +2252,7 @@ async function handleShopifyCheckout(req, res) {
         json(res, 400, { error: errMsg });
         return;
       }
-      json(res, 200, { checkoutUrl });
+      json(res, 200, { checkoutUrl, cartId: customerCartIdForResponse });
       return;
     }
 
@@ -2331,7 +2333,46 @@ async function handleShopifyCheckout(req, res) {
       });
       return;
     }
-    json(res, 200, { checkoutUrl });
+    json(res, 200, { checkoutUrl, cartId });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+/**
+ * Reports whether a Storefront cart still exists. Shopify deletes the Cart object once an
+ * order is created from it, so a missing cart is a reliable "order completed (or expired)"
+ * signal we use to clear localStorage for both guest and signed-in buyers after handoff.
+ */
+async function handleStorefrontCartStatus(req, res) {
+  try {
+    if (!STOREFRONT_ACCESS_TOKEN || !SHOP_FROM_ENV) {
+      json(res, 503, { error: "Storefront is not configured on the server." });
+      return;
+    }
+    const reqUrl = new URL(req.url, `http://${req.headers.host || "127.0.0.1"}`);
+    const rawId = String(reqUrl.searchParams.get("cartId") || "").trim();
+    if (!rawId || !rawId.startsWith("gid://shopify/Cart/")) {
+      json(res, 400, { error: "Invalid cart id." });
+      return;
+    }
+    let cart = null;
+    try {
+      const data = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: rawId });
+      cart = data?.cart || null;
+    } catch (_) {
+      cart = null;
+    }
+    if (!cart) {
+      json(res, 200, { exists: false, totalQuantity: 0, completed: true });
+      return;
+    }
+    const totalQuantity = Number(cart.totalQuantity || 0);
+    json(res, 200, {
+      exists: true,
+      totalQuantity,
+      completed: totalQuantity === 0,
+    });
   } catch (error) {
     json(res, 500, { error: error.message });
   }
@@ -2646,6 +2687,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/cart") {
     await handleCartGet(req, res);
+    return;
+  }
+  if (reqUrl.pathname === "/api/cart/storefront-status") {
+    await handleStorefrontCartStatus(req, res);
     return;
   }
   if (reqUrl.pathname === "/api/customer/check-email") {
