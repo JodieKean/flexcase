@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Flex Case — Thank You</title>
+    <link rel="stylesheet" href="assets/navbar.css" />
+    <script src="assets/flexcase-cart-sync.js"></script>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display",
+          "Helvetica Neue", Helvetica, Arial, sans-serif;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        padding: 40px 24px 80px;
+        padding-top: calc(62px + 40px);
+      }
+
+      main {
+        max-width: 560px;
+        margin: 0 auto;
+      }
+
+      .card {
+        background: #ffffff;
+        border: 1px solid #e6e6eb;
+        border-radius: 22px;
+        padding: 40px 32px 32px;
+        text-align: center;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.05);
+      }
+
+      .check {
+        width: 64px;
+        height: 64px;
+        margin: 0 auto 18px;
+        border-radius: 999px;
+        background: #1d1d1f;
+        color: #f5f5f7;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: clamp(1.6rem, 3vw, 2.1rem);
+        letter-spacing: -0.02em;
+        color: #1d1d1f;
+      }
+
+      p.lede {
+        margin: 0 0 6px;
+        font-size: 1rem;
+        line-height: 1.5;
+        color: #424245;
+      }
+
+      p.sub {
+        margin: 0 0 22px;
+        font-size: 0.92rem;
+        color: #6e6e73;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        justify-content: center;
+        flex-wrap: wrap;
+        margin-top: 14px;
+      }
+
+      .btn {
+        border: none;
+        border-radius: 999px;
+        padding: 11px 20px;
+        font-size: 0.95rem;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .btn-primary {
+        background: #1d1d1f;
+        color: #f5f5f7;
+      }
+
+      .btn-secondary {
+        background: #ffffff;
+        color: #1d1d1f;
+        border: 1px solid #d2d2d7;
+      }
+
+      .order-line {
+        margin: 18px 0 0;
+        padding: 12px 14px;
+        border-radius: 14px;
+        background: #fafafa;
+        border: 1px solid #e6e6eb;
+        font-size: 0.92rem;
+        color: #424245;
+      }
+
+      .order-line strong {
+        color: #1d1d1f;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="site-navbar" aria-label="Site">
+      <div class="site-navbar-inner">
+        <a class="site-brand" href="index.html" aria-label="Flex Case home">
+          <span class="site-brand-text">Flex Case</span>
+        </a>
+        <div class="navbar-actions" aria-label="Account and cart">
+          <a class="icon-btn" href="account.html" aria-label="Profile">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="18" height="18">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0ZM4.501 20.118a7.5 7.5 0 0 1 14.998 0A17.933 17.933 0 0 1 12 21.75c-2.676 0-5.216-.584-7.499-1.632Z"></path>
+            </svg>
+          </a>
+          <a class="icon-btn" href="checkout.html" aria-label="Cart">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" aria-hidden="true" width="18" height="18">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 10.5V6a3.75 3.75 0 1 0-7.5 0v4.5m11.356-1.993 1.263 12c.07.665-.45 1.243-1.119 1.243H4.25a1.125 1.125 0 0 1-1.12-1.243l1.264-12A1.125 1.125 0 0 1 5.513 7.5h12.974c.576 0 1.059.435 1.119 1.007ZM8.625 10.5a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Zm7.5 0a.375.375 0 1 1-.75 0 .375.375 0 0 1 .75 0Z"></path>
+            </svg>
+            <span class="cart-badge" aria-hidden="true">0</span>
+          </a>
+        </div>
+      </div>
+    </nav>
+
+    <main>
+      <div class="card">
+        <div class="check" aria-hidden="true">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="28" height="28">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        </div>
+        <h1>Thank you for your order</h1>
+        <p class="lede">Your payment was received and your order is being prepared.</p>
+        <p class="sub">You will receive an email confirmation from Shopify with your order details and tracking once it ships.</p>
+
+        <div id="orderLine" class="order-line hidden">
+          Order reference: <strong id="orderRef"></strong>
+        </div>
+
+        <div class="actions">
+          <a class="btn btn-primary" href="index.html">Continue shopping</a>
+          <a class="btn btn-secondary" href="account.html">View account</a>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      (function showOrderRefIfPresent() {
+        try {
+          const params = new URLSearchParams(window.location.search || "");
+          const ref =
+            params.get("order") ||
+            params.get("order_id") ||
+            params.get("order_number") ||
+            params.get("checkout") ||
+            "";
+          const cleaned = String(ref || "").trim();
+          if (!cleaned) return;
+          const wrap = document.getElementById("orderLine");
+          const target = document.getElementById("orderRef");
+          if (wrap && target) {
+            target.textContent = cleaned;
+            wrap.classList.remove("hidden");
+          }
+        } catch (_) {
+          /* ignore */
+        }
+      })();
+    </script>
+  </body>
+</html>

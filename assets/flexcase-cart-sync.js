@@ -198,6 +198,69 @@
   }
 
   /**
+   * Thank-you landing detection.
+   * Triggers on (a) ?order_complete=1 / ?flexcase_thanks=1 query params, or
+   * (b) any /thank-you.html path (the dedicated landing page). Shopify's order status page
+   * "Additional scripts" can redirect to either, so both guest and signed-in flows work.
+   */
+  function detectOrderCompleteSignal() {
+    try {
+      const path = String(window.location.pathname || "").toLowerCase();
+      if (path.endsWith("/thank-you.html") || path === "/thank-you.html") return true;
+      const params = new URLSearchParams(window.location.search || "");
+      if (params.get("order_complete") === "1") return true;
+      if (params.get("flexcase_thanks") === "1") return true;
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function stripOrderCompleteQueryParams() {
+    try {
+      const url = new URL(window.location.href);
+      let changed = false;
+      for (const key of ["order_complete", "flexcase_thanks"]) {
+        if (url.searchParams.has(key)) {
+          url.searchParams.delete(key);
+          changed = true;
+        }
+      }
+      if (changed) {
+        const next = url.pathname + (url.searchParams.toString() ? `?${url.searchParams}` : "") + url.hash;
+        window.history.replaceState({}, document.title, next);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  /**
+   * Clears local + server cart after a successful order. Skips reconcile (which would otherwise
+   * fight us if Shopify's webhook hasn't emptied the cart yet). Safe to call multiple times.
+   */
+  async function flexcaseHandleOrderCompleteUrl() {
+    if (!detectOrderCompleteSignal()) return false;
+    try {
+      sessionStorage.removeItem(CHECKOUT_HANDOFF_KEY);
+    } catch (_) {
+      /* ignore */
+    }
+    writeLocalLines([]);
+    updateBadges();
+    stripOrderCompleteQueryParams();
+    try {
+      const session = await getSessionState();
+      if (session.authenticated) {
+        await flexcaseClearServerCart().catch(() => {});
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return true;
+  }
+
+  /**
    * After returning from Shopify (or any navigation back), if the buyer had left for checkout:
    * signed-in users sync local from server — empty server clears local (order completed or cart cleared);
    * non-empty server restores lines (abandoned checkout). Guests keep localStorage (no /api/cart).
@@ -498,10 +561,15 @@
   window.flexcaseOnLogoutClearMergeFlag = flexcaseOnLogoutClearMergeFlag;
   window.flexcaseMarkShopifyCheckoutHandoff = flexcaseMarkShopifyCheckoutHandoff;
   window.flexcaseReconcileAfterShopifyCheckoutReturn = flexcaseReconcileAfterShopifyCheckoutReturn;
+  window.flexcaseHandleOrderCompleteUrl = flexcaseHandleOrderCompleteUrl;
 
   async function boot() {
     updateBadges();
-    await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
+    // Thank-you landing wins over reconcile so a successful order always clears the cart.
+    const orderCompleted = await flexcaseHandleOrderCompleteUrl().catch(() => false);
+    if (!orderCompleted) {
+      await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
+    }
     const path = String(window.location.pathname || "").toLowerCase();
     const isCheckoutPage = path.endsWith("/checkout.html") || path === "/checkout.html";
     // Checkout runs local-first to avoid background hydration overwriting in-progress edits.
@@ -524,7 +592,12 @@
 
   window.addEventListener("pageshow", (ev) => {
     if (!ev.persisted) return;
-    void flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
+    void (async () => {
+      const orderCompleted = await flexcaseHandleOrderCompleteUrl().catch(() => false);
+      if (!orderCompleted) {
+        await flexcaseReconcileAfterShopifyCheckoutReturn().catch(() => {});
+      }
+    })();
   });
 
   if (document.readyState === "loading") {
