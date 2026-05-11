@@ -806,15 +806,14 @@
                 </div>
 
                 <div id="user-fields" class="hidden">
-                  <label for="userEmail">Email *</label>
-                  <input id="userEmail" name="userEmail" type="email" autocomplete="username" placeholder="Enter account email" />
-
-                  <label for="password">Password *</label>
-                  <input id="password" name="password" type="password" autocomplete="current-password" placeholder="Enter password" />
-
-                  <p class="note">
-                    Demo only: no accounts are created. In production this would authenticate with your store backend.
+                  <p class="note" id="user-fields-lede">
+                    Sign in with your Flex Case account to use your saved addresses and track this order.
                   </p>
+                  <div class="actions" id="user-fields-actions">
+                    <button type="button" class="btn-primary" id="user-sign-in-btn">
+                      Sign in with Flex Case →
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1183,8 +1182,8 @@
       const email = document.getElementById("email");
       const firstName = document.getElementById("firstName");
       const lastName = document.getElementById("lastName");
-      const userEmail = document.getElementById("userEmail");
-      const password = document.getElementById("password");
+      const userSignInBtn = document.getElementById("user-sign-in-btn");
+      const contactActions = document.getElementById("contact-actions");
 
       const address1 = document.getElementById("address1");
       const city = document.getElementById("city");
@@ -1525,13 +1524,16 @@
         if (isGuest) {
           email.setAttribute("required", "required");
           firstName.setAttribute("required", "required");
-          userEmail.removeAttribute("required");
-          password.removeAttribute("required");
         } else {
           email.removeAttribute("required");
           firstName.removeAttribute("required");
-          userEmail.setAttribute("required", "required");
-          password.setAttribute("required", "required");
+        }
+
+        // User mode without a session uses the in-panel OAuth button; the bottom
+        // "Continue to Shipping" button is irrelevant until they sign in and return.
+        if (contactActions) {
+          const hideContinue = !isGuest && !checkoutSessionCustomer;
+          contactActions.classList.toggle("hidden", hideContinue);
         }
       }
 
@@ -1578,13 +1580,10 @@
             alert("Please enter your email and first name to continue as guest.");
             return false;
           }
-        } else {
-          if (!userEmail.value.trim() || !password.value.trim()) {
-            alert("Please enter your email and password to sign in.");
-            return false;
-          }
+          return true;
         }
-        return true;
+        alert("Please sign in with your Flex Case account to continue.");
+        return false;
       }
 
       function validateShipping() {
@@ -1612,16 +1611,13 @@
           const n = `${checkoutSessionCustomer.firstName} ${checkoutSessionCustomer.lastName}`.trim();
           return n || "Signed-in customer";
         }
-        if (checkoutModeInput.value === "guest") {
-          const last = lastName.value.trim();
-          return `${firstName.value.trim()}${last ? ` ${last}` : ""}`.trim();
-        }
-        return "Signed-in customer";
+        const last = lastName.value.trim();
+        return `${firstName.value.trim()}${last ? ` ${last}` : ""}`.trim();
       }
 
       function getContactEmail() {
         if (checkoutSessionCustomer) return checkoutSessionCustomer.email || "";
-        return checkoutModeInput.value === "guest" ? email.value.trim() : userEmail.value.trim();
+        return email.value.trim();
       }
 
       function getCheckoutCountryDisplayName() {
@@ -1804,6 +1800,14 @@
       });
 
       const checkoutRedirectOverlay = document.getElementById("checkout-redirect-overlay");
+      const checkoutRedirectTitleEl = document.getElementById("checkout-redirect-title");
+      const checkoutRedirectSubEl = checkoutRedirectOverlay?.querySelector(".checkout-redirect-sub") || null;
+      const DEFAULT_CHECKOUT_REDIRECT_TITLE = "Sending you to Shopify checkout…";
+      const DEFAULT_CHECKOUT_REDIRECT_SUB = "This usually takes a few seconds.";
+      function setCheckoutRedirectMessage(title, sub) {
+        if (checkoutRedirectTitleEl && typeof title === "string") checkoutRedirectTitleEl.textContent = title;
+        if (checkoutRedirectSubEl && typeof sub === "string") checkoutRedirectSubEl.textContent = sub;
+      }
       function setCheckoutRedirectLoading(on) {
         if (!checkoutRedirectOverlay) return;
         if (on) {
@@ -1814,7 +1818,49 @@
           checkoutRedirectOverlay.classList.add("hidden");
           checkoutRedirectOverlay.setAttribute("aria-hidden", "true");
           document.documentElement.style.overflow = "";
+          setCheckoutRedirectMessage(DEFAULT_CHECKOUT_REDIRECT_TITLE, DEFAULT_CHECKOUT_REDIRECT_SUB);
         }
+      }
+
+      let checkoutOauthInFlight = false;
+      async function beginCheckoutCustomerOauth(mode = "signin", keepLoggedIn = true) {
+        if (checkoutOauthInFlight) return;
+        checkoutOauthInFlight = true;
+        if (userSignInBtn) {
+          userSignInBtn.disabled = true;
+          userSignInBtn.setAttribute("aria-busy", "true");
+        }
+        try {
+          try {
+            await window.flexcaseFlushCartSync?.({ force: true });
+          } catch (_) {
+            /* ignore */
+          }
+          window.__flexcaseSkipExitCartFlush = true;
+          const params = new URLSearchParams();
+          params.set("mode", mode);
+          params.set("keep", keepLoggedIn ? "1" : "0");
+          const target = `${CHECKOUT_API_BASE}/api/customer/oauth/start?${params.toString()}`;
+          setCheckoutRedirectMessage(
+            "Sending you to sign in…",
+            "We'll bring you back to checkout when you're done."
+          );
+          setCheckoutRedirectLoading(true);
+          window.setTimeout(() => window.location.assign(target), 120);
+        } catch (_) {
+          checkoutOauthInFlight = false;
+          if (userSignInBtn) {
+            userSignInBtn.disabled = false;
+            userSignInBtn.removeAttribute("aria-busy");
+          }
+          setCheckoutRedirectLoading(false);
+        }
+      }
+
+      if (userSignInBtn) {
+        userSignInBtn.addEventListener("click", () => {
+          void beginCheckoutCustomerOauth("signin", true);
+        });
       }
 
       let flexcasePlaceOrderInFlight = false;
@@ -1825,6 +1871,11 @@
         if (!ev.persisted) return;
         setCheckoutRedirectLoading(false);
         flexcasePlaceOrderInFlight = false;
+        checkoutOauthInFlight = false;
+        if (userSignInBtn) {
+          userSignInBtn.disabled = false;
+          userSignInBtn.removeAttribute("aria-busy");
+        }
         const placeBtnRecover = document.getElementById("place-order");
         if (placeBtnRecover) {
           placeBtnRecover.disabled = false;
