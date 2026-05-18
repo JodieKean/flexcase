@@ -108,29 +108,16 @@
         padding: 2px 8px;
       }
 
-      .crumb {
+      .product-type {
         color: #8e8e93;
         font-size: 0.82rem;
+        margin: 0 0 8px;
       }
 
       h1 {
-        margin: 8px 0 8px;
+        margin: 0 0 8px;
         font-size: clamp(1.8rem, 2.8vw, 2.25rem);
         letter-spacing: -0.02em;
-      }
-
-      .rating-line {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        flex-wrap: wrap;
-        color: #6e6e73;
-        font-size: 0.86rem;
-      }
-
-      .stars {
-        color: #c39c58;
-        letter-spacing: 0.08em;
       }
 
       .price-line {
@@ -497,13 +484,8 @@
         </div>
 
         <div class="details">
-          <div class="crumb">Shop &nbsp;›&nbsp; Product</div>
+          <div class="product-type" id="product-subtitle"></div>
           <h1 id="product-title">Loading product...</h1>
-          <div class="rating-line">
-            <span class="stars"></span>
-            <span id="product-subtitle"></span>
-            <span></span>
-          </div>
 
           <div class="price-line">
             <span class="price-now" id="product-price-now"></span>
@@ -809,9 +791,7 @@
             return;
           }
           addToCartBtn.disabled = !purchasable;
-          addToCartBtn.textContent = purchasable
-            ? `Add to Cart — ${priceNowEl.textContent}`
-            : "Out of stock";
+          addToCartBtn.textContent = purchasable ? "Add to Cart" : "Out of stock";
         }
 
         function updateStock(variant) {
@@ -1018,7 +998,7 @@
           if (!selectedVariant?.availableForSale) return;
           const symbol = event.target.textContent?.trim();
           if (symbol === "+") quantity += 1;
-          if (symbol === "-") quantity = Math.max(1, quantity - 1);
+          if (symbol === "-" || symbol === "−") quantity = Math.max(1, quantity - 1);
           qtyValueEl.textContent = String(quantity);
         });
 
