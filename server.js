@@ -209,6 +209,16 @@ async function storefrontGraphql(query, variables = {}) {
   return payload.data;
 }
 
+function parseShopifyTags(raw) {
+  if (Array.isArray(raw)) {
+    return raw.map((tag) => String(tag || "").trim()).filter(Boolean);
+  }
+  if (typeof raw === "string" && raw.trim()) {
+    return raw.split(",").map((tag) => tag.trim()).filter(Boolean);
+  }
+  return [];
+}
+
 function mapProduct(node) {
   const variantEdges = node.variants?.edges || [];
   const variants = variantEdges.map((edge) => edge.node);
@@ -231,9 +241,7 @@ function mapProduct(node) {
     title: node.title,
     vendor: node.vendor,
     productType: String(node.productType || "").trim(),
-    tags: (Array.isArray(node.tags) ? node.tags : [])
-      .map((tag) => String(tag || "").trim())
-      .filter(Boolean),
+    tags: parseShopifyTags(node.tags),
     description: node.description || "",
     descriptionHtml: node.descriptionHtml || node.description || "",
     totalInventory: Number(node.totalInventory || 0),

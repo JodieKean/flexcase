@@ -18,30 +18,34 @@
     return type || "Product";
   }
 
-  const BADGE_TAG_RULES = [
-    { label: "Best Seller", keys: ["best seller", "bestseller", "best-seller"] },
-    { label: "New", keys: ["new"] },
-  ];
+  function parseProductTags(raw) {
+    if (Array.isArray(raw)) {
+      return raw.map((tag) => String(tag || "").trim()).filter(Boolean);
+    }
+    if (typeof raw === "string" && raw.trim()) {
+      return raw.split(",").map((tag) => tag.trim()).filter(Boolean);
+    }
+    return [];
+  }
 
-  function normalizeTag(tag) {
-    return String(tag || "")
+  function isCatalogBadgeTag(tag) {
+    const normalized = String(tag || "")
       .trim()
       .toLowerCase()
       .replace(/\s+/g, " ");
+    return (
+      normalized === "new" ||
+      normalized === "best seller" ||
+      normalized === "bestseller" ||
+      normalized === "best-seller"
+    );
   }
 
   function getProductBadgeHtml(product) {
-    const tags = (Array.isArray(product.tags) ? product.tags : [])
-      .map(normalizeTag)
-      .filter(Boolean);
-    if (!tags.length) return "";
-
-    for (const rule of BADGE_TAG_RULES) {
-      if (rule.keys.some((key) => tags.includes(key))) {
-        return '<span class="catalog-badge">' + escapeHtml(rule.label) + "</span>";
-      }
-    }
-    return "";
+    const tags = parseProductTags(product.tags);
+    const badgeTag = tags.find((tag) => isCatalogBadgeTag(tag));
+    if (!badgeTag) return "";
+    return '<span class="catalog-badge">' + escapeHtml(badgeTag) + "</span>";
   }
 
   function buildCatalogCardHtml(product) {
