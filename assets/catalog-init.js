@@ -131,7 +131,7 @@
     const section = document.getElementById("catalog");
     if (!section) return;
     const toolbar = section.querySelector(".catalog-toolbar") || section;
-    const navOffset = 72;
+    const navOffset = 62;
     const top = toolbar.getBoundingClientRect().top + window.pageYOffset - navOffset;
     window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     const search = document.getElementById("catalogSearch");

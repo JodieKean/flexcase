@@ -232,6 +232,7 @@ function mapProduct(node) {
     vendor: node.vendor,
     productType: String(node.productType || "").trim(),
     description: node.description || "",
+    descriptionHtml: node.descriptionHtml || node.description || "",
     totalInventory: Number(node.totalInventory || 0),
     featuredImage,
     images,
@@ -525,6 +526,7 @@ async function handleProduct(req, res, handle) {
             vendor
             productType
             description
+            descriptionHtml
             totalInventory
             featuredImage {
               url
