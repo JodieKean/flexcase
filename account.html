@@ -447,6 +447,29 @@
         text-align: right;
       }
 
+      .order-breakdown {
+        margin-top: 8px;
+        padding-top: 8px;
+        border-top: 1px solid #f0f0f3;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 0.88rem;
+        color: #6e6e73;
+      }
+
+      .order-breakdown-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+      }
+
+      .order-breakdown-row strong {
+        color: #1d1d1f;
+        font-weight: 500;
+      }
+
       .review-link {
         display: inline;
         border: 0;
@@ -2436,12 +2459,39 @@
         }
 
         orders.forEach((order, idx) => {
-          const total = order.total ? money(order.total.amount, order.total.currencyCode) : "-";
+          const currencyCode = order.total?.currencyCode || order.tax?.currencyCode || "MYR";
+          const total = order.total ? money(order.total.amount, currencyCode) : "-";
           const taxAmount = order.tax ? Number(order.tax.amount || 0) : 0;
           const taxLabelHtml =
             order.tax && taxAmount > 0
-              ? `<span class="order-total-tax">(includes ${money(order.tax.amount, order.tax.currencyCode || order.total?.currencyCode)} tax)</span>`
+              ? `<span class="order-total-tax">(includes ${money(order.tax.amount, order.tax.currencyCode || currencyCode)} tax)</span>`
               : "";
+          const subtotalAmount = (order.items || []).reduce(
+            (sum, item) => sum + Number(item.lineTotal?.amount || 0),
+            0
+          );
+          const subtotalLabel = money(subtotalAmount, currencyCode);
+          let shippingAmount = order.shipping ? Number(order.shipping.amount || 0) : 0;
+          if (!order.shipping) {
+            const totalNum = Number(order.total?.amount || 0);
+            const inferred = totalNum - subtotalAmount - taxAmount;
+            if (inferred > 0.009) shippingAmount = inferred;
+          }
+          const shippingLabel =
+            shippingAmount > 0
+              ? money(shippingAmount, order.shipping?.currencyCode || currencyCode)
+              : "Free";
+          const breakdownMarkup = `
+            <div class="order-breakdown" aria-label="Order totals">
+              <div class="order-breakdown-row">
+                <span>Subtotal</span>
+                <strong>${subtotalLabel}</strong>
+              </div>
+              <div class="order-breakdown-row">
+                <span>Shipping</span>
+                <strong>${shippingLabel}</strong>
+              </div>
+            </div>`;
           const date = order.processedAt
             ? new Date(order.processedAt).toLocaleDateString("en-US")
             : "-";
@@ -2496,6 +2546,7 @@
             </div>
             <div class="order-details ${idx === 0 ? "" : "hidden"}" data-order-details>
               ${itemsMarkup || '<div class="item"><div><div class="item-name">No line items</div></div></div>'}
+              ${breakdownMarkup}
               <div class="order-footer">
                 <button type="button" class="review-link" data-write-review${safeReviewAttr}>Write a Review</button>
                 <div class="order-footer-totals"><strong>Total: ${total}</strong>${taxLabelHtml}</div>
