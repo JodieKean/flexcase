@@ -55,8 +55,13 @@
       .gallery-thumbs {
         margin-top: 12px;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
         gap: 10px;
+      }
+
+      .gallery-thumbs:empty {
+        display: none;
+        margin-top: 0;
       }
 
       .thumb {
@@ -64,16 +69,31 @@
         border-radius: 14px;
         background: #ececf1;
         height: 104px;
+        padding: 6px;
+        box-sizing: border-box;
         display: flex;
         align-items: center;
         justify-content: center;
-        font-size: 0.76rem;
-        color: #7d7d86;
+        overflow: hidden;
+        cursor: pointer;
+        font: inherit;
+        width: 100%;
+        appearance: none;
+        -webkit-appearance: none;
+      }
+
+      .thumb img {
+        height: 100%;
+        width: auto;
+        max-width: 100%;
+        object-fit: contain;
+        object-position: center;
+        display: block;
+        pointer-events: none;
       }
 
       .thumb.active {
         border: 2px solid #1d1d1f;
-        color: #1d1d1f;
         background: #f2f2f5;
       }
 
@@ -512,9 +532,7 @@
       <section class="product-hero">
         <div class="gallery">
           <div class="gallery-main" id="product-gallery-main"></div>
-          <div class="gallery-thumbs" id="product-gallery-thumbs">
-            <div class="thumb active">Loading...</div>
-          </div>
+          <div class="gallery-thumbs" id="product-gallery-thumbs" aria-label="Product images"></div>
         </div>
 
         <div class="details">
@@ -726,35 +744,101 @@
           syncPurchaseControls();
         }
 
-        function renderGallery() {
-          const images = product.images?.nodes?.length
-            ? product.images.nodes
-            : product.featuredImage
-              ? [product.featuredImage]
-              : [];
-          if (!images.length) return;
+        function escapeGalleryText(str) {
+          return String(str || "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;");
+        }
 
-          const first = images[0];
-          galleryMain.innerHTML = `<img src="${first.url}" alt="${first.altText || product.title}" />`;
-          galleryThumbs.innerHTML = images
-            .slice(0, 4)
-            .map(
-              (img, i) =>
-                `<div class="thumb${i === 0 ? " active" : ""}" data-thumb-index="${i}" style="background-image:url('${img.url}');background-size:cover;background-position:center;"></div>`
-            )
+        function getProductImages() {
+          const fromNodes = product.images?.nodes;
+          const fromArray = Array.isArray(product.images) ? product.images : null;
+          const raw = fromNodes?.length
+            ? fromNodes
+            : fromArray?.length
+              ? fromArray
+              : product.featuredImage
+                ? [product.featuredImage]
+                : [];
+          const seen = new Set();
+          return raw.filter((img) => {
+            const url = String(img?.url || "").trim();
+            if (!url || seen.has(url)) return false;
+            seen.add(url);
+            return true;
+          });
+        }
+
+        let galleryImages = [];
+        let galleryActiveIndex = 0;
+
+        function setGalleryImage(index) {
+          const img = galleryImages[index];
+          if (!img) return;
+          galleryActiveIndex = index;
+          galleryMain.innerHTML =
+            '<img src="' +
+            escapeGalleryText(img.url) +
+            '" alt="' +
+            escapeGalleryText(img.altText || product.title) +
+            '" />';
+          galleryThumbs.querySelectorAll(".thumb").forEach((el, idx) => {
+            el.classList.toggle("active", idx === index);
+            el.setAttribute("aria-current", idx === index ? "true" : "false");
+          });
+        }
+
+        function renderGallery() {
+          galleryImages = getProductImages();
+          if (!galleryImages.length) {
+            galleryMain.innerHTML = "";
+            galleryThumbs.innerHTML = "";
+            return;
+          }
+
+          galleryActiveIndex = 0;
+          setGalleryImage(0);
+
+          if (galleryImages.length < 2) {
+            galleryThumbs.innerHTML = "";
+            return;
+          }
+
+          galleryThumbs.innerHTML = galleryImages
+            .map((img, i) => {
+              const alt = escapeGalleryText(img.altText || product.title);
+              const src = escapeGalleryText(img.url);
+              const active = i === 0 ? " active" : "";
+              const ariaCurrent = i === 0 ? "true" : "false";
+              return (
+                '<button type="button" class="thumb' +
+                active +
+                '" data-thumb-index="' +
+                i +
+                '" aria-label="View image ' +
+                (i + 1) +
+                " of " +
+                galleryImages.length +
+                '" aria-current="' +
+                ariaCurrent +
+                '"><img src="' +
+                src +
+                '" alt="' +
+                alt +
+                '" loading="lazy" /></button>'
+              );
+            })
             .join("");
 
-          galleryThumbs.addEventListener("click", (event) => {
+          galleryThumbs.onclick = (event) => {
             const thumb = event.target.closest("[data-thumb-index]");
             if (!thumb) return;
             const i = Number(thumb.dataset.thumbIndex || "0");
-            const img = images[i];
-            if (!img) return;
-            galleryMain.innerHTML = `<img src="${img.url}" alt="${img.altText || product.title}" />`;
-            galleryThumbs
-              .querySelectorAll(".thumb")
-              .forEach((el, idx) => el.classList.toggle("active", idx === i));
-          });
+            if (Number.isNaN(i) || i === galleryActiveIndex) return;
+            setGalleryImage(i);
+          };
         }
 
         function renderVariants() {
