@@ -231,6 +231,9 @@ function mapProduct(node) {
     title: node.title,
     vendor: node.vendor,
     productType: String(node.productType || "").trim(),
+    tags: (Array.isArray(node.tags) ? node.tags : [])
+      .map((tag) => String(tag || "").trim())
+      .filter(Boolean),
     description: node.description || "",
     descriptionHtml: node.descriptionHtml || node.description || "",
     totalInventory: Number(node.totalInventory || 0),
@@ -479,6 +482,7 @@ async function handleCatalog(req, res) {
             title
             vendor
             productType
+            tags
             featuredImage {
               url
               altText
@@ -525,6 +529,7 @@ async function handleProduct(req, res, handle) {
             title
             vendor
             productType
+            tags
             description
             descriptionHtml
             totalInventory

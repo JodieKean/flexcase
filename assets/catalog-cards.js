@@ -18,7 +18,33 @@
     return type || "Product";
   }
 
-  function buildCatalogCardHtml(product, index) {
+  const BADGE_TAG_RULES = [
+    { label: "Best Seller", keys: ["best seller", "bestseller", "best-seller"] },
+    { label: "New", keys: ["new"] },
+  ];
+
+  function normalizeTag(tag) {
+    return String(tag || "")
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " ");
+  }
+
+  function getProductBadgeHtml(product) {
+    const tags = (Array.isArray(product.tags) ? product.tags : [])
+      .map(normalizeTag)
+      .filter(Boolean);
+    if (!tags.length) return "";
+
+    for (const rule of BADGE_TAG_RULES) {
+      if (rule.keys.some((key) => tags.includes(key))) {
+        return '<span class="catalog-badge">' + escapeHtml(rule.label) + "</span>";
+      }
+    }
+    return "";
+  }
+
+  function buildCatalogCardHtml(product) {
     const firstVariant = product.variants?.nodes?.[0];
     const minPrice = product.priceRange?.minVariantPrice;
     const comparePrice = product.compareAtPriceRange?.minVariantPrice;
@@ -30,12 +56,7 @@
           "</span>"
         : "";
 
-    const badge =
-      index === 0
-        ? '<span class="catalog-badge">Best Seller</span>'
-        : index === 1
-          ? '<span class="catalog-badge">New</span>'
-          : "";
+    const badge = getProductBadgeHtml(product);
 
     const imageUrl = String(product.featuredImage?.url || "").trim();
     const image = imageUrl
@@ -99,13 +120,14 @@
         '<div class="catalog-card" style="grid-column:1/-1;padding:18px;">No products to show.</div>';
       return;
     }
-    container.innerHTML = list.map((product, index) => buildCatalogCardHtml(product, index)).join("");
+    container.innerHTML = list.map((product) => buildCatalogCardHtml(product)).join("");
   }
 
   global.flexcaseCatalogCards = {
     escapeHtml,
     money,
     productTypeLabel,
+    getProductBadgeHtml,
     buildCatalogCardHtml,
     renderCatalogGrid,
   };

@@ -6,10 +6,21 @@
   :root {
     --flexcase-content-width: 88vw;
   }
+
+  html,
+  body {
+    overflow-x: hidden;
+  }
+
+  body {
+    padding-left: 0;
+    padding-right: 0;
+  }
 }
 
 main {
   width: var(--flexcase-content-width);
+  max-width: 100%;
   margin-left: auto;
   margin-right: auto;
   box-sizing: border-box;
