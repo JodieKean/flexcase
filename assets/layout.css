@@ -14,14 +14,10 @@
   }
 
   /* iOS Safari zooms focused inputs below 16px */
-  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not(.catalog-search),
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
   select,
   textarea {
     font-size: 16px;
-  }
-
-  .catalog-toolbar .catalog-search {
-    font-size: 0.9rem;
   }
 
   .catalog-toolbar .catalog-chip {
