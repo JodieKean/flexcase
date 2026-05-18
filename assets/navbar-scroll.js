@@ -6,9 +6,17 @@
   let lastScrollY = window.scrollY;
   let ticking = false;
 
+  function updateStickyOffsets() {
+    const hidden = nav.classList.contains("is-hidden");
+    const top = hidden ? 0 : nav.offsetHeight;
+    document.documentElement.style.setProperty("--catalog-sticky-top", `${top}px`);
+    window.dispatchEvent(new CustomEvent("flexcase-navbar-offset-change"));
+  }
+
   function setNavbarHidden(hidden) {
     nav.classList.toggle("is-hidden", hidden);
     document.body.classList.toggle("navbar-hidden", hidden);
+    updateStickyOffsets();
   }
 
   function updateNavbarVisibility() {
@@ -37,11 +45,17 @@
   }
 
   window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", updateStickyOffsets);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", updateStickyOffsets);
+  }
   mobileQuery.addEventListener("change", () => {
     lastScrollY = window.scrollY;
     setNavbarHidden(false);
     updateNavbarVisibility();
+    updateStickyOffsets();
   });
 
+  updateStickyOffsets();
   updateNavbarVisibility();
 })();

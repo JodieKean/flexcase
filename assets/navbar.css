@@ -95,8 +95,4 @@
     transform: translateY(-100%);
     pointer-events: none;
   }
-
-  body.navbar-hidden .catalog-toolbar {
-    top: 0;
-  }
 }

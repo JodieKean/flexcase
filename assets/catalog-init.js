@@ -125,17 +125,109 @@
     scrollToCatalogFromHash();
   }
 
+  function getCatalogStickyTop() {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue("--catalog-sticky-top");
+    const parsed = parseFloat(raw);
+    return Number.isFinite(parsed) ? parsed : 62;
+  }
+
   function scrollToCatalogFromHash() {
     const hash = window.location.hash.replace(/^#/, "");
     if (hash !== "catalog") return;
     const section = document.getElementById("catalog");
     if (!section) return;
     const toolbar = section.querySelector(".catalog-toolbar") || section;
-    const navOffset = 62;
+    const navOffset = getCatalogStickyTop();
     const top = toolbar.getBoundingClientRect().top + window.pageYOffset - navOffset;
     window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
     const search = document.getElementById("catalogSearch");
     if (search) search.focus({ preventScroll: true });
+  }
+
+  function setupCatalogToolbarPin() {
+    const section = document.getElementById("catalog");
+    const toolbar = section?.querySelector(".catalog-toolbar");
+    if (!toolbar) return;
+
+    const mobileQuery = window.matchMedia("(max-width: 980px)");
+    let placeholder = null;
+    let naturalTop = 0;
+
+    function measureNaturalTop() {
+      if (toolbar.classList.contains("is-fixed") && placeholder) {
+        naturalTop = placeholder.getBoundingClientRect().top + window.scrollY;
+        return;
+      }
+      naturalTop = toolbar.getBoundingClientRect().top + window.scrollY;
+    }
+
+    function applyFixedTop() {
+      if (!toolbar.classList.contains("is-fixed")) return;
+      toolbar.style.top = `${getCatalogStickyTop()}px`;
+    }
+
+    function setFixed(fixed) {
+      if (fixed) {
+        if (toolbar.classList.contains("is-fixed")) return;
+        measureNaturalTop();
+        const height = toolbar.offsetHeight;
+        placeholder = document.createElement("div");
+        placeholder.className = "catalog-toolbar-placeholder";
+        placeholder.setAttribute("aria-hidden", "true");
+        placeholder.style.height = `${height}px`;
+        toolbar.parentNode.insertBefore(placeholder, toolbar);
+        toolbar.classList.add("is-fixed");
+        applyFixedTop();
+        return;
+      }
+      if (!toolbar.classList.contains("is-fixed")) return;
+      toolbar.classList.remove("is-fixed");
+      toolbar.style.top = "";
+      placeholder?.remove();
+      placeholder = null;
+      measureNaturalTop();
+    }
+
+    function updatePin() {
+      if (!mobileQuery.matches) {
+        setFixed(false);
+        return;
+      }
+      measureNaturalTop();
+      const offset = getCatalogStickyTop();
+      const shouldFix = window.scrollY + offset >= naturalTop - 1;
+      setFixed(shouldFix);
+      if (toolbar.classList.contains("is-fixed") && placeholder) {
+        applyFixedTop();
+        placeholder.style.height = `${toolbar.offsetHeight}px`;
+      }
+    }
+
+    let ticking = false;
+    function onScroll() {
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        updatePin();
+      });
+    }
+
+    window.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", () => {
+      setFixed(false);
+      measureNaturalTop();
+      updatePin();
+    });
+    window.addEventListener("flexcase-navbar-offset-change", updatePin);
+    mobileQuery.addEventListener("change", () => {
+      setFixed(false);
+      measureNaturalTop();
+      updatePin();
+    });
+
+    measureNaturalTop();
+    updatePin();
   }
 
   if (searchEl) {
@@ -146,6 +238,7 @@
   }
 
   window.addEventListener("hashchange", scrollToCatalogFromHash);
+  setupCatalogToolbarPin();
 
   try {
     const response = await fetchApiWithFallback("/api/catalog?first=100");
