@@ -5,12 +5,31 @@
   const mobileQuery = window.matchMedia("(max-width: 980px)");
   let lastScrollY = window.scrollY;
   let ticking = false;
+  let catalogReachY = Infinity;
+
+  function getCatalogToolbar() {
+    return document.querySelector("#catalog .catalog-toolbar");
+  }
+
+  function measureCatalogReachY() {
+    const toolbar = getCatalogToolbar();
+    if (!toolbar) {
+      catalogReachY = Infinity;
+      return;
+    }
+    let top = 0;
+    let el = toolbar;
+    while (el) {
+      top += el.offsetTop;
+      el = el.offsetParent;
+    }
+    catalogReachY = Math.max(0, top - nav.offsetHeight);
+  }
 
   function updateStickyOffsets() {
     const hidden = nav.classList.contains("is-hidden");
     const top = hidden ? 0 : nav.offsetHeight;
     document.documentElement.style.setProperty("--catalog-sticky-top", `${top}px`);
-    window.dispatchEvent(new CustomEvent("flexcase-navbar-offset-change"));
   }
 
   function setNavbarHidden(hidden) {
@@ -28,9 +47,14 @@
     }
 
     const currentY = window.scrollY;
-    if (currentY <= 8) {
+
+    if (currentY < catalogReachY) {
       setNavbarHidden(false);
-    } else if (currentY > lastScrollY + 6) {
+      lastScrollY = currentY;
+      return;
+    }
+
+    if (currentY > lastScrollY + 6) {
       setNavbarHidden(true);
     } else if (currentY < lastScrollY - 6) {
       setNavbarHidden(false);
@@ -44,18 +68,23 @@
     requestAnimationFrame(updateNavbarVisibility);
   }
 
+  function remeasure() {
+    measureCatalogReachY();
+    updateStickyOffsets();
+    updateNavbarVisibility();
+  }
+
   window.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("resize", updateStickyOffsets);
+  window.addEventListener("resize", remeasure);
+  window.addEventListener("load", remeasure);
   if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", updateStickyOffsets);
+    window.visualViewport.addEventListener("resize", remeasure);
   }
   mobileQuery.addEventListener("change", () => {
     lastScrollY = window.scrollY;
     setNavbarHidden(false);
-    updateNavbarVisibility();
-    updateStickyOffsets();
+    remeasure();
   });
 
-  updateStickyOffsets();
-  updateNavbarVisibility();
+  remeasure();
 })();
