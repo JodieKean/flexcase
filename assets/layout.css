@@ -1,0 +1,16 @@
+:root {
+  --flexcase-content-width: 60vw;
+}
+
+@media (max-width: 980px) {
+  :root {
+    --flexcase-content-width: 88vw;
+  }
+}
+
+main {
+  width: var(--flexcase-content-width);
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flex Case — Product</title>
     <link rel="stylesheet" href="assets/navbar.css" />
+    <link rel="stylesheet" href="assets/layout.css" />
     <link rel="stylesheet" href="assets/catalog.css" />
     <script src="assets/flexcase-cart-sync.js"></script>
     <script src="assets/catalog-cards.js"></script>
@@ -24,9 +25,13 @@
       }
 
       main {
-        width: 88vw;
         max-width: 1360px;
-        margin: 0 auto;
+      }
+
+      @media (min-width: 981px) {
+        main {
+          width: 88vw;
+        }
       }
 
       .product-hero {
@@ -451,11 +456,6 @@
       }
 
       @media (max-width: 640px) {
-        main,
-        .site-navbar-inner {
-          width: 92vw;
-        }
-
         .gallery-thumbs {
           grid-template-columns: 1fr 1fr;
         }
