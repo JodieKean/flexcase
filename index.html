@@ -177,6 +177,8 @@
         border-radius: 999px;
         padding: 7px 12px;
         font-size: 0.82rem;
+        cursor: pointer;
+        font: inherit;
       }
 
       .catalog-chip.active {
@@ -187,33 +189,21 @@
 
       .catalog-controls {
         margin-top: 12px;
-        display: grid;
-        grid-template-columns: minmax(240px, 1fr) auto;
-        gap: 10px;
-        align-items: center;
       }
 
       .catalog-search {
+        width: 100%;
+        box-sizing: border-box;
         border: 1px solid #e6e6eb;
         border-radius: 999px;
         background: #ffffff;
         padding: 10px 14px;
         font-size: 0.9rem;
-        color: #6e6e73;
+        color: #1d1d1f;
       }
 
-      .catalog-controls-right {
-        display: flex;
-        gap: 8px;
-      }
-
-      .catalog-btn {
-        border: 1px solid #e6e6eb;
-        border-radius: 999px;
-        background: #ffffff;
-        padding: 10px 12px;
-        font-size: 0.86rem;
-        color: #424245;
+      .catalog-search::placeholder {
+        color: #8e8e93;
       }
 
       .catalog-meta {
@@ -343,14 +333,6 @@
           grid-template-columns: 1fr;
         }
 
-        .catalog-controls {
-          grid-template-columns: 1fr;
-        }
-
-        .catalog-controls-right {
-          justify-content: flex-start;
-        }
-
         .catalog-grid {
           grid-template-columns: 1fr;
         }
@@ -457,24 +439,16 @@
 
       <section class="catalog-section" aria-label="Product catalog">
         <div class="catalog-toolbar">
-          <div class="catalog-categories">
-            <button type="button" class="catalog-chip active">All</button>
-            <button type="button" class="catalog-chip">Display Cases</button>
-            <button type="button" class="catalog-chip">Graded Cases</button>
-            <button type="button" class="catalog-chip">Card Cases</button>
-            <button type="button" class="catalog-chip">Box Protectors</button>
-          </div>
+          <div class="catalog-categories" id="catalogCategories" role="tablist" aria-label="Product type"></div>
           <div class="catalog-controls">
             <input
+              id="catalogSearch"
               class="catalog-search"
-              type="text"
-              placeholder="Search cases, display stands..."
-              aria-label="Search catalog"
+              type="search"
+              placeholder="Search by product name or type..."
+              aria-label="Search catalog by product name or type"
+              autocomplete="off"
             />
-            <div class="catalog-controls-right">
-              <button type="button" class="catalog-btn">Filters</button>
-              <button type="button" class="catalog-btn">Featured</button>
-            </div>
           </div>
         </div>
 
@@ -484,89 +458,7 @@
 
     </main>
 
-    <script>
-      (async function initShopifyCatalog() {
-        const API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
-        const apiUrl = (pathname) => `${API_BASE}${pathname}`;
-        const localApiUrl = (pathname) => pathname;
-        async function fetchApiWithFallback(pathname) {
-          try {
-            return await fetch(apiUrl(pathname));
-          } catch (_) {
-            return fetch(localApiUrl(pathname));
-          }
-        }
-        const grid = document.getElementById("catalogGrid");
-        if (!grid) return;
-
-        const money = (amount, currencyCode = "MYR") =>
-          new Intl.NumberFormat("ms-MY", {
-            style: "currency",
-            currency: currencyCode || "MYR",
-          }).format(Number(amount || 0));
-
-        function renderCatalogCards(products) {
-          if (!products.length) {
-            grid.innerHTML =
-              '<div class="catalog-card" style="grid-column:1/-1;padding:18px;">No Shopify products yet. Add products in your Shopify admin, then refresh.</div>';
-            return;
-          }
-
-          grid.innerHTML = products
-            .map((product, index) => {
-              const firstVariant = product.variants?.nodes?.[0];
-              const minPrice = product.priceRange?.minVariantPrice;
-              const comparePrice = product.compareAtPriceRange?.minVariantPrice;
-              const price = minPrice ? money(minPrice.amount, minPrice.currencyCode) : "-";
-              const oldPrice =
-                comparePrice && Number(comparePrice.amount) > Number(minPrice?.amount || 0)
-                  ? `<span class="catalog-old">${money(comparePrice.amount, comparePrice.currencyCode)}</span>`
-                  : "";
-
-              const badge =
-                index === 0
-                  ? '<span class="catalog-badge">Best Seller</span>'
-                  : index === 1
-                    ? '<span class="catalog-badge">New</span>'
-                    : "";
-
-              const image = product.featuredImage?.url
-                ? `style="background-image:url('${product.featuredImage.url}');background-size:cover;background-position:center;"`
-                : "";
-
-              return `
-                <a class="catalog-card catalog-link" href="Product.html?handle=${encodeURIComponent(product.handle)}" aria-label="View ${product.title}">
-                  <div class="catalog-image" ${image}>${badge}</div>
-                  <div class="catalog-card-body">
-                    <div class="catalog-kind">${product.vendor || "Product"}</div>
-                    <div class="catalog-title">${product.title}</div>
-                    <div class="catalog-rating">${firstVariant?.availableForSale ? "In stock" : "Out of stock"}</div>
-                    <div class="catalog-footer">
-                      <div><span class="catalog-price">${price}</span>${oldPrice}</div>
-                      <button type="button" class="catalog-view">View</button>
-                    </div>
-                  </div>
-                </a>
-              `;
-            })
-            .join("");
-        }
-
-        try {
-          const response = await fetchApiWithFallback("/api/catalog?first=24");
-          const payload = await response.json();
-          if (!response.ok) {
-            throw new Error(payload.error || "Catalog request failed.");
-          }
-          const products = payload.products || [];
-          renderCatalogCards(products);
-          const countEl = document.querySelector(".catalog-meta");
-          if (countEl) countEl.textContent = `${products.length} products found`;
-        } catch (error) {
-          grid.innerHTML = `<div class="catalog-card" style="grid-column:1/-1;padding:18px;">Failed to load catalog: ${error.message}</div>`;
-        }
-      })();
-    </script>
+    <script src="assets/catalog-init.js"></script>
 
     <script>
       const API_URL = "https://api.pokemontcg.io/v2/cards";

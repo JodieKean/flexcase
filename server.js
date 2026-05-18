@@ -230,6 +230,7 @@ function mapProduct(node) {
     handle: node.handle,
     title: node.title,
     vendor: node.vendor,
+    productType: String(node.productType || "").trim(),
     description: node.description || "",
     totalInventory: Number(node.totalInventory || 0),
     featuredImage,
@@ -464,6 +465,7 @@ async function handleCatalog(req, res) {
             handle
             title
             vendor
+            productType
             featuredImage {
               url
               altText
@@ -509,6 +511,7 @@ async function handleProduct(req, res, handle) {
             handle
             title
             vendor
+            productType
             description
             totalInventory
             featuredImage {

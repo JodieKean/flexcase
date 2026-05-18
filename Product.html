@@ -698,7 +698,8 @@
         const product = payload.product;
 
         titleEl.textContent = product.title;
-        subtitleEl.textContent = product.vendor || "Shopify Product";
+        const productType = String(product.productType || "").trim();
+        subtitleEl.textContent = productType || product.vendor || "Shopify Product";
         descriptionEl.textContent = product.description || "No product description yet.";
 
         const variants = product.variants?.nodes || [];
