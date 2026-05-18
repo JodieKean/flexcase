@@ -38,15 +38,21 @@
         border: 1px solid #e6e6eb;
         border-radius: 20px;
         aspect-ratio: 1 / 1;
+        position: relative;
+        overflow: hidden;
         display: flex;
         align-items: center;
         justify-content: center;
       }
 
       .gallery-main img {
-        width: min(74%, 430px);
-        max-height: 90%;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
         object-fit: contain;
+        object-position: center;
+        display: block;
       }
 
       .gallery-main-inner {
@@ -57,17 +63,6 @@
         background: linear-gradient(160deg, #fcfcfd 0%, #f1f1f4 100%);
         box-shadow: inset 0 0 0 2px #fafafc;
         position: relative;
-      }
-
-      .gallery-main-inner::after {
-        content: "ULTRA-PRO";
-        position: absolute;
-        bottom: 16px;
-        right: 18px;
-        font-size: 0.74rem;
-        letter-spacing: 0.05em;
-        color: #b7b7be;
-        font-weight: 700;
       }
 
       .gallery-thumbs {
@@ -244,6 +239,29 @@
         color: #1d1d1f;
         width: 100%;
         margin-top: 10px;
+      }
+
+      .cta-dark:disabled,
+      .cta-light:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .cta-dark:disabled {
+        background: #d2d2d7;
+        color: #6e6e73;
+        border-color: #d2d2d7;
+      }
+
+      .cta-light:disabled {
+        background: #f5f5f7;
+        color: #8e8e93;
+        border-color: #d2d2d7;
+      }
+
+      .qty.qty--muted {
+        opacity: 0.45;
+        pointer-events: none;
       }
 
       .trust-inline {
@@ -683,6 +701,7 @@
         const variants = product.variants?.nodes || [];
         let selectedVariant = variants[0] || null;
         let quantity = 1;
+        let addToCartInFlight = false;
 
         function updatePriceBlock(variant) {
           const vPrice = variant?.price || product.priceRange?.minVariantPrice;
@@ -693,7 +712,22 @@
           const hasCompare = vCompare && Number(vCompare.amount) > Number(vPrice?.amount || 0);
           priceOldEl.textContent = hasCompare ? money(vCompare.amount, vCompare.currencyCode) : "";
           saleEl.textContent = hasCompare ? "Sale" : "";
-          addToCartBtn.textContent = `Add to Cart — ${priceNowEl.textContent}`;
+          syncPurchaseControls();
+        }
+
+        function syncPurchaseControls() {
+          const purchasable = Boolean(selectedVariant?.availableForSale);
+          const qtyRow = qtyValueEl?.closest(".qty");
+          if (qtyRow) qtyRow.classList.toggle("qty--muted", !purchasable);
+          buyNowBtn.disabled = !purchasable;
+          if (addToCartInFlight) {
+            addToCartBtn.disabled = true;
+            return;
+          }
+          addToCartBtn.disabled = !purchasable;
+          addToCartBtn.textContent = purchasable
+            ? `Add to Cart — ${priceNowEl.textContent}`
+            : "Out of stock";
         }
 
         function updateStock(variant) {
@@ -704,6 +738,7 @@
           } else {
             stockEl.textContent = "• Currently out of stock";
           }
+          syncPurchaseControls();
         }
 
         function renderGallery() {
@@ -770,6 +805,7 @@
 
         const qtyContainer = qtyValueEl?.closest(".qty");
         qtyContainer?.addEventListener("click", (event) => {
+          if (!selectedVariant?.availableForSale) return;
           const symbol = event.target.textContent?.trim();
           if (symbol === "+") quantity += 1;
           if (symbol === "-") quantity = Math.max(1, quantity - 1);
@@ -812,9 +848,9 @@
           window.flexcaseUpdateCartBadges?.();
         }
 
-        let addToCartInFlight = false;
         addToCartBtn.addEventListener("click", async () => {
           if (!selectedVariant?.id) return;
+          if (!selectedVariant.availableForSale) return;
           if (addToCartInFlight) return;
           let sessionAuthed = false;
           try {
@@ -869,13 +905,12 @@
             const totalQty = itemsAfter.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
             addToCartBtn.textContent = `Added (${totalQty})`;
             setTimeout(() => {
-              addToCartBtn.disabled = false;
-              addToCartBtn.textContent = `Add to Cart — ${priceNowEl.textContent}`;
               addToCartInFlight = false;
+              syncPurchaseControls();
             }, 800);
           } catch (error) {
-            addToCartBtn.disabled = false;
             addToCartInFlight = false;
+            syncPurchaseControls();
             if (sessionAuthed) {
               const msg = String(error?.message || "Cart sync unavailable").trim();
               addToCartBtn.textContent = msg.slice(0, 42);
@@ -884,13 +919,14 @@
             }
             console.error(error);
             setTimeout(() => {
-              addToCartBtn.textContent = `Add to Cart — ${priceNowEl.textContent}`;
+              syncPurchaseControls();
             }, 2200);
           }
         });
 
         buyNowBtn.addEventListener("click", async () => {
           if (!selectedVariant?.id) return;
+          if (!selectedVariant.availableForSale) return;
           window.location.href = "checkout.html";
         });
       })();
