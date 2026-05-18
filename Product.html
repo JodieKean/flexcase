@@ -5,7 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Flex Case — Product</title>
     <link rel="stylesheet" href="assets/navbar.css" />
+    <link rel="stylesheet" href="assets/catalog.css" />
     <script src="assets/flexcase-cart-sync.js"></script>
+    <script src="assets/catalog-cards.js"></script>
     <style>
       :root {
         color-scheme: light;
@@ -165,9 +167,9 @@
         margin-bottom: 8px;
       }
 
-      .size-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+      .option-grid {
+        display: flex;
+        flex-wrap: wrap;
         gap: 8px;
       }
 
@@ -179,6 +181,8 @@
         padding: 8px 12px;
         text-align: center;
         font-size: 0.88rem;
+        cursor: pointer;
+        font: inherit;
       }
 
       .chip.active {
@@ -187,27 +191,9 @@
         border-color: #1d1d1f;
       }
 
-      .finish-dots {
-        margin-top: 8px;
-        display: flex;
-        gap: 10px;
-      }
-
-      .dot {
-        width: 24px;
-        height: 24px;
-        border-radius: 50%;
-        border: 1px solid #d0d0d4;
-      }
-
-      .dot.one {
-        background: #dce8f2;
-      }
-      .dot.two {
-        background: #1d1d1f;
-      }
-      .dot.three {
-        background: #9ca3b5;
+      .chip:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
       }
 
       .buy-row {
@@ -424,44 +410,19 @@
         letter-spacing: -0.02em;
       }
 
+      .setup-view-all {
+        color: #6e6e73;
+        text-decoration: none;
+        font-size: 0.95rem;
+      }
+
+      .setup-view-all:hover {
+        color: #1d1d1f;
+        text-decoration: underline;
+      }
+
       .setup-grid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 14px;
-      }
-
-      .setup-card {
-        background: #ffffff;
-        border: 1px solid #ececf1;
-        border-radius: 18px;
-        overflow: hidden;
-      }
-
-      .setup-image {
-        height: 210px;
-        background: linear-gradient(145deg, #f2f2f5, #e7e7ed);
-        border-bottom: 1px solid #ececf1;
-      }
-
-      .setup-body {
-        padding: 12px;
-      }
-
-      .setup-body h3 {
-        margin: 0 0 6px;
-        font-size: 1.05rem;
-      }
-
-      .setup-body p {
-        margin: 0;
-        font-size: 0.82rem;
-        color: #7b7b81;
-      }
-
-      .setup-price {
-        margin-top: 8px;
-        font-size: 1.65rem;
-        font-weight: 700;
+        margin-top: 0;
       }
 
       @media (max-width: 1200px) {
@@ -483,9 +444,6 @@
           grid-template-columns: 1fr;
         }
 
-        .setup-grid {
-          grid-template-columns: 1fr 1fr;
-        }
       }
 
       @media (max-width: 640px) {
@@ -498,8 +456,7 @@
           grid-template-columns: 1fr 1fr;
         }
 
-        .size-grid,
-        .setup-grid,
+        .option-grid,
         .feature-strip {
           grid-template-columns: 1fr;
         }
@@ -551,22 +508,7 @@
           </div>
           <div class="stock-note" id="product-stock-note"></div>
 
-          <div class="variant-group">
-            <div class="variant-head">
-              <strong>Card Size</strong>
-              <span style="color: #a1a1a6">Size guide</span>
-            </div>
-            <div class="size-grid" id="variant-size-grid"></div>
-          </div>
-
-          <div class="variant-group">
-            <div class="variant-head"><strong>Finish</strong><span style="color: #6e6e73"></span></div>
-            <div class="finish-dots">
-              <div class="dot one"></div>
-              <div class="dot two"></div>
-              <div class="dot three"></div>
-            </div>
-          </div>
+          <div id="variant-options" class="variant-options"></div>
 
           <div class="buy-row">
             <div class="qty"><span>−</span><strong id="qty-value">1</strong><span>+</span></div>
@@ -610,12 +552,12 @@
         <div class="review-grid"></div>
       </section>
 
-      <section class="setup">
+      <section class="setup" aria-label="Related products">
         <div class="setup-top">
           <h2>Complete Your Setup</h2>
-          <span style="color: #6e6e73">View all →</span>
+          <a class="setup-view-all" href="index.html#catalog">View all →</a>
         </div>
-        <div class="setup-grid"></div>
+        <div class="catalog-grid setup-grid" id="setupCatalogGrid"></div>
       </section>
     </main>
 
@@ -658,7 +600,7 @@
         const descriptionEl = document.getElementById("product-description");
         const galleryMain = document.getElementById("product-gallery-main");
         const galleryThumbs = document.getElementById("product-gallery-thumbs");
-        const sizeGrid = document.getElementById("variant-size-grid");
+        const variantOptionsEl = document.getElementById("variant-options");
         const addToCartBtn = document.getElementById("add-to-cart-btn");
         const buyNowBtn = document.getElementById("buy-now-btn");
         const qtyValueEl = document.getElementById("qty-value");
@@ -703,9 +645,94 @@
         descriptionEl.textContent = product.description || "No product description yet.";
 
         const variants = product.variants?.nodes || [];
+        let selectedOptionValues = {};
         let selectedVariant = variants[0] || null;
         let quantity = 1;
         let addToCartInFlight = false;
+
+        function deriveOptionsFromVariants(vs) {
+          const map = new Map();
+          for (const v of vs) {
+            for (const opt of v.selectedOptions || []) {
+              if (!opt.name || !opt.value) continue;
+              if (!map.has(opt.name)) map.set(opt.name, new Set());
+              map.get(opt.name).add(opt.value);
+            }
+          }
+          return Array.from(map.entries()).map(([name, values]) => ({
+            name,
+            values: Array.from(values),
+          }));
+        }
+
+        function getProductOptions() {
+          const fromProduct = (product.options || []).filter(
+            (o) => o.name && Array.isArray(o.values) && o.values.length
+          );
+          if (fromProduct.length) return fromProduct;
+          return deriveOptionsFromVariants(variants);
+        }
+
+        function isDefaultOnlyProduct() {
+          if (!variants.length) return true;
+          if (variants.length === 1) {
+            const t = String(variants[0]?.title || "").trim();
+            if (!t || t === "Default Title") return true;
+          }
+          const opts = getProductOptions();
+          if (!opts.length) return true;
+          if (
+            opts.length === 1 &&
+            opts[0].name === "Title" &&
+            opts[0].values.length === 1 &&
+            opts[0].values[0] === "Default Title"
+          ) {
+            return true;
+          }
+          return false;
+        }
+
+        function initSelectedOptions() {
+          selectedOptionValues = {};
+          const opts = getProductOptions();
+          if (!opts.length) return;
+          const source = selectedVariant?.selectedOptions?.length
+            ? selectedVariant.selectedOptions
+            : variants[0]?.selectedOptions || [];
+          for (const opt of source) {
+            if (opt.name && opt.value) selectedOptionValues[opt.name] = opt.value;
+          }
+          for (const o of opts) {
+            if (!selectedOptionValues[o.name] && o.values?.length) {
+              selectedOptionValues[o.name] = o.values[0];
+            }
+          }
+        }
+
+        function findVariantByOptions(selections) {
+          const keys = Object.keys(selections);
+          if (!keys.length) return variants[0] || null;
+          return (
+            variants.find((v) => {
+              const vopts = v.selectedOptions || [];
+              return keys.every((name) =>
+                vopts.some((o) => o.name === name && o.value === selections[name])
+              );
+            }) || null
+          );
+        }
+
+        function optionValueAvailable(optionName, value) {
+          const trial = { ...selectedOptionValues, [optionName]: value };
+          const match = findVariantByOptions(trial);
+          return Boolean(match?.availableForSale);
+        }
+
+        function applySelectedVariant() {
+          selectedVariant = findVariantByOptions(selectedOptionValues) || selectedVariant;
+          updatePriceBlock(selectedVariant);
+          updateStock(selectedVariant);
+        }
 
         function updatePriceBlock(variant) {
           const vPrice = variant?.price || product.priceRange?.minVariantPrice;
@@ -723,7 +750,7 @@
           const purchasable = Boolean(selectedVariant?.availableForSale);
           const qtyRow = qtyValueEl?.closest(".qty");
           if (qtyRow) qtyRow.classList.toggle("qty--muted", !purchasable);
-          buyNowBtn.disabled = !purchasable;
+          buyNowBtn.disabled = !purchasable || addToCartInFlight;
           if (addToCartInFlight) {
             addToCartBtn.disabled = true;
             return;
@@ -843,31 +870,91 @@
         }
 
         function renderVariants() {
-          if (!variants.length) return;
-          sizeGrid.innerHTML = variants
-            .map(
-              (variant, i) =>
-                `<button type="button" class="chip${i === 0 ? " active" : ""}" data-variant-id="${variant.id}">${variant.title}</button>`
-            )
+          if (!variantOptionsEl) return;
+          if (isDefaultOnlyProduct()) {
+            variantOptionsEl.innerHTML = "";
+            variantOptionsEl.hidden = true;
+            return;
+          }
+          variantOptionsEl.hidden = false;
+          const options = getProductOptions();
+          variantOptionsEl.innerHTML = options
+            .map((option) => {
+              const name = escapeGalleryText(option.name);
+              const chips = (option.values || [])
+                .map((value) => {
+                  const active =
+                    selectedOptionValues[option.name] === value ? " active" : "";
+                  const disabled = optionValueAvailable(option.name, value) ? "" : " disabled";
+                  return (
+                    '<button type="button" class="chip' +
+                    active +
+                    '" data-option-name="' +
+                    escapeGalleryText(option.name) +
+                    '" data-option-value="' +
+                    escapeGalleryText(value) +
+                    '"' +
+                    disabled +
+                    ">" +
+                    escapeGalleryText(value) +
+                    "</button>"
+                  );
+                })
+                .join("");
+              return (
+                '<div class="variant-group">' +
+                '<div class="variant-head"><strong>' +
+                name +
+                "</strong></div>" +
+                '<div class="option-grid">' +
+                chips +
+                "</div></div>"
+              );
+            })
             .join("");
-          sizeGrid.addEventListener("click", (event) => {
-            const chip = event.target.closest("[data-variant-id]");
-            if (!chip) return;
-            const variant = variants.find((v) => v.id === chip.dataset.variantId);
-            if (!variant) return;
-            selectedVariant = variant;
-            sizeGrid
-              .querySelectorAll(".chip")
-              .forEach((el) => el.classList.toggle("active", el === chip));
-            updatePriceBlock(selectedVariant);
-            updateStock(selectedVariant);
-          });
+
+          variantOptionsEl.onclick = (event) => {
+            const chip = event.target.closest("[data-option-name]");
+            if (!chip || chip.disabled) return;
+            const optionName = chip.dataset.optionName;
+            const optionValue = chip.dataset.optionValue;
+            if (!optionName || !optionValue) return;
+            selectedOptionValues[optionName] = optionValue;
+            renderVariants();
+            applySelectedVariant();
+          };
         }
+
+        initSelectedOptions();
+        selectedVariant = findVariantByOptions(selectedOptionValues) || selectedVariant;
 
         renderGallery();
         renderVariants();
         updatePriceBlock(selectedVariant);
         updateStock(selectedVariant);
+
+        async function renderRelatedProducts() {
+          const setupGrid = document.getElementById("setupCatalogGrid");
+          const cardsApi = window.flexcaseCatalogCards;
+          if (!setupGrid || !cardsApi) return;
+          try {
+            const res = await fetchApiWithFallback("/api/catalog?first=100");
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Catalog request failed.");
+            cardsApi.renderCatalogGrid(setupGrid, data.products || [], {
+              excludeHandle: product.handle,
+              limit: 4,
+              emptyMessage:
+                '<div class="catalog-card" style="grid-column:1/-1;padding:18px;">No other products to show yet.</div>',
+            });
+          } catch (err) {
+            setupGrid.innerHTML =
+              '<div class="catalog-card" style="grid-column:1/-1;padding:18px;">Could not load related products.</div>';
+            console.error(err);
+          }
+        }
+
+        await renderRelatedProducts();
 
         if (typeof window.flexcaseRefreshCartFromServer === "function") {
           await window.flexcaseRefreshCartFromServer().catch(() => {});
@@ -918,6 +1005,56 @@
           window.flexcaseUpdateCartBadges?.();
         }
 
+        async function addProductToCart() {
+          if (!selectedVariant?.id) throw new Error("No variant selected");
+          if (!selectedVariant.availableForSale) throw new Error("Out of stock");
+
+          let sessionAuthed = false;
+          try {
+            let s;
+            try {
+              s = await fetchWithTimeout(
+                apiUrl("/api/customer/session"),
+                { credentials: "include" },
+                3500
+              );
+            } catch (_) {
+              s = await fetchWithTimeout(
+                localApiUrl("/api/customer/session"),
+                { credentials: "include" },
+                2500
+              );
+            }
+            const sj = await s.json();
+            sessionAuthed = Boolean(sj?.authenticated);
+          } catch (_) {
+            sessionAuthed = false;
+          }
+
+          if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
+            const lineDetails = {
+              productHandle: product.handle,
+              productTitle: product.title,
+              variantTitle: selectedVariant.title || "Default",
+              price:
+                selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount || 0,
+              currencyCode:
+                selectedVariant.price?.currencyCode ||
+                product.priceRange?.minVariantPrice?.currencyCode ||
+                "MYR",
+              image: product.featuredImage?.url || "",
+            };
+            await withTimeout(
+              window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity, lineDetails),
+              9000,
+              "Cart sync timeout"
+            );
+          } else {
+            addLineToLocalCart();
+          }
+          return sessionAuthed;
+        }
+
         addToCartBtn.addEventListener("click", async () => {
           if (!selectedVariant?.id) return;
           if (!selectedVariant.availableForSale) return;
@@ -925,51 +1062,10 @@
           let sessionAuthed = false;
           try {
             addToCartInFlight = true;
-            addToCartBtn.disabled = true;
+            syncPurchaseControls();
             addToCartBtn.textContent = "Adding...";
 
-            try {
-              let s;
-              try {
-                s = await fetchWithTimeout(
-                  apiUrl("/api/customer/session"),
-                  { credentials: "include" },
-                  3500
-                );
-              } catch (_) {
-                s = await fetchWithTimeout(
-                  localApiUrl("/api/customer/session"),
-                  { credentials: "include" },
-                  2500
-                );
-              }
-              const sj = await s.json();
-              sessionAuthed = Boolean(sj?.authenticated);
-            } catch (_) {
-              sessionAuthed = false;
-            }
-
-            if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
-              const lineDetails = {
-                productHandle: product.handle,
-                productTitle: product.title,
-                variantTitle: selectedVariant.title || "Default",
-                price:
-                  selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount || 0,
-                currencyCode:
-                  selectedVariant.price?.currencyCode ||
-                  product.priceRange?.minVariantPrice?.currencyCode ||
-                  "MYR",
-                image: product.featuredImage?.url || "",
-              };
-              await withTimeout(
-                window.flexcaseAddToCartLoggedIn(selectedVariant.id, quantity, lineDetails),
-                9000,
-                "Cart sync timeout"
-              );
-            } else {
-              addLineToLocalCart();
-            }
+            sessionAuthed = await addProductToCart();
 
             const itemsAfter = readCart();
             const totalQty = itemsAfter.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
@@ -997,7 +1093,20 @@
         buyNowBtn.addEventListener("click", async () => {
           if (!selectedVariant?.id) return;
           if (!selectedVariant.availableForSale) return;
-          window.location.href = "checkout.html";
+          if (addToCartInFlight) return;
+          const buyLabel = buyNowBtn.textContent;
+          try {
+            addToCartInFlight = true;
+            syncPurchaseControls();
+            buyNowBtn.textContent = "Loading...";
+            await addProductToCart();
+            window.location.href = "checkout.html";
+          } catch (error) {
+            addToCartInFlight = false;
+            buyNowBtn.textContent = buyLabel;
+            syncPurchaseControls();
+            console.error(error);
+          }
         });
       })();
     </script>

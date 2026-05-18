@@ -235,6 +235,12 @@ function mapProduct(node) {
     totalInventory: Number(node.totalInventory || 0),
     featuredImage,
     images,
+    options: (Array.isArray(node.options) ? node.options : []).map((opt) => ({
+      name: String(opt?.name || "").trim(),
+      values: (Array.isArray(opt?.values) ? opt.values : [])
+        .map((v) => String(v || "").trim())
+        .filter(Boolean),
+    })),
     priceRange: {
       minVariantPrice: {
         amount: variants[0]?.price || "0",
@@ -251,6 +257,12 @@ function mapProduct(node) {
       nodes: variants.map((variant) => ({
         id: variant.id,
         title: variant.title,
+        selectedOptions: (Array.isArray(variant.selectedOptions) ? variant.selectedOptions : [])
+          .map((opt) => ({
+            name: String(opt?.name || "").trim(),
+            value: String(opt?.value || "").trim(),
+          }))
+          .filter((opt) => opt.name && opt.value),
         availableForSale: !!variant.inventoryQuantity && variant.inventoryQuantity > 0,
         quantityAvailable: Number(variant.inventoryQuantity || 0),
         price: {
@@ -525,6 +537,10 @@ async function handleProduct(req, res, handle) {
                   altText
                 }
               }
+            }
+            options {
+              name
+              values
             }
             variants(first: 50) {
               edges {

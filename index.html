@@ -150,12 +150,21 @@
 
       .catalog-section {
         margin-top: 54px;
+        width: 100vw;
+        max-width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
+        padding-left: max(16px, env(safe-area-inset-left, 0px));
+        padding-right: max(16px, env(safe-area-inset-right, 0px));
+        box-sizing: border-box;
       }
 
       .catalog-toolbar {
         position: sticky;
         top: 68px;
         z-index: 35;
+        width: 100%;
+        box-sizing: border-box;
         background: rgba(245, 245, 247, 0.95);
         backdrop-filter: saturate(180%) blur(8px);
         -webkit-backdrop-filter: saturate(180%) blur(8px);
@@ -168,6 +177,7 @@
         display: flex;
         gap: 8px;
         flex-wrap: wrap;
+        width: 100%;
       }
 
       .catalog-chip {
@@ -179,6 +189,7 @@
         font-size: 0.82rem;
         cursor: pointer;
         font: inherit;
+        white-space: nowrap;
       }
 
       .catalog-chip.active {
@@ -189,17 +200,24 @@
 
       .catalog-controls {
         margin-top: 12px;
+        width: 100%;
+        min-width: 0;
       }
 
       .catalog-search {
+        display: block;
         width: 100%;
+        max-width: none;
+        min-width: 0;
         box-sizing: border-box;
         border: 1px solid #e6e6eb;
         border-radius: 999px;
         background: #ffffff;
-        padding: 10px 14px;
-        font-size: 0.9rem;
+        padding: 12px 16px;
+        font-size: 1rem;
         color: #1d1d1f;
+        -webkit-appearance: none;
+        appearance: none;
       }
 
       .catalog-search::placeholder {
@@ -326,11 +344,56 @@
         .catalog-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
+
+        .catalog-categories {
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          overflow-y: hidden;
+          -webkit-overflow-scrolling: touch;
+          scroll-snap-type: x proximity;
+          overscroll-behavior-x: contain;
+          scrollbar-width: none;
+          margin-left: -4px;
+          margin-right: -4px;
+          padding-left: 4px;
+          padding-right: 4px;
+        }
+
+        .catalog-categories::-webkit-scrollbar {
+          display: none;
+        }
+
+        .catalog-chip {
+          flex: 0 0 auto;
+          scroll-snap-align: start;
+        }
       }
 
       @media (max-width: 680px) {
         .windows {
           grid-template-columns: 1fr;
+        }
+
+        .catalog-section {
+          padding-left: max(12px, env(safe-area-inset-left, 0px));
+          padding-right: max(12px, env(safe-area-inset-right, 0px));
+        }
+
+        .catalog-toolbar {
+          padding: 10px;
+          border-radius: 14px;
+        }
+
+        .catalog-categories {
+          margin-left: -6px;
+          margin-right: -6px;
+          padding-left: 6px;
+          padding-right: 6px;
+        }
+
+        .catalog-search {
+          padding: 11px 14px;
+          font-size: 16px; /* avoids iOS zoom-on-focus */
         }
 
         .catalog-grid {
@@ -437,7 +500,7 @@
         </div>
       </section>
 
-      <section class="catalog-section" aria-label="Product catalog">
+      <section id="catalog" class="catalog-section" aria-label="Product catalog">
         <div class="catalog-toolbar">
           <div class="catalog-categories" id="catalogCategories" role="tablist" aria-label="Product type"></div>
           <div class="catalog-controls">
@@ -458,6 +521,7 @@
 
     </main>
 
+    <script src="assets/catalog-cards.js"></script>
     <script src="assets/catalog-init.js"></script>
 
     <script>

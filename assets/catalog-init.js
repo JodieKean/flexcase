@@ -13,30 +13,14 @@
   const categoriesEl = document.getElementById("catalogCategories");
   const searchEl = document.getElementById("catalogSearch");
   const countEl = document.querySelector(".catalog-meta");
-  if (!grid) return;
+  const cards = window.flexcaseCatalogCards;
+  if (!grid || !cards) return;
 
   let allProducts = [];
   let activeType = "All";
   let searchQuery = "";
 
-  const money = (amount, currencyCode = "MYR") =>
-    new Intl.NumberFormat("ms-MY", {
-      style: "currency",
-      currency: currencyCode || "MYR",
-    }).format(Number(amount || 0));
-
-  function escapeHtml(str) {
-    return String(str || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;");
-  }
-
-  function productTypeLabel(product) {
-    const type = String(product.productType || "").trim();
-    return type || "Product";
-  }
+  const { escapeHtml, productTypeLabel, renderCatalogGrid } = cards;
 
   function collectProductTypes(products) {
     const types = new Set();
@@ -132,77 +116,26 @@
       return;
     }
 
-    grid.innerHTML = products
-      .map((product, index) => {
-        const firstVariant = product.variants?.nodes?.[0];
-        const minPrice = product.priceRange?.minVariantPrice;
-        const comparePrice = product.compareAtPriceRange?.minVariantPrice;
-        const price = minPrice ? money(minPrice.amount, minPrice.currencyCode) : "-";
-        const oldPrice =
-          comparePrice && Number(comparePrice.amount) > Number(minPrice?.amount || 0)
-            ? '<span class="catalog-old">' +
-              money(comparePrice.amount, comparePrice.currencyCode) +
-              "</span>"
-            : "";
-
-        const badge =
-          index === 0
-            ? '<span class="catalog-badge">Best Seller</span>'
-            : index === 1
-              ? '<span class="catalog-badge">New</span>'
-              : "";
-
-        const imageUrl = String(product.featuredImage?.url || "").trim();
-        const image = imageUrl
-          ? 'style="background-image:url(\'' +
-            imageUrl.replace(/'/g, "%27") +
-            "');background-size:cover;background-position:center;\""
-          : "";
-
-        const title = escapeHtml(product.title);
-        const kind = escapeHtml(productTypeLabel(product));
-        const handle = encodeURIComponent(product.handle || "");
-        const stock = firstVariant?.availableForSale ? "In stock" : "Out of stock";
-
-        return (
-          '<a class="catalog-card catalog-link" href="Product.html?handle=' +
-          handle +
-          '" aria-label="View ' +
-          title +
-          '">' +
-          '<div class="catalog-image" ' +
-          image +
-          ">" +
-          badge +
-          "</div>" +
-          '<div class="catalog-card-body">' +
-          '<div class="catalog-kind">' +
-          kind +
-          "</div>" +
-          '<div class="catalog-title">' +
-          title +
-          "</div>" +
-          '<div class="catalog-rating">' +
-          stock +
-          "</div>" +
-          '<div class="catalog-footer">' +
-          "<div><span class=\"catalog-price\">" +
-          price +
-          "</span>" +
-          oldPrice +
-          "</div>" +
-          '<button type="button" class="catalog-view">View</button>' +
-          "</div>" +
-          "</div>" +
-          "</a>"
-        );
-      })
-      .join("");
+    renderCatalogGrid(grid, products);
     updateMeta(products.length);
   }
 
   function applyCatalogFilters() {
     renderCatalogCards(getFilteredProducts());
+    scrollToCatalogFromHash();
+  }
+
+  function scrollToCatalogFromHash() {
+    const hash = window.location.hash.replace(/^#/, "");
+    if (hash !== "catalog") return;
+    const section = document.getElementById("catalog");
+    if (!section) return;
+    const toolbar = section.querySelector(".catalog-toolbar") || section;
+    const navOffset = 72;
+    const top = toolbar.getBoundingClientRect().top + window.pageYOffset - navOffset;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    const search = document.getElementById("catalogSearch");
+    if (search) search.focus({ preventScroll: true });
   }
 
   if (searchEl) {
@@ -211,6 +144,8 @@
       applyCatalogFilters();
     });
   }
+
+  window.addEventListener("hashchange", scrollToCatalogFromHash);
 
   try {
     const response = await fetchApiWithFallback("/api/catalog?first=100");
@@ -221,6 +156,7 @@
     allProducts = payload.products || [];
     renderCategoryChips(collectProductTypes(allProducts));
     applyCatalogFilters();
+    requestAnimationFrame(() => requestAnimationFrame(scrollToCatalogFromHash));
   } catch (error) {
     grid.innerHTML =
       '<div class="catalog-card" style="grid-column:1/-1;padding:18px;">Failed to load catalog: ' +
