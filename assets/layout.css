@@ -12,6 +12,13 @@
     padding-right: 0;
     max-width: 100vw;
   }
+
+  /* iOS Safari zooms focused inputs below 16px */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]),
+  select,
+  textarea {
+    font-size: 16px;
+  }
 }
 
 main {
