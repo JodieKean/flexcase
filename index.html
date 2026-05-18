@@ -18,9 +18,18 @@
           "Helvetica Neue", Helvetica, Arial, sans-serif;
         background: #f5f5f7;
         color: #1d1d1f;
-        padding: 40px 24px;
+        padding: 40px 0;
         padding-top: calc(62px + 40px);
         max-width: 100vw;
+        overscroll-behavior-x: none;
+      }
+
+      .page-top {
+        overflow-x: hidden;
+        max-width: 100vw;
+        padding-left: 24px;
+        padding-right: 24px;
+        box-sizing: border-box;
       }
 
       h1 {
@@ -152,7 +161,15 @@
 
       .catalog-section {
         margin-top: 54px;
+        width: 100%;
+        max-width: 100vw;
         overflow: visible;
+      }
+
+      .catalog-body {
+        width: var(--flexcase-content-width, 60vw);
+        margin: 0 auto;
+        box-sizing: border-box;
       }
 
       .catalog-toolbar {
@@ -160,10 +177,8 @@
         position: sticky;
         top: 62px;
         z-index: 40;
-        width: 100vw;
+        width: 100%;
         max-width: 100vw;
-        margin-left: calc(50% - 50vw);
-        margin-right: calc(50% - 50vw);
         box-sizing: border-box;
         background: rgba(245, 245, 247, 0.72);
         backdrop-filter: saturate(180%) blur(14px);
@@ -186,6 +201,7 @@
         width: 100%;
         max-width: 100%;
         min-width: 0;
+        overscroll-behavior-x: contain;
       }
 
       .catalog-chip {
@@ -351,6 +367,11 @@
           padding-right: 0;
         }
 
+        .page-top {
+          padding-left: 0;
+          padding-right: 0;
+        }
+
         .windows {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
@@ -371,6 +392,7 @@
           -webkit-overflow-scrolling: touch;
           scroll-snap-type: x proximity;
           overscroll-behavior-x: contain;
+          touch-action: pan-x;
           scrollbar-width: none;
         }
 
@@ -422,7 +444,8 @@
       </div>
     </nav>
 
-    <main>
+    <div class="page-top">
+      <main>
       <div class="hero-text">
         <h1>Flex your collection in style.</h1>
         <p>Display your personal collection with Flex Case.</p>
@@ -497,29 +520,31 @@
           />
         </div>
       </section>
+      </main>
+    </div>
 
-      <section id="catalog" class="catalog-section" aria-label="Product catalog">
-        <div class="catalog-toolbar">
-          <div class="catalog-toolbar-inner">
-            <div class="catalog-categories" id="catalogCategories" role="tablist" aria-label="Product type"></div>
-            <div class="catalog-controls">
-              <input
-                id="catalogSearch"
-                class="catalog-search"
-                type="search"
-                placeholder="Search by product name or type..."
-                aria-label="Search catalog by product name or type"
-                autocomplete="off"
-              />
-            </div>
+    <section id="catalog" class="catalog-section" aria-label="Product catalog">
+      <div class="catalog-toolbar">
+        <div class="catalog-toolbar-inner">
+          <div class="catalog-categories" id="catalogCategories" role="tablist" aria-label="Product type"></div>
+          <div class="catalog-controls">
+            <input
+              id="catalogSearch"
+              class="catalog-search"
+              type="search"
+              placeholder="Search by product name or type..."
+              aria-label="Search catalog by product name or type"
+              autocomplete="off"
+            />
           </div>
         </div>
+      </div>
 
+      <div class="catalog-body">
         <div class="catalog-meta">Loading products...</div>
         <div class="catalog-grid" id="catalogGrid"></div>
-      </section>
-
-    </main>
+      </div>
+    </section>
 
     <script src="assets/catalog-cards.js"></script>
     <script src="assets/catalog-init.js"></script>
