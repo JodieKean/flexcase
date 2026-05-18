@@ -436,8 +436,6 @@
         .catalog-toolbar {
           position: relative;
           top: auto;
-          transition: transform 0.22s ease;
-          will-change: transform;
         }
 
         .catalog-toolbar.is-stuck {
@@ -446,15 +444,12 @@
           right: 0;
           width: 100%;
           max-width: 100vw;
+          top: var(--catalog-sticky-top, 62px);
           z-index: 40;
+          transition: top 0.22s ease;
           background: rgba(245, 245, 247, 0.72);
           backdrop-filter: saturate(180%) blur(14px);
           -webkit-backdrop-filter: saturate(180%) blur(14px);
-        }
-
-        .catalog-toolbar.is-hidden {
-          transform: translateY(-100%);
-          pointer-events: none;
         }
 
         .catalog-chip {
