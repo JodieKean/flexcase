@@ -37,15 +37,23 @@
       normalized === "new" ||
       normalized === "best seller" ||
       normalized === "bestseller" ||
-      normalized === "best-seller"
+      normalized === "best-seller" ||
+      normalized === "max savings" ||
+      normalized === "early bird discount"
     );
   }
 
-  function getProductBadgeHtml(product) {
+  function getProductBadgesHtml(product, maxBadges = 2) {
     const tags = parseProductTags(product.tags);
-    const badgeTag = tags.find((tag) => isCatalogBadgeTag(tag));
-    if (!badgeTag) return "";
-    return '<span class="catalog-badge">' + escapeHtml(badgeTag) + "</span>";
+    const badgeTags = tags.filter((tag) => isCatalogBadgeTag(tag)).slice(0, maxBadges);
+    if (!badgeTags.length) return "";
+    return (
+      '<div class="catalog-badges">' +
+      badgeTags
+        .map((tag) => '<span class="catalog-badge">' + escapeHtml(tag) + "</span>")
+        .join("") +
+      "</div>"
+    );
   }
 
   function buildCatalogCardHtml(product) {
@@ -60,7 +68,7 @@
           "</span>"
         : "";
 
-    const badge = getProductBadgeHtml(product);
+    const badge = getProductBadgesHtml(product);
 
     const imageUrl = String(product.featuredImage?.url || "").trim();
     const image = imageUrl
@@ -131,7 +139,7 @@
     escapeHtml,
     money,
     productTypeLabel,
-    getProductBadgeHtml,
+    getProductBadgesHtml,
     buildCatalogCardHtml,
     renderCatalogGrid,
   };
