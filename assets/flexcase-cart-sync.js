@@ -15,7 +15,7 @@
 (function () {
   const CART_KEY = "flexcase.local.cart";
   const SCHEMA_KEY = "flexcase.cart_schema_version";
-  const SCHEMA_VERSION = "v2";
+  const SCHEMA_VERSION = "v3";
   const MERGED_PREFIX = "flexcase.merged_for_";
   const LAST_AUTH_IDENTITY_KEY = "flexcase.last.auth.identity";
   const LEGACY_MERGED_KEY = "flexcase_guest_cart_merged";

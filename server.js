@@ -1552,7 +1552,8 @@ const STOREFRONT_CART_FRAGMENT = `
   lines(first: 100) {
     edges {
       node {
-        ... on CartLine {
+        __typename
+        ... on BaseCartLine {
           id
           quantity
           merchandise {
