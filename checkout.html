@@ -2177,6 +2177,16 @@
           }
         }
 
+        if (isAuthed && !checkoutCartDirty) {
+          try {
+            await window.flexcaseMergeServerCart?.();
+          } catch (_) {
+            /* ignore */
+          }
+          writeCartItems(readCartItems());
+          renderOrderLines(readCartItems());
+        }
+
         if (!checkoutCartDirty) {
           patchRenderedQuantities(readCartItems());
           recalcTotals();
