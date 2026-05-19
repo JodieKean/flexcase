@@ -1027,7 +1027,8 @@
           if (existing) {
             existing.quantity += quantity;
           } else {
-            items.push({
+            // Newest item goes to the top of the cart.
+            items.unshift({
               variantId: selectedVariant.id,
               productHandle: product.handle,
               productTitle: product.title,

@@ -105,30 +105,67 @@
   window.addEventListener("flexcase-cart-updated", updateBadges);
 
   /**
-   * When the server returns canonical lines, keep any UI metadata (title/image/handle)
-   * that the server response did not include (Shopify normally returns these — this is a safety net).
+   * Reorder server response so the local cart presents newest-added on top while
+   * existing lines keep their previous position (quantity changes do not reshuffle).
+   *
+   *   • `justAddedVariantId` (optional): force that variant to the top.
+   *   • Items new to the server (e.g. transform-injected bundles, sync from another
+   *     device) go above previously-known items.
+   *   • Previously-known items keep their previous local order.
+   *
+   * Also preserves UI metadata (title/image/handle) when the server response is sparse.
    */
-  function preserveLocalDetails(serverLines) {
+  function reconcileServerLines(serverLines, justAddedVariantId = "") {
     const local = readLocalLines();
-    const byKey = new Map();
-    for (const l of local) {
+    const localByKey = new Map();
+    const localOrder = new Map();
+    local.forEach((l, idx) => {
       const k = variantKey(l);
-      if (k) byKey.set(k, l);
-    }
-    return (serverLines || []).map((line) => {
+      if (!k) return;
+      localByKey.set(k, l);
+      localOrder.set(k, idx);
+    });
+
+    const justAddedKey = justAddedVariantId
+      ? normalizeStorefrontVariantGid(justAddedVariantId) || String(justAddedVariantId).trim()
+      : "";
+
+    const hydrated = (serverLines || []).map((line, srvIdx) => {
       const key = variantKey(line);
-      const cached = byKey.get(key) || {};
+      const cached = localByKey.get(key) || {};
       return {
-        ...cached,
-        ...line,
-        variantId: key,
-        productHandle: line.productHandle || cached.productHandle || "",
-        productTitle: line.productTitle || cached.productTitle || "",
-        variantTitle: line.variantTitle || cached.variantTitle || "",
-        image: line.image || cached.image || "",
-        currencyCode: line.currencyCode || cached.currencyCode || "MYR",
+        line: {
+          ...cached,
+          ...line,
+          variantId: key,
+          productHandle: line.productHandle || cached.productHandle || "",
+          productTitle: line.productTitle || cached.productTitle || "",
+          variantTitle: line.variantTitle || cached.variantTitle || "",
+          image: line.image || cached.image || "",
+          currencyCode: line.currencyCode || cached.currencyCode || "MYR",
+        },
+        key,
+        srvIdx,
       };
     });
+
+    hydrated.sort((a, b) => {
+      if (a.key && a.key === justAddedKey) return -1;
+      if (b.key && b.key === justAddedKey) return 1;
+      const aKnown = localOrder.has(a.key);
+      const bKnown = localOrder.has(b.key);
+      if (aKnown && bKnown) return localOrder.get(a.key) - localOrder.get(b.key);
+      if (aKnown && !bKnown) return 1;
+      if (!aKnown && bKnown) return -1;
+      return a.srvIdx - b.srvIdx;
+    });
+
+    return hydrated.map((entry) => entry.line);
+  }
+
+  // Backwards-compatible alias — older callers passed only server lines.
+  function preserveLocalDetails(serverLines) {
+    return reconcileServerLines(serverLines, "");
   }
 
   function sessionIdentity(payload) {
@@ -236,7 +273,7 @@
         if (!r.ok) return false;
         const j = await r.json().catch(() => ({}));
         if (Array.isArray(j.lines)) {
-          writeLocalLines(preserveLocalDetails(j.lines));
+          writeLocalLines(reconcileServerLines(j.lines, vid));
         }
         updateBadges();
         return true;
