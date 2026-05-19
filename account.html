@@ -386,6 +386,15 @@
         border-radius: 10px;
         border: 1px solid #e6e6eb;
         background: linear-gradient(135deg, #ececf1, #f8f8fb);
+        overflow: hidden;
+        flex-shrink: 0;
+      }
+
+      .thumb img {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
       }
 
       .item-name {
@@ -2506,12 +2515,17 @@
                 const lineTotal = item.lineTotal
                   ? money(item.lineTotal.amount, item.lineTotal.currencyCode)
                   : "-";
+                const imageUrl = String(item.image || "").trim();
+                const imageAlt = escapeHtml(item.imageAlt || item.title || "Product image");
+                const thumbHtml = imageUrl
+                  ? `<div class="thumb"><img src="${escapeHtml(imageUrl)}" alt="${imageAlt}" loading="lazy" /></div>`
+                  : `<div class="thumb"></div>`;
                 return `
                 <div class="item">
-                  <div class="thumb"></div>
+                  ${thumbHtml}
                   <div>
-                    <div class="item-name">${item.title || "Item"}</div>
-                    <div class="item-meta">${item.variantTitle || "Default"} · Qty ${item.quantity || 1}</div>
+                    <div class="item-name">${escapeHtml(item.title || "Item")}</div>
+                    <div class="item-meta">${escapeHtml(item.variantTitle || "Default")} · Qty ${item.quantity || 1}</div>
                   </div>
                   <div class="item-price">${lineTotal}</div>
                 </div>

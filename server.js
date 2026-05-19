@@ -1101,10 +1101,18 @@ async function handleCustomerAccountData(req, res) {
                     id
                     handle
                     onlineStoreUrl
+                    featuredImage {
+                      url
+                      altText
+                    }
                   }
                   variant {
                     id
                     title
+                    image {
+                      url
+                      altText
+                    }
                   }
                 }
               }
@@ -1203,6 +1211,15 @@ async function handleCustomerAccountData(req, res) {
               null,
             productHandle: item.product?.handle || "",
             productUrl: item.product?.onlineStoreUrl || "",
+            image:
+              item.variant?.image?.url ||
+              item.product?.featuredImage?.url ||
+              "",
+            imageAlt:
+              item.variant?.image?.altText ||
+              item.product?.featuredImage?.altText ||
+              item.title ||
+              "",
           })) || [],
       })),
     });
