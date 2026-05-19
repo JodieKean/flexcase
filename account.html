@@ -1558,7 +1558,7 @@
           /* ignore */
         }
         window.__flexcaseSkipExitCartFlush = true;
-        clearClientSessionState({ clearCart: false });
+        clearClientSessionState();
         showAuthRedirectOverlay("Always remember to Flex your collection!");
         // Use provider logout endpoint to clear Shopify Account SSO session too.
         window.setTimeout(() => window.location.assign(apiUrl("/api/customer/logout")), 120);
@@ -1859,6 +1859,7 @@
 
       const authStorageKey = "flexcase.auth.user";
       const cartStorageKey = "flexcase.local.cart";
+      const cartSchemaStorageKey = "flexcase.cart_schema_version";
       const cartMergedKey = "flexcase_guest_cart_merged";
       const authRedirectOverlay = document.getElementById("auth-redirect-overlay");
       const authRedirectTitle = authRedirectOverlay?.querySelector(".auth-redirect-title");
@@ -2209,6 +2210,7 @@
 
       function clearBrowserFlexcaseStorage(preserveKeys) {
         const preserveSet = new Set(Array.isArray(preserveKeys) ? preserveKeys : []);
+        preserveSet.add(cartSchemaStorageKey);
         const purge = (store) => {
           try {
             const toDelete = [];
@@ -2244,11 +2246,15 @@
         const clearCart = options?.clearCart !== false;
         // Remove known Flexcase client-side session/cart caches.
         clearAuthSession();
-        // When preserving the cart, also keep cart-adjacent state (checkout handoff tracker,
-        // guest-merge flag) so an in-progress flow isn't silently broken.
+        // When preserving the cart, also keep cart-adjacent state.
         const preserveKeys = clearCart
           ? []
-          : [cartStorageKey, "flexcase.last_checkout_cart", "flexcase.checkout_handoff_pending", cartMergedKey];
+          : [
+              cartStorageKey,
+              "flexcase.last_checkout_cart",
+              "flexcase.checkout_handoff_pending",
+              cartMergedKey,
+            ];
         clearBrowserFlexcaseStorage(preserveKeys);
         if (clearCart) localStorage.removeItem(cartStorageKey);
         if (clearCart) sessionStorage.removeItem(cartMergedKey);
