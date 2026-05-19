@@ -2055,11 +2055,11 @@ async function handleCartGet(req, res) {
       json(res, 401, { error: "Not authenticated.", guest: true });
       return;
     }
-    const { cart } = await ensureCustomerStorefrontCart(customer.id);
+    const { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
     json(res, 200, {
-      cartId: cart.id,
+      cartId: cartId,
       lines: mapStorefrontCartToClientLines(cart),
-      totalQuantity: Number(cart.totalQuantity || 0),
+      totalQuantity: Number(cart?.totalQuantity || 0),
     });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -2110,6 +2110,120 @@ async function handleCartAddLine(req, res) {
       json(res, 200, {
         lines: mapStorefrontCartToClientLines(cart),
         totalQuantity: Number(cart?.totalQuantity || 0),
+      });
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCartSetLineQuantity(req, res) {
+  try {
+    const customer = await resolveAuthCustomerForCart(req);
+    if (!customer) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const merchandiseId = normalizeStorefrontVariantGid(
+      String(body.variantId || body.merchandiseId || "").trim()
+    );
+    if (!merchandiseId.startsWith("gid://shopify/ProductVariant/")) {
+      json(res, 400, { error: "Invalid variant id." });
+      return;
+    }
+    const rawQty = Number(body.quantity);
+    if (!Number.isFinite(rawQty) || rawQty < 0) {
+      json(res, 400, { error: "Invalid quantity." });
+      return;
+    }
+    const quantity = Math.min(99, Math.floor(rawQty));
+    await runSerializedCustomerCartMutation(customer.id, async () => {
+      let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+      const existing = findCartLineForVariant(cart, merchandiseId);
+      let nextCart = cart;
+      if (existing) {
+        if (quantity === 0) {
+          const rmData = await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, {
+            cartId,
+            lineIds: [existing.lineId],
+          });
+          const errs = rmData?.cartLinesRemove?.userErrors?.filter((e) => e?.message) || [];
+          if (errs.length) {
+            json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+            return;
+          }
+          nextCart = rmData?.cartLinesRemove?.cart;
+        } else {
+          const upData = await storefrontGraphql(STOREFRONT_CART_LINES_UPDATE, {
+            cartId,
+            lines: [{ id: existing.lineId, quantity }],
+          });
+          const errs = upData?.cartLinesUpdate?.userErrors?.filter((e) => e?.message) || [];
+          if (errs.length) {
+            json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+            return;
+          }
+          nextCart = upData?.cartLinesUpdate?.cart;
+        }
+      } else if (quantity > 0) {
+        const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, {
+          cartId,
+          lines: [{ merchandiseId, quantity }],
+        });
+        const errs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+        if (errs.length) {
+          json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+          return;
+        }
+        nextCart = addData?.cartLinesAdd?.cart;
+      }
+      json(res, 200, {
+        cartId,
+        lines: mapStorefrontCartToClientLines(nextCart),
+        totalQuantity: Number(nextCart?.totalQuantity || 0),
+      });
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleCartRemoveLine(req, res) {
+  try {
+    const customer = await resolveAuthCustomerForCart(req);
+    if (!customer) {
+      json(res, 401, { error: "Not authenticated." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const merchandiseId = normalizeStorefrontVariantGid(
+      String(body.variantId || body.merchandiseId || "").trim()
+    );
+    if (!merchandiseId.startsWith("gid://shopify/ProductVariant/")) {
+      json(res, 400, { error: "Invalid variant id." });
+      return;
+    }
+    await runSerializedCustomerCartMutation(customer.id, async () => {
+      let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+      const existing = findCartLineForVariant(cart, merchandiseId);
+      let nextCart = cart;
+      if (existing) {
+        const rmData = await storefrontGraphql(STOREFRONT_CART_LINES_REMOVE, {
+          cartId,
+          lineIds: [existing.lineId],
+        });
+        const errs = rmData?.cartLinesRemove?.userErrors?.filter((e) => e?.message) || [];
+        if (errs.length) {
+          json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+          return;
+        }
+        nextCart = rmData?.cartLinesRemove?.cart;
+      }
+      json(res, 200, {
+        cartId,
+        lines: mapStorefrontCartToClientLines(nextCart),
+        totalQuantity: Number(nextCart?.totalQuantity || 0),
       });
     });
   } catch (error) {
@@ -2715,6 +2829,14 @@ const server = http.createServer(async (req, res) => {
   }
   if (req.method === "POST" && reqUrl.pathname === "/api/cart/add") {
     await handleCartAddLine(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/cart/set-quantity") {
+    await handleCartSetLineQuantity(req, res);
+    return;
+  }
+  if (req.method === "POST" && reqUrl.pathname === "/api/cart/remove-line") {
+    await handleCartRemoveLine(req, res);
     return;
   }
   if (req.method === "POST" && reqUrl.pathname === "/api/cart/merge") {

@@ -1279,11 +1279,6 @@
       }
 
       async function hydrateSignedInShippingFromAccount() {
-        try {
-          await window.flexcaseFlushCartSync?.({ force: true });
-        } catch (_) {
-          /* ignore */
-        }
         const accountRes = await fetchCheckoutApi("/api/customer/account-data");
         let accountPayload = {};
         try {
@@ -1497,26 +1492,33 @@
       });
 
       async function adjustLineQuantity(variantId, delta) {
-        window.__flexcaseSkipHydrateWrite = true;
         const items = readCartItems();
         const idx = items.findIndex((line) => String(line.variantId || "") === String(variantId || ""));
         if (idx < 0) return;
         checkoutCartDirty = true;
         const currentQty = Math.max(1, Number(items[idx].quantity || 1));
         const nextQty = currentQty + Number(delta || 0);
+
         if (nextQty < 1) {
           const shouldRemove = await confirmRemoveItemModal();
           if (!shouldRemove) return;
-          items.splice(idx, 1);
+          if (typeof window.flexcaseRemoveLine === "function") {
+            await window.flexcaseRemoveLine(variantId).catch(() => {});
+          } else {
+            items.splice(idx, 1);
+            writeCartItems(items);
+          }
+        } else if (typeof window.flexcaseSetLineQuantity === "function") {
+          await window.flexcaseSetLineQuantity(variantId, nextQty).catch(() => {});
         } else {
           items[idx].quantity = nextQty;
+          writeCartItems(items);
         }
-        writeCartItems(items);
-        renderOrderLines(items);
+
+        const after = readCartItems();
+        renderOrderLines(after);
         recalcTotals();
         window.flexcaseUpdateCartBadges?.();
-        // Keep checkout edits local-first; sync runs when user continues
-        // to Shipping or leaves checkout.
       }
 
       function setStep(step) {
@@ -1755,13 +1757,8 @@
         }
       });
 
-      document.getElementById("to-shipping").addEventListener("click", async () => {
+      document.getElementById("to-shipping").addEventListener("click", () => {
         if (!validateContact()) return;
-        try {
-          await window.flexcaseFlushCartSync?.({ force: true });
-        } catch (_) {
-          /* ignore sync failures and let checkout proceed */
-        }
         setShippingStepRequiredFields();
         setStep(2);
       });
@@ -1876,12 +1873,6 @@
         checkoutOauthInFlight = true;
         setCheckoutSignInBusy(true);
         try {
-          try {
-            await window.flexcaseFlushCartSync?.({ force: true });
-          } catch (_) {
-            /* ignore */
-          }
-          window.__flexcaseSkipExitCartFlush = true;
           const params = new URLSearchParams();
           params.set("mode", mode);
           params.set("keep", keepLoggedIn ? "1" : "0");
@@ -2018,7 +2009,6 @@
         setCheckoutRedirectLoading(true);
         let navigatingToCheckout = false;
         try {
-          await window.flexcaseFlushCartSync?.({ force: true });
           const res = await fetchCheckoutApi("/api/checkout/shopify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -2062,7 +2052,6 @@
       });
 
       (async function initCheckoutCartInstantly() {
-        window.__flexcaseSkipHydrateWrite = false;
         writeCartItems(readCartItems());
         renderOrderLines(readCartItems());
         selectMode("guest");
@@ -2179,7 +2168,7 @@
 
         if (isAuthed && !checkoutCartDirty) {
           try {
-            await window.flexcaseMergeServerCart?.();
+            await window.flexcaseHydrateLocalCartFromServer?.();
           } catch (_) {
             /* ignore */
           }
