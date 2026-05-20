@@ -101,12 +101,6 @@
         background: #ffffff;
       }
 
-      .auth-form input:focus-visible {
-        outline: none;
-        border-color: #0071e3;
-        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
-      }
-
       @media (hover: hover) and (pointer: fine) {
         .auth-form select:hover {
           border-color: #d2d2d7;
@@ -566,12 +560,6 @@
         background: #ffffff;
       }
 
-      .new-address-card input:focus-visible {
-        outline: none;
-        border-color: #0071e3;
-        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
-      }
-
       .new-address-card select {
         width: 100%;
         box-sizing: border-box;
@@ -589,12 +577,6 @@
           box-shadow: none;
           background: #ffffff;
         }
-      }
-
-      .new-address-card select:focus-visible {
-        outline: none;
-        border-color: #0071e3;
-        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
       }
 
       #new-address-country:invalid {
@@ -898,7 +880,7 @@
       }
 
       .settings-toggle-input:focus-visible + .settings-toggle-track {
-        box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.25);
+        box-shadow: 0 0 0 3px var(--flexcase-focus-ring);
       }
 
       .settings-toggle-input:checked + .settings-toggle-track {

@@ -1,5 +1,21 @@
 :root {
   --flexcase-content-width: 60vw;
+  --flexcase-focus: #b08d57;
+  --flexcase-focus-ring: rgba(176, 141, 87, 0.18);
+}
+
+input,
+select,
+textarea {
+  caret-color: var(--flexcase-focus);
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  border-color: var(--flexcase-focus);
+  box-shadow: 0 0 0 3px var(--flexcase-focus-ring);
 }
 
 @media (max-width: 980px) {
