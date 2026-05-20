@@ -78,15 +78,16 @@
       pct > 0 && pct < 100 ? '<span class="catalog-badge">-' + pct + "%</span>" : "";
 
     return (
-      '<div class="catalog-price-row">' +
+      '<div class="catalog-price-block">' +
       '<span class="catalog-price">' +
       money(minPrice.amount, minPrice.currencyCode) +
       "</span>" +
+      '<div class="catalog-price-meta">' +
       '<span class="catalog-old">' +
       money(comparePrice.amount, comparePrice.currencyCode) +
       "</span>" +
       saveHint +
-      "</div>"
+      "</div></div>"
     );
   }
 

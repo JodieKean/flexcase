@@ -70,14 +70,28 @@
   margin-top: 8px;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 8px;
 }
 
-.catalog-price-row {
+.catalog-price-block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.catalog-price-meta {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
+}
+
+.catalog-footer .catalog-view {
+  flex-shrink: 0;
 }
 
 .catalog-price {
