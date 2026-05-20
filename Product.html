@@ -50,18 +50,6 @@
         overflow: hidden;
       }
 
-      /* Video / embed fills the frame with no inner “frame” ring from the panel border */
-      .gallery-main.gallery-main--fill-media {
-        border: none;
-        background: #000;
-      }
-
-      .gallery-main.gallery-main--fill-media video,
-      .gallery-main.gallery-main--fill-media iframe {
-        object-fit: cover;
-        background: #000;
-      }
-
       .gallery-main img,
       .gallery-main video,
       .gallery-main iframe {
@@ -81,16 +69,34 @@
         background: transparent;
       }
 
-      .gallery-main.gallery-main--fill-media video {
-        background: #000;
-      }
-
       .gallery-main iframe {
         background: #f0f0f2;
       }
 
-      .gallery-main.gallery-main--fill-media iframe {
+      /* Video / embed fills the frame; overscan clips subpixel seams (esp. bottom) */
+      .gallery-main.gallery-main--fill-media {
+        border: none;
         background: #000;
+        line-height: 0;
+      }
+
+      .gallery-main.gallery-main--fill-media video,
+      .gallery-main.gallery-main--fill-media iframe {
+        inset: -6px;
+        width: calc(100% + 12px);
+        height: calc(100% + 12px);
+        max-width: none;
+        max-height: none;
+        object-fit: cover;
+        object-position: center center;
+        background: #000;
+        transform: translateZ(0);
+        backface-visibility: hidden;
+      }
+
+      .gallery-main.gallery-main--fill-media video::-webkit-media-controls-enclosure {
+        overflow: hidden;
+        border-radius: 0;
       }
 
       .gallery-thumbs {
