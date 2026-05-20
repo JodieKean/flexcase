@@ -499,10 +499,15 @@
       }
 
       .qty-btn:hover,
-      .qty-btn:active,
       .qty-btn:focus,
       .qty-btn:focus-visible {
-        color: #6e6e73;
+        color: #1d1d1f;
+        outline: none;
+      }
+
+      .qty-btn:active {
+        color: #1d1d1f;
+        transform: scale(0.9);
         outline: none;
       }
 
@@ -1195,8 +1200,9 @@
       let discount = 0;
       /** After user edits quantities, ignore a late background server refresh so it cannot revert the UI. */
       let checkoutCartDirty = false;
-      /** Serialize +/- so rapid clicks do not read stale cart state in parallel. */
-      let lineQtyAdjustChain = Promise.resolve();
+      /** Debounced server sync per variant after optimistic +/- clicks. */
+      const qtyServerSyncTimers = new Map();
+      const QTY_SERVER_SYNC_MS = 180;
 
       const stepContact = document.getElementById("step-contact");
       const stepShipping = document.getElementById("step-shipping");
@@ -1464,6 +1470,64 @@
         });
       }
 
+      function refreshOrderSummaryFromCart() {
+        const items = readCartItems();
+        patchRenderedQuantities(items);
+        recalcTotals();
+        window.flexcaseUpdateCartBadges?.();
+        return items;
+      }
+
+      function cancelQtyServerSync(variantId) {
+        const vid = String(variantId || "").trim();
+        const pending = qtyServerSyncTimers.get(vid);
+        if (!pending) return;
+        clearTimeout(pending);
+        qtyServerSyncTimers.delete(vid);
+      }
+
+      function syncQtyToServerNow(variantId) {
+        const vid = String(variantId || "").trim();
+        if (!vid || typeof window.flexcaseSetLineQuantity !== "function") {
+          return Promise.resolve(true);
+        }
+        const items = readCartItems();
+        const line = items.find((l) => String(l?.variantId || "").trim() === vid);
+        const qty = line ? Math.max(0, Math.min(99, Number(line.quantity || 0))) : 0;
+        return window.flexcaseSetLineQuantity(vid, qty).then((ok) => {
+          if (!ok) return false;
+          if (qty > 0) patchRenderedQuantities(readCartItems());
+          else renderOrderLines(readCartItems());
+          recalcTotals();
+          window.flexcaseUpdateCartBadges?.();
+          return true;
+        });
+      }
+
+      function scheduleQtyServerSync(variantId) {
+        const vid = String(variantId || "").trim();
+        if (!vid || typeof window.flexcaseSetLineQuantity !== "function") return;
+        cancelQtyServerSync(vid);
+        const timer = window.setTimeout(() => {
+          qtyServerSyncTimers.delete(vid);
+          void syncQtyToServerNow(vid).then((ok) => {
+            if (!ok) {
+              renderOrderLines(readCartItems());
+              recalcTotals();
+              window.flexcaseUpdateCartBadges?.();
+            }
+          });
+        }, QTY_SERVER_SYNC_MS);
+        qtyServerSyncTimers.set(vid, timer);
+      }
+
+      async function flushPendingQtyServerSync() {
+        if (typeof window.flexcaseSetLineQuantity !== "function") return;
+        const pending = [...qtyServerSyncTimers.keys()];
+        pending.forEach((vid) => cancelQtyServerSync(vid));
+        await Promise.all(pending.map((vid) => syncQtyToServerNow(vid).catch(() => false)));
+      }
+
       function confirmRemoveItemModal() {
         return new Promise((resolve) => {
           pendingRemoveResolve = resolve;
@@ -1492,8 +1556,9 @@
       });
 
       async function adjustLineQuantity(variantId, delta) {
+        const vid = String(variantId || "").trim();
         const items = readCartItems();
-        const idx = items.findIndex((line) => String(line.variantId || "") === String(variantId || ""));
+        const idx = items.findIndex((line) => String(line.variantId || "").trim() === vid);
         if (idx < 0) return;
         checkoutCartDirty = true;
         const currentQty = Math.max(1, Number(items[idx].quantity || 1));
@@ -1502,23 +1567,30 @@
         if (nextQty < 1) {
           const shouldRemove = await confirmRemoveItemModal();
           if (!shouldRemove) return;
-          if (typeof window.flexcaseRemoveLine === "function") {
-            await window.flexcaseRemoveLine(variantId).catch(() => {});
-          } else {
-            items.splice(idx, 1);
-            writeCartItems(items);
-          }
-        } else if (typeof window.flexcaseSetLineQuantity === "function") {
-          await window.flexcaseSetLineQuantity(variantId, nextQty).catch(() => {});
-        } else {
-          items[idx].quantity = nextQty;
+          cancelQtyServerSync(vid);
+          items.splice(idx, 1);
           writeCartItems(items);
+          renderOrderLines(readCartItems());
+          refreshOrderSummaryFromCart();
+          if (typeof window.flexcaseRemoveLine === "function") {
+            void window.flexcaseRemoveLine(vid).then((ok) => {
+              if (!ok) {
+                renderOrderLines(readCartItems());
+                recalcTotals();
+                window.flexcaseUpdateCartBadges?.();
+              }
+            });
+          }
+          return;
         }
 
-        const after = readCartItems();
-        renderOrderLines(after);
-        recalcTotals();
-        window.flexcaseUpdateCartBadges?.();
+        items[idx] = { ...items[idx], quantity: nextQty };
+        writeCartItems(items);
+        refreshOrderSummaryFromCart();
+
+        if (typeof window.flexcaseSetLineQuantity === "function") {
+          scheduleQtyServerSync(vid);
+        }
       }
 
       function setStep(step) {
@@ -1823,9 +1895,7 @@
         const lineItem = el?.closest?.("[data-variant-id]");
         const variantId = lineItem?.dataset?.variantId || "";
         if (!variantId) return;
-        lineQtyAdjustChain = lineQtyAdjustChain
-          .catch(() => {})
-          .then(() => adjustLineQuantity(variantId, plusBtn ? 1 : -1));
+        void adjustLineQuantity(variantId, plusBtn ? 1 : -1);
       });
 
       const checkoutRedirectOverlay = document.getElementById("checkout-redirect-overlay");
@@ -2009,6 +2079,7 @@
         setCheckoutRedirectLoading(true);
         let navigatingToCheckout = false;
         try {
+          await flushPendingQtyServerSync();
           const res = await fetchCheckoutApi("/api/checkout/shopify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
