@@ -450,7 +450,13 @@ function computeProductPriceRanges(variantNodes, productId, handle, discountMap)
   };
 }
 
+function isActiveShopifyProduct(node) {
+  return String(node?.status || "").toUpperCase() === "ACTIVE";
+}
+
 function mapProduct(node, discountMap = new Map()) {
+  if (!node || !isActiveShopifyProduct(node)) return null;
+
   const variantEdges = node.variants?.edges || [];
   const variants = variantEdges.map((edge) => edge.node);
   const featuredImage = node.featuredImage
@@ -818,12 +824,13 @@ async function handleCatalog(req, res) {
   const first = Math.min(Number(reqUrl.searchParams.get("first") || 24), 100);
   const query = `
     query Products($first: Int!) {
-      products(first: $first) {
+      products(first: $first, query: "status:active") {
         edges {
           node {
             id
             handle
             title
+            status
             vendor
             productType
             tags
@@ -874,6 +881,7 @@ async function handleProduct(req, res, handle) {
             id
             handle
             title
+            status
             vendor
             productType
             tags
@@ -972,11 +980,11 @@ async function handleProduct(req, res, handle) {
   `;
   try {
     const [data, discountMap] = await Promise.all([
-      adminGraphql(query, { query: `handle:${handle}` }),
+      adminGraphql(query, { query: `handle:${handle} status:active` }),
       getAutomaticDiscountByProductId(),
     ]);
     const node = data?.products?.edges?.[0]?.node;
-    if (!node) {
+    if (!node || !isActiveShopifyProduct(node)) {
       json(res, 404, { error: "Product not found." });
       return;
     }
