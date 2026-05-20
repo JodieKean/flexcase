@@ -50,7 +50,9 @@
         overflow: hidden;
       }
 
-      .gallery-main img {
+      .gallery-main img,
+      .gallery-main video,
+      .gallery-main iframe {
         position: absolute;
         inset: 0;
         width: 100%;
@@ -58,6 +60,14 @@
         object-fit: contain;
         object-position: center;
         display: block;
+      }
+
+      .gallery-main iframe {
+        background: #000;
+      }
+
+      .gallery-main video {
+        background: #000;
       }
 
       .gallery-thumbs {
@@ -103,6 +113,23 @@
       .thumb.active {
         border: 2px solid #1d1d1f;
         background: #f2f2f5;
+      }
+
+      .thumb.thumb--video {
+        position: relative;
+      }
+
+      .thumb.thumb--video::after {
+        content: "";
+        position: absolute;
+        right: 8px;
+        bottom: 8px;
+        width: 0;
+        height: 0;
+        border-style: solid;
+        border-width: 7px 0 7px 11px;
+        border-color: transparent transparent transparent rgba(0, 0, 0, 0.75);
+        pointer-events: none;
       }
 
       .details {
@@ -497,7 +524,7 @@
       <section class="product-hero">
         <div class="gallery">
           <div class="gallery-main" id="product-gallery-main"></div>
-          <div class="gallery-thumbs" id="product-gallery-thumbs" aria-label="Product images"></div>
+          <div class="gallery-thumbs" id="product-gallery-thumbs" aria-label="Product media"></div>
         </div>
 
         <div class="details">
@@ -831,7 +858,7 @@
             .replace(/"/g, "&quot;");
         }
 
-        function getProductImages() {
+        function getLegacyProductImages() {
           const fromNodes = product.images?.nodes;
           const fromArray = Array.isArray(product.images) ? product.images : null;
           const raw = fromNodes?.length
@@ -850,19 +877,67 @@
           });
         }
 
-        let galleryImages = [];
+        function getGalleryItems() {
+          const mg = product.mediaGallery;
+          if (Array.isArray(mg) && mg.length) {
+            return mg.filter((item) => {
+              const u = String(item?.url || "").trim();
+              const v = String(item?.videoUrl || "").trim();
+              const e = String(item?.embedUrl || "").trim();
+              return Boolean(u || v || e);
+            });
+          }
+          return getLegacyProductImages().map((img) => ({
+            kind: "image",
+            url: String(img?.url || "").trim(),
+            altText: String(img?.altText || product.title || "Product").trim(),
+          }));
+        }
+
+        let galleryItems = [];
         let galleryActiveIndex = 0;
 
-        function setGalleryImage(index) {
-          const img = galleryImages[index];
-          if (!img) return;
+        function setGalleryMain(index) {
+          const item = galleryItems[index];
+          if (!item) return;
           galleryActiveIndex = index;
-          galleryMain.innerHTML =
-            '<img src="' +
-            escapeGalleryText(img.url) +
-            '" alt="' +
-            escapeGalleryText(img.altText || product.title) +
-            '" />';
+          const alt = escapeGalleryText(item.altText || product.title);
+          const videoUrl = String(item.videoUrl || "").trim();
+          const poster = String(item.poster || item.url || "").trim();
+          const embedUrl = String(item.embedUrl || "").trim();
+
+          if (item.kind === "video" && videoUrl) {
+            const src = escapeGalleryText(videoUrl);
+            const posterEsc = escapeGalleryText(poster);
+            galleryMain.innerHTML =
+              '<video class="gallery-video" src="' +
+              src +
+              '" poster="' +
+              posterEsc +
+              '" playsinline autoplay loop muted controls preload="metadata" aria-label="' +
+              alt +
+              '"></video>';
+            const vidEl = galleryMain.querySelector("video");
+            if (vidEl) {
+              vidEl.muted = true;
+              void vidEl.play?.().catch(() => {});
+            }
+          } else if (item.kind === "video" && poster) {
+            const src = escapeGalleryText(poster);
+            galleryMain.innerHTML = '<img src="' + src + '" alt="' + alt + '" />';
+          } else if (item.kind === "external_video" && embedUrl) {
+            const src = escapeGalleryText(embedUrl);
+            galleryMain.innerHTML =
+              '<iframe class="gallery-iframe" src="' +
+              src +
+              '" title="' +
+              alt +
+              '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>';
+          } else {
+            const src = escapeGalleryText(String(item.url || "").trim());
+            galleryMain.innerHTML = '<img src="' + src + '" alt="' + alt + '" />';
+          }
+
           galleryThumbs.querySelectorAll(".thumb").forEach((el, idx) => {
             el.classList.toggle("active", idx === index);
             el.setAttribute("aria-current", idx === index ? "true" : "false");
@@ -870,40 +945,50 @@
         }
 
         function renderGallery() {
-          galleryImages = getProductImages();
-          if (!galleryImages.length) {
+          galleryItems = getGalleryItems();
+          if (!galleryItems.length) {
             galleryMain.innerHTML = "";
             galleryThumbs.innerHTML = "";
             return;
           }
 
           galleryActiveIndex = 0;
-          setGalleryImage(0);
+          setGalleryMain(0);
 
-          if (galleryImages.length < 2) {
+          if (galleryItems.length < 2) {
             galleryThumbs.innerHTML = "";
             return;
           }
 
-          galleryThumbs.innerHTML = galleryImages
-            .map((img, i) => {
-              const alt = escapeGalleryText(img.altText || product.title);
-              const src = escapeGalleryText(img.url);
+          galleryThumbs.innerHTML = galleryItems
+            .map((item, i) => {
+              const alt = escapeGalleryText(item.altText || product.title);
+              const isVideo = item.kind === "video" && String(item.videoUrl || "").trim();
+              const isExternal = item.kind === "external_video" && String(item.embedUrl || "").trim();
+              const posterOnly = item.kind === "video" && !isVideo && String(item.poster || item.url || "").trim();
+              const thumbSrc = escapeGalleryText(
+                String(item.poster || item.url || "").trim() ||
+                  (isExternal ? String(item.embedUrl || "").trim() : "")
+              );
               const active = i === 0 ? " active" : "";
-              const ariaCurrent = i === 0 ? "true" : "false";
+              const vClass = isVideo || isExternal || posterOnly ? " thumb--video" : "";
+              const labelKind = isVideo || isExternal || posterOnly ? "video" : "image";
               return (
                 '<button type="button" class="thumb' +
                 active +
+                vClass +
                 '" data-thumb-index="' +
                 i +
-                '" aria-label="View image ' +
+                '" aria-label="View ' +
+                labelKind +
+                " " +
                 (i + 1) +
                 " of " +
-                galleryImages.length +
+                galleryItems.length +
                 '" aria-current="' +
-                ariaCurrent +
+                (i === 0 ? "true" : "false") +
                 '"><img src="' +
-                src +
+                thumbSrc +
                 '" alt="' +
                 alt +
                 '" loading="lazy" /></button>'
@@ -916,7 +1001,7 @@
             if (!thumb) return;
             const i = Number(thumb.dataset.thumbIndex || "0");
             if (Number.isNaN(i) || i === galleryActiveIndex) return;
-            setGalleryImage(i);
+            setGalleryMain(i);
           };
         }
 

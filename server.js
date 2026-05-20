@@ -709,6 +709,80 @@ function readJsonBody(req) {
   });
 }
 
+/** Pick an MP4 (or non-HLS) source for native <video>; falls back to originalSource. */
+function pickShopifyVideoPlayableUrl(videoNode) {
+  const list = Array.isArray(videoNode?.sources) ? videoNode.sources : [];
+  const mp4 = list.find((s) => {
+    const mt = String(s?.mimeType || "").toLowerCase();
+    const fmt = String(s?.format || "").toLowerCase();
+    return mt.includes("video/mp4") || fmt === "mp4";
+  });
+  if (mp4?.url) return String(mp4.url).trim();
+  const nonHls = list.find((s) => !String(s?.mimeType || "").includes("mpegurl"));
+  if (nonHls?.url) return String(nonHls.url).trim();
+  const orig = videoNode?.originalSource;
+  if (orig?.url) return String(orig.url).trim();
+  if (list[0]?.url) return String(list[0].url).trim();
+  return "";
+}
+
+/**
+ * Ordered gallery from Product.media (images + Shopify-hosted / external video).
+ * Legacy `images` remains on the product for thumbnails when media is empty.
+ */
+function mapProductMediaToGallery(node) {
+  const edges = node?.media?.edges || [];
+  const out = [];
+  const seen = new Set();
+  for (const edge of edges) {
+    const m = edge?.node;
+    if (!m?.id) continue;
+    if (seen.has(m.id)) continue;
+    seen.add(m.id);
+    const mct = String(m.mediaContentType || "").toUpperCase();
+    const altBase = String(m.alt || "").trim();
+
+    if (mct === "IMAGE") {
+      const url = String(m.image?.url || "").trim();
+      if (!url) continue;
+      const altText = altBase || String(m.image?.altText || node?.title || "Product").trim();
+      out.push({ kind: "image", url, altText });
+      continue;
+    }
+
+    if (mct === "VIDEO") {
+      const poster = String(m.preview?.image?.url || "").trim();
+      const videoUrl = pickShopifyVideoPlayableUrl(m);
+      const altText = altBase || String(m.preview?.image?.altText || node?.title || "Product video").trim();
+      if (!videoUrl && !poster) continue;
+      out.push({
+        kind: "video",
+        url: poster || videoUrl,
+        videoUrl,
+        poster,
+        altText,
+        status: String(m.status || ""),
+      });
+      continue;
+    }
+
+    if (mct === "EXTERNAL_VIDEO") {
+      const embedUrl = String(m.embedUrl || "").trim();
+      const poster = String(m.preview?.image?.url || "").trim();
+      if (!embedUrl && !poster) continue;
+      const altText = altBase || String(m.preview?.image?.altText || node?.title || "Product video").trim();
+      out.push({
+        kind: "external_video",
+        embedUrl,
+        url: poster || embedUrl,
+        poster,
+        altText,
+      });
+    }
+  }
+  return out;
+}
+
 async function handleCatalog(req, res) {
   const reqUrl = new URL(req.url, "http://localhost");
   const first = Math.min(Number(reqUrl.searchParams.get("first") || 24), 100);
@@ -788,6 +862,48 @@ async function handleProduct(req, res, handle) {
                 }
               }
             }
+            media(first: 25) {
+              edges {
+                node {
+                  id
+                  mediaContentType
+                  alt
+                  ... on MediaImage {
+                    image {
+                      url
+                      altText
+                    }
+                  }
+                  ... on Video {
+                    status
+                    preview {
+                      image {
+                        url
+                        altText
+                      }
+                    }
+                    originalSource {
+                      url
+                      mimeType
+                    }
+                    sources {
+                      url
+                      mimeType
+                      format
+                    }
+                  }
+                  ... on ExternalVideo {
+                    embedUrl
+                    preview {
+                      image {
+                        url
+                        altText
+                      }
+                    }
+                  }
+                }
+              }
+            }
             options {
               name
               values
@@ -827,7 +943,9 @@ async function handleProduct(req, res, handle) {
       json(res, 404, { error: "Product not found." });
       return;
     }
-    json(res, 200, { product: mapProduct(node, discountMap) });
+    const product = mapProduct(node, discountMap);
+    product.mediaGallery = mapProductMediaToGallery(node);
+    json(res, 200, { product });
   } catch (error) {
     json(res, 500, { error: error.message });
   }
