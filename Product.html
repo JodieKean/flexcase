@@ -138,9 +138,19 @@
         text-decoration: line-through;
       }
 
-      .sale {
-        font-size: 0.82rem;
-        font-weight: 600;
+      .catalog-badge {
+        border-radius: 999px;
+        background: #d9be83;
+        color: #4d3b19;
+        font-size: 0.68rem;
+        font-weight: 700;
+        padding: 3px 8px;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+
+      .price-line .catalog-badge {
+        align-self: center;
       }
 
       .stock-note {
@@ -497,7 +507,7 @@
           <div class="price-line">
             <span class="price-now" id="product-price-now"></span>
             <span class="price-old" id="product-price-old"></span>
-            <span class="sale" id="product-sale"></span>
+            <span class="catalog-badge" id="product-sale" hidden></span>
           </div>
           <div class="stock-note" id="product-stock-note"></div>
 
@@ -784,7 +794,8 @@
           }
           const hasCompare = vCompare && Number(vCompare.amount) > Number(vPrice?.amount || 0);
           priceOldEl.textContent = hasCompare ? money(vCompare.amount, vCompare.currencyCode) : "";
-          saleEl.textContent = hasCompare ? "Sale" : "";
+          saleEl.textContent = hasCompare ? "Early Bird Discount" : "";
+          saleEl.hidden = !hasCompare;
           syncPurchaseControls();
         }
 

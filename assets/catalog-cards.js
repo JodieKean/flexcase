@@ -75,11 +75,11 @@
         ? Math.round((1 - current / original) * 100)
         : 0;
     const saveHint =
-      pct > 0 && pct < 100 ? '<span class="catalog-save">-' + pct + "%</span>" : "";
+      pct > 0 && pct < 100 ? '<span class="catalog-badge">-' + pct + "%</span>" : "";
 
     return (
       '<div class="catalog-price-row">' +
-      '<span class="catalog-price catalog-price--sale">' +
+      '<span class="catalog-price">' +
       money(minPrice.amount, minPrice.currencyCode) +
       "</span>" +
       '<span class="catalog-old">' +

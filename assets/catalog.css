@@ -85,24 +85,11 @@
   font-weight: 700;
 }
 
-.catalog-price--sale {
-  color: #b42318;
-}
-
 .catalog-old {
   color: #9a9aa0;
   text-decoration: line-through;
   font-size: 0.76rem;
   font-weight: 500;
-}
-
-.catalog-save {
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: #b42318;
-  background: rgba(180, 35, 24, 0.08);
-  border-radius: 999px;
-  padding: 2px 6px;
 }
 
 .catalog-view {
