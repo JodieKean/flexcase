@@ -219,7 +219,238 @@ function parseShopifyTags(raw) {
   return [];
 }
 
-function mapProduct(node) {
+const SHOP_CURRENCY_CODE = String(process.env.SHOPIFY_CURRENCY || "MYR").trim() || "MYR";
+
+let automaticDiscountCache = { fetchedAt: 0, byProductId: new Map() };
+const AUTOMATIC_DISCOUNT_CACHE_MS = 5 * 60 * 1000;
+
+const AUTOMATIC_DISCOUNTS_QUERY = `
+  query FlexcaseAutomaticDiscounts {
+    automaticDiscountNodes(first: 50) {
+      edges {
+        node {
+          automaticDiscount {
+            ... on DiscountAutomaticBasic {
+              title
+              status
+              startsAt
+              endsAt
+              customerGets {
+                value {
+                  ... on DiscountPercentage {
+                    percentage
+                  }
+                  ... on DiscountAmount {
+                    amount {
+                      amount
+                      currencyCode
+                    }
+                  }
+                }
+                items {
+                  ... on DiscountProducts {
+                    products(first: 100) {
+                      edges {
+                        node {
+                          id
+                          handle
+                        }
+                      }
+                    }
+                  }
+                  ... on DiscountCollections {
+                    collections(first: 20) {
+                      edges {
+                        node {
+                          products(first: 100) {
+                            edges {
+                              node {
+                                id
+                                handle
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  ... on AllDiscountItems {
+                    allItems
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+function isDiscountActiveNow(discount) {
+  if (!discount || String(discount.status || "").toUpperCase() !== "ACTIVE") return false;
+  const now = Date.now();
+  const starts = discount.startsAt ? Date.parse(discount.startsAt) : NaN;
+  const ends = discount.endsAt ? Date.parse(discount.endsAt) : NaN;
+  if (Number.isFinite(starts) && now < starts) return false;
+  if (Number.isFinite(ends) && now > ends) return false;
+  return true;
+}
+
+function pickBetterAutomaticDiscount(existing, next) {
+  if (!existing) return next;
+  if (existing.type === "percentage" && next.type === "percentage") {
+    return next.percentage > existing.percentage ? next : existing;
+  }
+  return existing;
+}
+
+function registerDiscountForProduct(map, productId, handle, discount) {
+  if (!productId && !handle) return;
+  if (productId) {
+    map.set(productId, pickBetterAutomaticDiscount(map.get(productId), discount));
+  }
+  if (handle) {
+    map.set(`handle:${handle}`, pickBetterAutomaticDiscount(map.get(`handle:${handle}`), discount));
+  }
+}
+
+async function getAutomaticDiscountByProductId() {
+  const now = Date.now();
+  if (
+    automaticDiscountCache.fetchedAt &&
+    now - automaticDiscountCache.fetchedAt < AUTOMATIC_DISCOUNT_CACHE_MS
+  ) {
+    return automaticDiscountCache.byProductId;
+  }
+
+  const map = new Map();
+  try {
+    const data = await adminGraphql(AUTOMATIC_DISCOUNTS_QUERY);
+    const edges = data?.automaticDiscountNodes?.edges || [];
+    for (const edge of edges) {
+      const discount = edge?.node?.automaticDiscount;
+      if (!isDiscountActiveNow(discount)) continue;
+
+      const value = discount?.customerGets?.value;
+      let parsed = null;
+      if (value?.percentage != null) {
+        parsed = { type: "percentage", percentage: Number(value.percentage) };
+      } else if (value?.amount?.amount != null) {
+        parsed = {
+          type: "amount",
+          amount: Number(value.amount.amount),
+          currencyCode: value.amount.currencyCode || SHOP_CURRENCY_CODE,
+        };
+      }
+      if (!parsed) continue;
+
+      const items = discount?.customerGets?.items;
+      if (items?.allItems) {
+        map.set("__all__", pickBetterAutomaticDiscount(map.get("__all__"), parsed));
+        continue;
+      }
+
+      for (const productEdge of items?.products?.edges || []) {
+        const product = productEdge?.node;
+        registerDiscountForProduct(map, product?.id, product?.handle, parsed);
+      }
+
+      for (const collectionEdge of items?.collections?.edges || []) {
+        for (const productEdge of collectionEdge?.node?.products?.edges || []) {
+          const product = productEdge?.node;
+          registerDiscountForProduct(map, product?.id, product?.handle, parsed);
+        }
+      }
+    }
+  } catch (_) {
+    /* ignore — catalog still works without automatic discounts */
+  }
+
+  automaticDiscountCache = { fetchedAt: now, byProductId: map };
+  return map;
+}
+
+function applyAutomaticDiscountToPrice(priceAmount, discount) {
+  const price = Number(priceAmount);
+  if (!Number.isFinite(price) || price <= 0 || !discount) return null;
+  if (discount.type === "percentage") {
+    let pct = Number(discount.percentage || 0);
+    if (pct > 0 && pct <= 1) pct *= 100;
+    pct = Math.max(0, Math.min(100, pct));
+    return Math.max(0, price * (1 - pct / 100));
+  }
+  if (discount.type === "amount") {
+    const off = Math.max(0, Number(discount.amount || 0));
+    return Math.max(0, price - off);
+  }
+  return null;
+}
+
+function resolveAutomaticDiscountForProduct(productId, handle, discountMap) {
+  if (!discountMap || discountMap.size === 0) return null;
+  return (
+    discountMap.get(productId) ||
+    discountMap.get(`handle:${handle}`) ||
+    discountMap.get("__all__") ||
+    null
+  );
+}
+
+/** Lowest variant price; compare-at from that variant or Shopify automatic discount. */
+function computeProductPriceRanges(variantNodes, productId, handle, discountMap) {
+  const currencyCode = SHOP_CURRENCY_CODE;
+  let minPrice = Infinity;
+  let minVariant = null;
+
+  for (const variant of variantNodes) {
+    const price = Number(variant?.price || 0);
+    if (!Number.isFinite(price) || price <= 0) continue;
+    if (price < minPrice) {
+      minPrice = price;
+      minVariant = variant;
+    }
+  }
+
+  if (!minVariant) {
+    return {
+      priceRange: { minVariantPrice: { amount: "0", currencyCode } },
+      compareAtPriceRange: { minVariantPrice: null },
+      onSale: false,
+    };
+  }
+
+  const salePrice = Number(minVariant.price || 0);
+  const compareAtRaw = minVariant.compareAtPrice ? Number(minVariant.compareAtPrice) : null;
+
+  if (compareAtRaw && compareAtRaw > salePrice) {
+    return {
+      priceRange: { minVariantPrice: { amount: String(salePrice), currencyCode } },
+      compareAtPriceRange: { minVariantPrice: { amount: String(compareAtRaw), currencyCode } },
+      onSale: true,
+      discountSource: "compare_at",
+    };
+  }
+
+  const auto = resolveAutomaticDiscountForProduct(productId, handle, discountMap);
+  const discounted = applyAutomaticDiscountToPrice(salePrice, auto);
+  if (discounted != null && discounted < salePrice - 0.001) {
+    return {
+      priceRange: { minVariantPrice: { amount: discounted.toFixed(2), currencyCode } },
+      compareAtPriceRange: { minVariantPrice: { amount: String(salePrice), currencyCode } },
+      onSale: true,
+      discountSource: "automatic",
+    };
+  }
+
+  return {
+    priceRange: { minVariantPrice: { amount: String(salePrice), currencyCode } },
+    compareAtPriceRange: { minVariantPrice: null },
+    onSale: false,
+  };
+}
+
+function mapProduct(node, discountMap = new Map()) {
   const variantEdges = node.variants?.edges || [];
   const variants = variantEdges.map((edge) => edge.node);
   const featuredImage = node.featuredImage
@@ -253,41 +484,42 @@ function mapProduct(node) {
         .map((v) => String(v || "").trim())
         .filter(Boolean),
     })),
-    priceRange: {
-      minVariantPrice: {
-        amount: variants[0]?.price || "0",
-        currencyCode: variants[0]?.inventoryItem?.unitCost?.currencyCode || "MYR",
-      },
-    },
-    compareAtPriceRange: {
-      minVariantPrice: {
-        amount: variants[0]?.compareAtPrice || null,
-        currencyCode: variants[0]?.inventoryItem?.unitCost?.currencyCode || "MYR",
-      },
-    },
+    ...computeProductPriceRanges(variants, node.id, node.handle, discountMap),
     variants: {
-      nodes: variants.map((variant) => ({
-        id: variant.id,
-        title: variant.title,
-        selectedOptions: (Array.isArray(variant.selectedOptions) ? variant.selectedOptions : [])
-          .map((opt) => ({
-            name: String(opt?.name || "").trim(),
-            value: String(opt?.value || "").trim(),
-          }))
-          .filter((opt) => opt.name && opt.value),
-        availableForSale: !!variant.inventoryQuantity && variant.inventoryQuantity > 0,
-        quantityAvailable: Number(variant.inventoryQuantity || 0),
-        price: {
-          amount: variant.price || "0",
-          currencyCode: variant.inventoryItem?.unitCost?.currencyCode || "MYR",
-        },
-        compareAtPrice: variant.compareAtPrice
-          ? {
-              amount: variant.compareAtPrice,
-              currencyCode: variant.inventoryItem?.unitCost?.currencyCode || "MYR",
-            }
-          : null,
-      })),
+      nodes: variants.map((variant) => {
+        const currencyCode = SHOP_CURRENCY_CODE;
+        const priceAmount = Number(variant.price || 0);
+        const compareAtAmount = variant.compareAtPrice ? Number(variant.compareAtPrice) : null;
+        let price = { amount: String(priceAmount || 0), currencyCode };
+        let compareAtPrice =
+          compareAtAmount && compareAtAmount > priceAmount
+            ? { amount: String(compareAtAmount), currencyCode }
+            : null;
+
+        if (!compareAtPrice) {
+          const auto = resolveAutomaticDiscountForProduct(node.id, node.handle, discountMap);
+          const discounted = applyAutomaticDiscountToPrice(priceAmount, auto);
+          if (discounted != null && discounted < priceAmount - 0.001) {
+            price = { amount: discounted.toFixed(2), currencyCode };
+            compareAtPrice = { amount: String(priceAmount), currencyCode };
+          }
+        }
+
+        return {
+          id: variant.id,
+          title: variant.title,
+          selectedOptions: (Array.isArray(variant.selectedOptions) ? variant.selectedOptions : [])
+            .map((opt) => ({
+              name: String(opt?.name || "").trim(),
+              value: String(opt?.value || "").trim(),
+            }))
+            .filter((opt) => opt.name && opt.value),
+          availableForSale: !!variant.inventoryQuantity && variant.inventoryQuantity > 0,
+          quantityAvailable: Number(variant.inventoryQuantity || 0),
+          price,
+          compareAtPrice,
+        };
+      }),
     },
   };
 }
@@ -517,9 +749,12 @@ async function handleCatalog(req, res) {
     }
   `;
   try {
-    const data = await adminGraphql(query, { first });
+    const [data, discountMap] = await Promise.all([
+      adminGraphql(query, { first }),
+      getAutomaticDiscountByProductId(),
+    ]);
     const products =
-      data?.products?.edges?.map((edge) => mapProduct(edge.node)).filter(Boolean) || [];
+      data?.products?.edges?.map((edge) => mapProduct(edge.node, discountMap)).filter(Boolean) || [];
     json(res, 200, { products });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -583,13 +818,16 @@ async function handleProduct(req, res, handle) {
     }
   `;
   try {
-    const data = await adminGraphql(query, { query: `handle:${handle}` });
+    const [data, discountMap] = await Promise.all([
+      adminGraphql(query, { query: `handle:${handle}` }),
+      getAutomaticDiscountByProductId(),
+    ]);
     const node = data?.products?.edges?.[0]?.node;
     if (!node) {
       json(res, 404, { error: "Product not found." });
       return;
     }
-    json(res, 200, { product: mapProduct(node) });
+    json(res, 200, { product: mapProduct(node, discountMap) });
   } catch (error) {
     json(res, 500, { error: error.message });
   }

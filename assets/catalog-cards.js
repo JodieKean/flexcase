@@ -56,17 +56,43 @@
     );
   }
 
+  function buildCatalogPriceHtml(product) {
+    const minPrice = product.priceRange?.minVariantPrice;
+    if (!minPrice) return '<span class="catalog-price">-</span>';
+
+    const comparePrice = product.compareAtPriceRange?.minVariantPrice;
+    const sale =
+      comparePrice && Number(comparePrice.amount) > Number(minPrice.amount || 0);
+
+    if (!sale) {
+      return '<span class="catalog-price">' + money(minPrice.amount, minPrice.currencyCode) + "</span>";
+    }
+
+    const original = Number(comparePrice.amount);
+    const current = Number(minPrice.amount);
+    const pct =
+      original > 0 && current < original
+        ? Math.round((1 - current / original) * 100)
+        : 0;
+    const saveHint =
+      pct > 0 && pct < 100 ? '<span class="catalog-save">-' + pct + "%</span>" : "";
+
+    return (
+      '<div class="catalog-price-row">' +
+      '<span class="catalog-price catalog-price--sale">' +
+      money(minPrice.amount, minPrice.currencyCode) +
+      "</span>" +
+      '<span class="catalog-old">' +
+      money(comparePrice.amount, comparePrice.currencyCode) +
+      "</span>" +
+      saveHint +
+      "</div>"
+    );
+  }
+
   function buildCatalogCardHtml(product) {
     const firstVariant = product.variants?.nodes?.[0];
-    const minPrice = product.priceRange?.minVariantPrice;
-    const comparePrice = product.compareAtPriceRange?.minVariantPrice;
-    const price = minPrice ? money(minPrice.amount, minPrice.currencyCode) : "-";
-    const oldPrice =
-      comparePrice && Number(comparePrice.amount) > Number(minPrice?.amount || 0)
-        ? '<span class="catalog-old">' +
-          money(comparePrice.amount, comparePrice.currencyCode) +
-          "</span>"
-        : "";
+    const priceHtml = buildCatalogPriceHtml(product);
 
     const badge = getProductBadgesHtml(product);
 
@@ -104,10 +130,8 @@
       stock +
       "</div>" +
       '<div class="catalog-footer">' +
-      "<div><span class=\"catalog-price\">" +
-      price +
-      "</span>" +
-      oldPrice +
+      "<div>" +
+      priceHtml +
       "</div>" +
       '<button type="button" class="catalog-view">View</button>' +
       "</div>" +
