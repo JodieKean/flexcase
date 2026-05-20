@@ -709,21 +709,51 @@ function readJsonBody(req) {
   });
 }
 
-/** Pick an MP4 (or non-HLS) source for native <video>; falls back to originalSource. */
+/** True for HLS playlists (not usable as a bare <video src> in most browsers). */
+function isShopifyHlsVideoSource(s) {
+  if (!s) return false;
+  const mt = String(s.mimeType || "").toLowerCase();
+  const u = String(s.url || "").toLowerCase();
+  return (
+    mt.includes("application/vnd.apple.mpegurl") ||
+    mt.includes("mpegurl") ||
+    u.includes(".m3u8")
+  );
+}
+
+/**
+ * Prefer Shopify's uploaded original, else the largest progressive rendition
+ * (by pixel area, then file size). Avoids picking the first low-res MP4 transcode.
+ */
 function pickShopifyVideoPlayableUrl(videoNode) {
   const list = Array.isArray(videoNode?.sources) ? videoNode.sources : [];
-  const mp4 = list.find((s) => {
-    const mt = String(s?.mimeType || "").toLowerCase();
-    const fmt = String(s?.format || "").toLowerCase();
-    return mt.includes("video/mp4") || fmt === "mp4";
-  });
-  if (mp4?.url) return String(mp4.url).trim();
-  const nonHls = list.find((s) => !String(s?.mimeType || "").includes("mpegurl"));
-  if (nonHls?.url) return String(nonHls.url).trim();
   const orig = videoNode?.originalSource;
-  if (orig?.url) return String(orig.url).trim();
-  if (list[0]?.url) return String(list[0].url).trim();
-  return "";
+
+  if (orig?.url && !isShopifyHlsVideoSource(orig)) {
+    return String(orig.url).trim();
+  }
+
+  const progressive = list.filter((s) => s?.url && !isShopifyHlsVideoSource(s));
+  if (!progressive.length) {
+    if (orig?.url) return String(orig.url).trim();
+    const any = list.find((s) => s?.url);
+    return any ? String(any.url).trim() : "";
+  }
+
+  let best = progressive[0];
+  let bestPx = Number(best?.width || 0) * Number(best?.height || 0);
+  let bestFs = Number(best?.fileSize || 0);
+  for (let i = 1; i < progressive.length; i += 1) {
+    const s = progressive[i];
+    const px = Number(s?.width || 0) * Number(s?.height || 0);
+    const fs = Number(s?.fileSize || 0);
+    if (px > bestPx || (px === bestPx && fs > bestFs)) {
+      best = s;
+      bestPx = px;
+      bestFs = fs;
+    }
+  }
+  return best?.url ? String(best.url).trim() : "";
 }
 
 /**
@@ -885,11 +915,18 @@ async function handleProduct(req, res, handle) {
                     originalSource {
                       url
                       mimeType
+                      format
+                      width
+                      height
+                      fileSize
                     }
                     sources {
                       url
                       mimeType
                       format
+                      width
+                      height
+                      fileSize
                     }
                   }
                   ... on ExternalVideo {
