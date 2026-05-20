@@ -160,6 +160,7 @@
 
       .details {
         padding: 2px 8px;
+        min-width: 0;
       }
 
       .product-type {
@@ -177,8 +178,17 @@
       .price-line {
         display: flex;
         align-items: baseline;
+        flex-wrap: wrap;
         gap: 10px;
         margin-top: 14px;
+      }
+
+      .price-amounts {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: 10px;
+        min-width: 0;
       }
 
       .price-now {
@@ -521,6 +531,17 @@
         .feature-strip {
           grid-template-columns: 1fr;
         }
+
+        /* Sale badge on its own row so price + compare + badge don't overflow */
+        .price-line {
+          flex-direction: column;
+          align-items: flex-start;
+          gap: 8px;
+        }
+
+        .price-line .catalog-badge {
+          align-self: flex-start;
+        }
       }
     </style>
   </head>
@@ -558,8 +579,10 @@
           <h1 id="product-title">Loading product...</h1>
 
           <div class="price-line">
-            <span class="price-now" id="product-price-now"></span>
-            <span class="price-old" id="product-price-old"></span>
+            <div class="price-amounts">
+              <span class="price-now" id="product-price-now"></span>
+              <span class="price-old" id="product-price-old"></span>
+            </div>
             <span class="catalog-badge" id="product-sale" hidden></span>
           </div>
           <div class="stock-note" id="product-stock-note"></div>
