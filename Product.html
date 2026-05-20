@@ -116,11 +116,9 @@
         border-radius: 14px;
         background: #ececf1;
         height: 104px;
-        padding: 6px;
+        padding: 0;
         box-sizing: border-box;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+        display: block;
         overflow: hidden;
         cursor: pointer;
         font: inherit;
@@ -130,10 +128,9 @@
       }
 
       .thumb img {
+        width: 100%;
         height: 100%;
-        width: auto;
-        max-width: 100%;
-        object-fit: contain;
+        object-fit: cover;
         object-position: center;
         display: block;
         pointer-events: none;
@@ -146,15 +143,6 @@
 
       .thumb.thumb--video {
         position: relative;
-        padding: 0;
-      }
-
-      .thumb.thumb--video img {
-        width: 100%;
-        height: 100%;
-        max-width: none;
-        object-fit: cover;
-        object-position: center;
       }
 
       .thumb.thumb--video::after {
