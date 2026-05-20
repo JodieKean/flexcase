@@ -42,8 +42,10 @@
         font-size: 0.95rem;
       }
 
-      .back-link a:hover {
-        color: #1d1d1f;
+      @media (hover: hover) and (pointer: fine) {
+        .back-link a:hover {
+          color: #1d1d1f;
+        }
       }
 
       .stepper {
@@ -143,8 +145,10 @@
         transition: border-color 0.15s ease, background 0.15s ease;
       }
 
-      .mode-card:hover {
-        border-color: #cfcfd4;
+      @media (hover: hover) and (pointer: fine) {
+        .mode-card:hover {
+          border-color: #cfcfd4;
+        }
       }
 
       .mode-card.selected {
@@ -194,7 +198,7 @@
         color: #1d1d1f;
       }
 
-      input:focus {
+      input:focus-visible {
         outline: none;
         border-color: #0071e3;
         box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
@@ -211,7 +215,7 @@
         color: #1d1d1f;
       }
 
-      select:focus {
+      select:focus-visible {
         outline: none;
         border-color: #0071e3;
         box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
@@ -498,8 +502,13 @@
         font-weight: 400;
       }
 
-      .qty-btn:hover,
-      .qty-btn:focus,
+      @media (hover: hover) and (pointer: fine) {
+        .qty-btn:hover {
+          color: #1d1d1f;
+          outline: none;
+        }
+      }
+
       .qty-btn:focus-visible {
         color: #1d1d1f;
         outline: none;

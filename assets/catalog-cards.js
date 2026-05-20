@@ -56,16 +56,19 @@
     );
   }
 
-  function buildCatalogPriceHtml(product) {
+  function buildCatalogPriceParts(product) {
     const minPrice = product.priceRange?.minVariantPrice;
-    if (!minPrice) return '<span class="catalog-price">-</span>';
+    const mainPrice =
+      '<span class="catalog-price">' +
+      (minPrice ? money(minPrice.amount, minPrice.currencyCode) : "-") +
+      "</span>";
 
     const comparePrice = product.compareAtPriceRange?.minVariantPrice;
     const sale =
-      comparePrice && Number(comparePrice.amount) > Number(minPrice.amount || 0);
+      comparePrice && minPrice && Number(comparePrice.amount) > Number(minPrice.amount || 0);
 
     if (!sale) {
-      return '<span class="catalog-price">' + money(minPrice.amount, minPrice.currencyCode) + "</span>";
+      return { mainPrice, saleMeta: "" };
     }
 
     const original = Number(comparePrice.amount);
@@ -77,23 +80,39 @@
     const saveHint =
       pct > 0 && pct < 100 ? '<span class="catalog-badge">-' + pct + "%</span>" : "";
 
-    return (
-      '<div class="catalog-price-block">' +
-      '<span class="catalog-price">' +
-      money(minPrice.amount, minPrice.currencyCode) +
-      "</span>" +
+    const saleMeta =
       '<div class="catalog-price-meta">' +
       '<span class="catalog-old">' +
       money(comparePrice.amount, comparePrice.currencyCode) +
       "</span>" +
       saveHint +
-      "</div></div>"
-    );
+      "</div>";
+
+    return { mainPrice, saleMeta };
+  }
+
+  function buildCatalogFooterHtml(product) {
+    const { mainPrice, saleMeta } = buildCatalogPriceParts(product);
+    const viewBtn = '<button type="button" class="catalog-view">View</button>';
+
+    if (saleMeta) {
+      return (
+        '<div class="catalog-price-block">' +
+        '<div class="catalog-price-head">' +
+        mainPrice +
+        viewBtn +
+        "</div>" +
+        saleMeta +
+        "</div>"
+      );
+    }
+
+    return '<div class="catalog-price-head">' + mainPrice + viewBtn + "</div>";
   }
 
   function buildCatalogCardHtml(product) {
     const firstVariant = product.variants?.nodes?.[0];
-    const priceHtml = buildCatalogPriceHtml(product);
+    const footerHtml = buildCatalogFooterHtml(product);
 
     const badge = getProductBadgesHtml(product);
 
@@ -131,10 +150,7 @@
       stock +
       "</div>" +
       '<div class="catalog-footer">' +
-      "<div>" +
-      priceHtml +
-      "</div>" +
-      '<button type="button" class="catalog-view">View</button>' +
+      footerHtml +
       "</div>" +
       "</div>" +
       "</a>"

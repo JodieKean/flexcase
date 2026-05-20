@@ -57,10 +57,12 @@
   text-decoration: none;
 }
 
-.icon-btn:hover {
-  color: #1d1d1f;
-  border-color: #e6e6eb;
-  background: #ffffff;
+@media (hover: hover) and (pointer: fine) {
+  .icon-btn:hover {
+    color: #1d1d1f;
+    border-color: #e6e6eb;
+    background: #ffffff;
+  }
 }
 
 .icon-btn svg {

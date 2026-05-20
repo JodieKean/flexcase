@@ -101,16 +101,18 @@
         background: #ffffff;
       }
 
-      .auth-form input:focus {
+      .auth-form input:focus-visible {
         outline: none;
         border-color: #0071e3;
         box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
       }
 
-      .auth-form select:hover {
-        border-color: #d2d2d7;
-        box-shadow: none;
-        background: #ffffff;
+      @media (hover: hover) and (pointer: fine) {
+        .auth-form select:hover {
+          border-color: #d2d2d7;
+          box-shadow: none;
+          background: #ffffff;
+        }
       }
 
       .keep-row {
@@ -487,9 +489,11 @@
         font-weight: 400;
       }
 
-      .review-link:hover {
-        text-decoration: underline;
-        text-underline-offset: 2px;
+      @media (hover: hover) and (pointer: fine) {
+        .review-link:hover {
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
       }
 
       .account-section.hidden {
@@ -562,7 +566,7 @@
         background: #ffffff;
       }
 
-      .new-address-card input:focus {
+      .new-address-card input:focus-visible {
         outline: none;
         border-color: #0071e3;
         box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
@@ -579,13 +583,15 @@
         color: #1d1d1f;
       }
 
-      .new-address-card select:hover {
-        border-color: #d2d2d7;
-        box-shadow: none;
-        background: #ffffff;
+      @media (hover: hover) and (pointer: fine) {
+        .new-address-card select:hover {
+          border-color: #d2d2d7;
+          box-shadow: none;
+          background: #ffffff;
+        }
       }
 
-      .new-address-card select:focus {
+      .new-address-card select:focus-visible {
         outline: none;
         border-color: #0071e3;
         box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
@@ -721,9 +727,11 @@
         cursor: pointer;
       }
 
-      .set-default:hover {
-        text-decoration: underline;
-        text-underline-offset: 2px;
+      @media (hover: hover) and (pointer: fine) {
+        .set-default:hover {
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
       }
 
       .address-footer {

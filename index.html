@@ -72,7 +72,7 @@
         color: #a1a1a6;
       }
 
-      .windows input:focus {
+      .windows input:focus-visible {
         outline: none;
         box-shadow: none;
       }
@@ -250,7 +250,7 @@
         appearance: none;
       }
 
-      .catalog-search:focus {
+      .catalog-search:focus-visible {
         outline: none;
         border-color: #c7c7cc;
       }
@@ -316,6 +316,7 @@
 
       .catalog-card-body {
         padding: 10px 12px 12px;
+        min-width: 0;
       }
 
       .catalog-kind {
@@ -351,19 +352,29 @@
 
       .catalog-footer {
         margin-top: 8px;
+        min-width: 0;
+      }
+
+      .catalog-price-head {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
+        align-items: center;
         gap: 8px;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .catalog-price-head .catalog-price {
+        min-width: 0;
       }
 
       .catalog-price-block {
         display: flex;
         flex-direction: column;
-        align-items: flex-start;
+        align-items: stretch;
         gap: 2px;
+        width: 100%;
         min-width: 0;
-        flex: 1;
       }
 
       .catalog-price-meta {
@@ -373,7 +384,7 @@
         gap: 4px;
       }
 
-      .catalog-footer .catalog-view {
+      .catalog-price-head .catalog-view {
         flex-shrink: 0;
       }
 

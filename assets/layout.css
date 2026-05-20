@@ -33,3 +33,24 @@ main {
   box-sizing: border-box;
   overflow: visible;
 }
+
+/* Touch: no sticky :hover flash; form focus ring only for keyboard (:focus-visible) */
+@media (hover: none), (pointer: coarse) {
+  button,
+  input,
+  select,
+  textarea,
+  a,
+  summary,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  input:focus:not(:focus-visible),
+  select:focus:not(:focus-visible),
+  textarea:focus:not(:focus-visible),
+  button:focus:not(:focus-visible) {
+    outline: none;
+    box-shadow: none;
+  }
+}
