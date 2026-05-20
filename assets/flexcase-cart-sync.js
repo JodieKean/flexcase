@@ -6,8 +6,9 @@
  *   • Signed-in cart truth lives on the Shopify Storefront Cart attached to the customer.
  *     localStorage is a read-through cache. Every mutation hits a dedicated endpoint
  *     that operates on absolute quantities (idempotent), and the response overwrites local.
- *   • The additive guest-into-customer merge runs at most ONCE per (customerId, cartId)
- *     pair. After that the merge stamp is recorded in localStorage so visits never compound.
+ *   • The sign-in merge (`/api/cart/merge`) reconciles the browser cart with the Storefront
+ *     cart once per (customerId, cartId): guest quantities win on overlapping variants so a
+ *     preserved local cart cannot double server quantities after sign-out / sign-in.
  *   • Page loads do NOT merge. They only pull from the server.
  *   • A schema-version flag triggers a one-time automatic wipe so old buggy state is cleaned
  *     up on the user's next visit.

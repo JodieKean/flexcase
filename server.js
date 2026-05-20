@@ -2482,18 +2482,34 @@ async function handleCartMerge(req, res) {
     await runSerializedCustomerCartMutation(customer.id, async () => {
       let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
 
-      const byVariant = new Map();
+      /**
+       * Sign-in merge: browser `lines` are the guest snapshot (often a preserved copy of the
+       * same Storefront cart after sign-out). We must NOT add serverQty + guestQty or quantities
+       * double every sign-in. Guest wins on overlapping variants; server-only lines stay.
+       */
+      const merged = new Map();
       for (const edge of cart?.lines?.edges || []) {
         const n = edge?.node;
         const m = n?.merchandise;
-        if (m?.id) byVariant.set(m.id, Number(n.quantity || 0));
+        if (m?.id) merged.set(m.id, Number(n.quantity || 0));
       }
+
+      const guestByVariant = new Map();
       for (const gl of guestLines) {
         const vid = normalizeStorefrontVariantGid(String(gl.variantId || "").trim());
         if (!vid.startsWith("gid://shopify/ProductVariant/")) continue;
-        const q = Math.max(1, Math.min(99, Number(gl.quantity || 1)));
-        byVariant.set(vid, (byVariant.get(vid) || 0) + q);
+        const raw = Number(gl.quantity);
+        const q = Number.isFinite(raw)
+          ? Math.max(1, Math.min(99, Math.floor(raw)))
+          : Math.max(1, Math.min(99, Number(gl.quantity || 1)));
+        guestByVariant.set(vid, Math.min(99, (guestByVariant.get(vid) || 0) + q));
       }
+
+      for (const [vid, gq] of guestByVariant) {
+        merged.set(vid, gq);
+      }
+
+      const byVariant = merged;
 
       await removeAllStorefrontCartLines(cartId);
 
