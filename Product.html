@@ -524,7 +524,23 @@
 
       @media (max-width: 640px) {
         .gallery-thumbs {
-          grid-template-columns: 1fr 1fr;
+          display: grid;
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 8px;
+          max-width: 228px;
+        }
+
+        .gallery-thumbs .thumb {
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1 / 1;
+          border-radius: 10px;
+        }
+
+        .gallery-thumbs .thumb.thumb--video::after {
+          right: 4px;
+          bottom: 4px;
+          border-width: 5px 0 5px 8px;
         }
 
         .option-grid,
@@ -541,6 +557,35 @@
 
         .price-line .catalog-badge {
           align-self: flex-start;
+        }
+
+        /* Chromeless gallery video on mobile (no playbar / overlay buttons) */
+        .gallery-main video.gallery-video--chromeless {
+          pointer-events: none;
+        }
+
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-enclosure,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-panel,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-play-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-start-playback-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-overlay-play-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-timeline,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-timeline-container,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-current-time-display,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-time-remaining-display,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-mute-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-volume-slider,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-fullscreen-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-rewind-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-return-to-realtime-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-seek-back-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-seek-forward-button,
+        .gallery-main video.gallery-video--chromeless::-webkit-media-controls-toggle-closed-captions-button {
+          display: none !important;
+          opacity: 0 !important;
+          pointer-events: none !important;
+          -webkit-appearance: none;
         }
       }
     </style>
@@ -595,11 +640,11 @@
           </div>
           <button class="cta-light" id="buy-now-btn" type="button">Buy Now</button>
 
-          <details open>
+          <details class="product-accordion">
             <summary>Product Details</summary>
             <div id="product-description" class="product-description"></div>
           </details>
-          <details open>
+          <details class="product-accordion">
             <summary>Shipping &amp; Returns</summary>
             <p>Free shipping above RM200. 30-day hassle-free returns for unopened and defect-related cases.</p>
           </details>
@@ -927,24 +972,41 @@
         }
 
         function getGalleryItems() {
+          const maxGalleryItems = 3;
           const mg = product.mediaGallery;
           if (Array.isArray(mg) && mg.length) {
-            return mg.filter((item) => {
-              const u = String(item?.url || "").trim();
-              const v = String(item?.videoUrl || "").trim();
-              const e = String(item?.embedUrl || "").trim();
-              return Boolean(u || v || e);
-            });
+            return mg
+              .filter((item) => {
+                const u = String(item?.url || "").trim();
+                const v = String(item?.videoUrl || "").trim();
+                const e = String(item?.embedUrl || "").trim();
+                return Boolean(u || v || e);
+              })
+              .slice(0, maxGalleryItems);
           }
-          return getLegacyProductImages().map((img) => ({
-            kind: "image",
-            url: String(img?.url || "").trim(),
-            altText: String(img?.altText || product.title || "Product").trim(),
-          }));
+          return getLegacyProductImages()
+            .map((img) => ({
+              kind: "image",
+              url: String(img?.url || "").trim(),
+              altText: String(img?.altText || product.title || "Product").trim(),
+            }))
+            .slice(0, maxGalleryItems);
         }
 
         let galleryItems = [];
         let galleryActiveIndex = 0;
+        const mobileGalleryMq = window.matchMedia("(max-width: 640px)");
+
+        function isMobileGalleryView() {
+          return mobileGalleryMq.matches;
+        }
+
+        function syncProductAccordions() {
+          document.querySelectorAll(".details details.product-accordion").forEach((el) => {
+            if (isMobileGalleryView()) el.removeAttribute("open");
+            else el.setAttribute("open", "");
+          });
+        }
 
         function setGalleryMain(index) {
           const item = galleryItems[index];
@@ -958,16 +1020,25 @@
           if (item.kind === "video" && videoUrl) {
             const src = escapeGalleryText(videoUrl);
             const posterEsc = escapeGalleryText(poster);
+            const mobileView = isMobileGalleryView();
+            const videoClass =
+              "gallery-video" + (mobileView ? " gallery-video--chromeless" : "");
+            const controlsAttr = mobileView ? "" : " controls";
             galleryMain.innerHTML =
-              '<video class="gallery-video" src="' +
+              '<video class="' +
+              videoClass +
+              '" src="' +
               src +
               '" poster="' +
               posterEsc +
-              '" playsinline autoplay loop muted controls preload="metadata" aria-label="' +
+              '" playsinline autoplay loop muted' +
+              controlsAttr +
+              ' preload="metadata" disablepictureinpicture disableremoteplayback aria-label="' +
               alt +
               '"></video>';
             const vidEl = galleryMain.querySelector("video");
             if (vidEl) {
+              vidEl.controls = !mobileView;
               vidEl.muted = true;
               void vidEl.play?.().catch(() => {});
             }
@@ -1122,6 +1193,20 @@
         renderVariants();
         updatePriceBlock(selectedVariant);
         updateStock(selectedVariant);
+        syncProductAccordions();
+
+        let galleryLayoutTimer;
+        window.addEventListener("resize", () => {
+          clearTimeout(galleryLayoutTimer);
+          galleryLayoutTimer = setTimeout(() => {
+            syncProductAccordions();
+            if (galleryItems.length) setGalleryMain(galleryActiveIndex);
+          }, 150);
+        });
+        mobileGalleryMq.addEventListener("change", () => {
+          syncProductAccordions();
+          if (galleryItems.length) setGalleryMain(galleryActiveIndex);
+        });
 
         async function renderRelatedProducts() {
           const setupGrid = document.getElementById("setupCatalogGrid");
