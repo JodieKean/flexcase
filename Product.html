@@ -1294,7 +1294,7 @@
               <label>Photos (optional)</label>
               <div class="review-media-drop" id="review-media-drop" tabindex="0" role="button">
                 <strong>Drop files here or click to upload</strong>
-                JPG, PNG, WebP, or GIF · up to 3 files · 12 MB each
+                JPG, PNG, WebP, or GIF · up to 2 files · 12 MB each
               </div>
               <input
                 class="review-media-input"
@@ -1817,7 +1817,7 @@
           const mediaDropEl = document.getElementById("review-media-drop");
           const mediaInputEl = document.getElementById("review-media-input");
           const mediaPreviewsEl = document.getElementById("review-media-previews");
-          const MAX_REVIEW_MEDIA = 3;
+          const MAX_REVIEW_MEDIA = 2;
           const MAX_REVIEW_MEDIA_BYTES = 12 * 1024 * 1024;
 
           function setComposeMessage(text, kind) {
@@ -1898,7 +1898,7 @@
             const incoming = Array.from(fileList || []);
             for (const file of incoming) {
               if (mediaFiles.length >= MAX_REVIEW_MEDIA) {
-                setComposeMessage("You can attach up to 3 photos.", "error");
+                setComposeMessage("You can attach up to 2 photos.", "error");
                 break;
               }
               if (file.size > MAX_REVIEW_MEDIA_BYTES) {

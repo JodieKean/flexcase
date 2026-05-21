@@ -546,7 +546,7 @@ const REVIEW_AUTHOR_OVERRIDES_PATH = path.join(__dirname, "data", "review-author
 const REVIEW_MEDIA_OVERRIDES_PATH = path.join(__dirname, "data", "review-media-overrides.json");
 const REVIEW_BODY_HIDE_PATH = path.join(__dirname, "data", "review-body-hide.json");
 const REVIEW_MEDIA_MAX_BYTES = 12 * 1024 * 1024;
-const REVIEW_MEDIA_MAX_FILES = 3;
+const REVIEW_MEDIA_MAX_FILES = 2;
 const REVIEW_MEDIA_ALLOWED_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -971,6 +971,64 @@ function reviewBodyForDisplay(title, body, hideBody = false) {
   return stripJudgeMeHtml(body);
 }
 
+function extractJudgeMeReviewerDisplayName(review) {
+  const candidates = [
+    review?.name,
+    review?.reviewer_name,
+    review?.display_name,
+    review?.public_name,
+    review?.reviewer?.display_name,
+    review?.reviewer?.name,
+  ];
+  for (const candidate of candidates) {
+    const name = stripJudgeMeHtml(candidate);
+    if (name) return name;
+  }
+  return "";
+}
+
+function parseJudgeMeWidgetDisplayNames(widgetHtml) {
+  const namesByReviewId = {};
+  const html = String(widgetHtml || "");
+  if (!html) return namesByReviewId;
+
+  const chunks = html.split(/class="jdgm-rev\b/gi);
+  for (let index = 1; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    const idMatch = chunk.match(/data-review-id="(\d+)"/i);
+    const authorMatch = chunk.match(/class="jdgm-rev__author"[^>]*>([^<]+)</i);
+    if (!idMatch || !authorMatch) continue;
+    const name = stripJudgeMeHtml(authorMatch[1]);
+    if (!name || name.toLowerCase() === "anonymous") continue;
+    namesByReviewId[String(idMatch[1])] = name;
+  }
+  return namesByReviewId;
+}
+
+async function fetchJudgeMeWidgetDisplayNames(externalId) {
+  const productId = String(externalId || "").trim();
+  if (!productId) return {};
+  try {
+    const data = await judgeMeRequest("widgets/product_review", {
+      external_id: productId,
+      per_page: 100,
+      page: 1,
+    });
+    return parseJudgeMeWidgetDisplayNames(data?.widget || data?.html || "");
+  } catch (error) {
+    console.warn("Judge.me widget display names failed:", productId, error.message);
+    return {};
+  }
+}
+
+function resolveJudgeMeReviewAuthor(review, displayNamesByReviewId = {}, authorOverrides = {}) {
+  const reviewId = String(review?.id || "").trim();
+  const widgetName = reviewId ? stripJudgeMeHtml(displayNamesByReviewId[reviewId]) : "";
+  const overrideName = reviewId ? stripJudgeMeHtml(authorOverrides[reviewId]) : "";
+  const apiName = extractJudgeMeReviewerDisplayName(review);
+  return widgetName || overrideName || apiName || "Customer";
+}
+
 async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
   if (!judgeMeConfigured() || !handle) return "";
   if (JUDGE_ME_REVIEW_LINK) return JUDGE_ME_REVIEW_LINK;
@@ -1005,7 +1063,7 @@ async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
   return `https://judge.me/reviews/new?${params.toString()}`;
 }
 
-function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
+function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "", displayNamesByReviewId = {}) {
   const authorOverrides = loadReviewAuthorOverrides();
   const mediaOverrides = loadReviewMediaOverrides();
   const bodyHideIds = loadReviewBodyHideIds();
@@ -1021,10 +1079,7 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
         apiPictures.length > 0
           ? mergeApiAndStoredPictures(apiPictures, storedPictures)
           : storedPictures;
-      const author =
-        (reviewId && authorOverrides[reviewId]) ||
-        stripJudgeMeHtml(review.reviewer?.name) ||
-        "Customer";
+      const author = resolveJudgeMeReviewAuthor(review, displayNamesByReviewId, authorOverrides);
       const displayTitle = stripJudgeMeHtml(review.title);
       return {
         id: review.id,
@@ -1150,8 +1205,13 @@ async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
     }
   }
 
+  let displayNamesByReviewId = {};
+  if (externalId) {
+    displayNamesByReviewId = await fetchJudgeMeWidgetDisplayNames(externalId);
+  }
+
   const enrichedReviews = await enrichJudgeMeReviewsWithPictures(rawReviews);
-  return mapJudgeMeReviewBundle(enrichedReviews, handle, writeReviewUrl);
+  return mapJudgeMeReviewBundle(enrichedReviews, handle, writeReviewUrl, displayNamesByReviewId);
 }
 
 async function resolveActiveProductNodeByHandle(handle) {
