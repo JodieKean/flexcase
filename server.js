@@ -100,6 +100,8 @@ const JUDGE_ME_SHOP_DOMAIN =
       ? String(SHOP_FROM_ENV)
       : `${String(SHOP_FROM_ENV)}.myshopify.com`
     : "");
+/** Optional: paste Judge.me → Collect reviews → Review link if auto URLs fail on headless. */
+const JUDGE_ME_REVIEW_LINK = String(process.env.JUDGE_ME_REVIEW_LINK || "").trim();
 
 async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiresAt - 60_000) return cachedToken;
@@ -506,6 +508,39 @@ async function judgeMeRequest(path, query = {}) {
   return data;
 }
 
+async function judgeMePostJson(path, body = {}) {
+  if (!judgeMeConfigured()) {
+    throw new Error("Judge.me is not configured.");
+  }
+  const url = new URL(`https://judge.me/api/v1/${String(path).replace(/^\//, "")}`);
+  const payload = { shop_domain: JUDGE_ME_SHOP_DOMAIN, ...body };
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+      "X-Api-Token": JUDGE_ME_API_TOKEN,
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await response.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
+  }
+  if (!response.ok) {
+    const msg =
+      data?.error ||
+      data?.message ||
+      (typeof data?.raw === "string" ? data.raw.slice(0, 200) : null) ||
+      `Judge.me HTTP ${response.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 function isPublishedJudgeMeReview(review) {
   if (!review || review.hidden) return false;
   const curated = String(review.curated || "").toLowerCase();
@@ -519,16 +554,41 @@ function stripJudgeMeHtml(value) {
     .trim();
 }
 
-function buildJudgeMeWriteReviewUrl(handle) {
-  const productUrl = `${FRONTEND_ORIGIN}/Product.html?handle=${encodeURIComponent(handle)}`;
+async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
+  if (!judgeMeConfigured() || !handle) return "";
+  if (JUDGE_ME_REVIEW_LINK) return JUDGE_ME_REVIEW_LINK;
+
+  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
+  // Judge.me public forms resolve the shop from a Shopify URL, not the headless domain.
+  const shopifyProductUrl = `https://${JUDGE_ME_SHOP_DOMAIN}/products/${encodeURIComponent(handle)}`;
+
+  if (externalId) {
+    try {
+      const data = await judgeMeRequest("products/-1", { external_id: externalId });
+      const product = data?.product || data;
+      const direct =
+        product?.review_link ||
+        product?.public_review_url ||
+        product?.reviews_url ||
+        product?.new_review_url;
+      if (direct && /^https?:\/\//i.test(String(direct))) {
+        return String(direct);
+      }
+    } catch (error) {
+      console.warn("Judge.me product lookup for review link failed:", error.message);
+    }
+  }
+
   const params = new URLSearchParams({
-    url: productUrl,
     shop_domain: JUDGE_ME_SHOP_DOMAIN,
+    url: shopifyProductUrl,
+    handle,
   });
+  if (externalId) params.set("external_id", externalId);
   return `https://judge.me/reviews/new?${params.toString()}`;
 }
 
-function mapJudgeMeReviewBundle(rawReviews, handle) {
+function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
   const items = rawReviews
     .filter(isPublishedJudgeMeReview)
     .map((review) => {
@@ -565,12 +625,13 @@ function mapJudgeMeReviewBundle(rawReviews, handle) {
     count,
     distribution,
     items,
-    writeReviewUrl: buildJudgeMeWriteReviewUrl(handle),
+    writeReviewUrl,
   };
 }
 
 async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
-  const empty = mapJudgeMeReviewBundle([], handle);
+  const writeReviewUrl = await buildJudgeMeWriteReviewUrl(handle, shopifyProductGid);
+  const empty = mapJudgeMeReviewBundle([], handle, writeReviewUrl);
   if (!judgeMeConfigured()) return empty;
 
   const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
@@ -605,7 +666,100 @@ async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
     }
   }
 
-  return mapJudgeMeReviewBundle(rawReviews, handle);
+  return mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl);
+}
+
+async function resolveActiveProductNodeByHandle(handle) {
+  const safeHandle = String(handle || "").trim();
+  if (!safeHandle) return null;
+  const query = `
+    query ProductIdByHandle($query: String!) {
+      products(first: 1, query: $query) {
+        edges {
+          node {
+            id
+            handle
+            title
+            status
+          }
+        }
+      }
+    }
+  `;
+  const data = await adminGraphql(query, { query: `handle:${safeHandle} status:active` });
+  const node = data?.products?.edges?.[0]?.node;
+  if (!node || !isActiveShopifyProduct(node)) return null;
+  return node;
+}
+
+async function handleProductReviewSubmit(req, res, handle) {
+  if (!judgeMeConfigured()) {
+    json(res, 503, { error: "Reviews are not configured yet." });
+    return;
+  }
+
+  let body = {};
+  try {
+    body = await readJsonBody(req);
+  } catch (error) {
+    json(res, 400, { error: error.message || "Invalid request." });
+    return;
+  }
+
+  if (String(body.website || "").trim()) {
+    json(res, 200, { ok: true, message: "Thanks! Your review was submitted." });
+    return;
+  }
+
+  const rating = Math.round(Number(body.rating));
+  const name = String(body.name || "").trim().slice(0, 120);
+  const email = String(body.email || "").trim().toLowerCase().slice(0, 254);
+  const reviewBody = String(body.body || "").trim().slice(0, 5000);
+  const title = String(body.title || "").trim().slice(0, 200);
+
+  if (!name || !email || !reviewBody || rating < 1 || rating > 5) {
+    json(res, 400, {
+      error: "Please provide your name, email, a star rating, and review text.",
+    });
+    return;
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    json(res, 400, { error: "Please enter a valid email address." });
+    return;
+  }
+
+  try {
+    const node = await resolveActiveProductNodeByHandle(handle);
+    if (!node) {
+      json(res, 404, { error: "Product not found." });
+      return;
+    }
+
+    const externalId = parseShopifyResourceNumericId(node.id, "Product");
+    if (!externalId) {
+      json(res, 400, { error: "Unable to resolve this product for reviews." });
+      return;
+    }
+
+    await judgeMePostJson("reviews", {
+      platform: "shopify",
+      id: Number(externalId),
+      name,
+      email,
+      rating,
+      title: title || "Product review",
+      body: reviewBody,
+    });
+
+    json(res, 200, {
+      ok: true,
+      message:
+        "Thanks! Your review was submitted and will appear on this page after Judge.me approves it.",
+    });
+  } catch (error) {
+    console.error("Judge.me review submit failed:", error.message);
+    json(res, 502, { error: error.message || "Could not submit your review. Try again shortly." });
+  }
 }
 
 function mapProduct(node, discountMap = new Map()) {
@@ -3514,6 +3668,12 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/catalog") {
     await handleCatalog(req, res);
+    return;
+  }
+  const productReviewMatch = reqUrl.pathname.match(/^\/api\/product\/([^/]+)\/reviews$/);
+  if (req.method === "POST" && productReviewMatch) {
+    const handle = decodeURIComponent(productReviewMatch[1] || "").trim();
+    await handleProductReviewSubmit(req, res, handle);
     return;
   }
   if (reqUrl.pathname.startsWith("/api/product/")) {
