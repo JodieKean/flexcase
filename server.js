@@ -479,6 +479,7 @@ async function judgeMeRequest(path, query = {}) {
   if (!judgeMeConfigured()) return null;
   const url = new URL(`https://judge.me/api/v1/${String(path).replace(/^\//, "")}`);
   url.searchParams.set("shop_domain", JUDGE_ME_SHOP_DOMAIN);
+  url.searchParams.set("api_token", JUDGE_ME_API_TOKEN);
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== null && value !== "") {
       url.searchParams.set(key, String(value));
@@ -916,27 +917,26 @@ function extractJudgeMePictures(review) {
   );
 }
 
-async function enrichJudgeMeReviewsWithPictures(rawReviews = []) {
+async function enrichJudgeMeReviewDetails(rawReviews = []) {
   const list = Array.isArray(rawReviews) ? rawReviews : [];
   return Promise.all(
     list.map(async (review) => {
-      if (extractJudgeMePictures(review).length) return review;
-      const hasPublishedPictures =
-        review?.has_published_pictures === true ||
-        String(review?.has_published_pictures || "").toLowerCase() === "true";
-      if (!hasPublishedPictures) return review;
       const reviewId = String(review?.id || "").trim();
       if (!reviewId) return review;
       try {
         const data = await judgeMeRequest(`reviews/${reviewId}`);
         const full = data?.review || data;
-        if (Array.isArray(full?.pictures) && full.pictures.length) {
-          return { ...review, pictures: full.pictures };
-        }
+        if (!full || typeof full !== "object") return review;
+        return {
+          ...review,
+          ...full,
+          pictures:
+            Array.isArray(full.pictures) && full.pictures.length ? full.pictures : review.pictures,
+        };
       } catch (error) {
-        console.warn("Judge.me review picture lookup failed:", reviewId, error.message);
+        console.warn("Judge.me review detail lookup failed:", reviewId, error.message);
+        return review;
       }
-      return review;
     })
   );
 }
@@ -975,10 +975,12 @@ function extractJudgeMeReviewerDisplayName(review) {
   const candidates = [
     review?.name,
     review?.reviewer_name,
+    review?.public_reviewer_name,
     review?.display_name,
     review?.public_name,
+    review?.customer_name,
+    review?.reviewer_display_name,
     review?.reviewer?.display_name,
-    review?.reviewer?.name,
   ];
   for (const candidate of candidates) {
     const name = stripJudgeMeHtml(candidate);
@@ -987,46 +989,210 @@ function extractJudgeMeReviewerDisplayName(review) {
   return "";
 }
 
-function parseJudgeMeWidgetDisplayNames(widgetHtml) {
+function sortJudgeMeReviewsNewestFirst(reviews = []) {
+  return [...reviews].sort((a, b) => {
+    const timeA = Date.parse(a?.created_at || a?.createdAt || "") || 0;
+    const timeB = Date.parse(b?.created_at || b?.createdAt || "") || 0;
+    if (timeB !== timeA) return timeB - timeA;
+    return String(b?.id || "").localeCompare(String(a?.id || ""));
+  });
+}
+
+function parseJudgeMeWidgetDisplayNames(widgetHtml, reviewIdsInOrder = []) {
   const namesByReviewId = {};
   const html = String(widgetHtml || "");
   if (!html) return namesByReviewId;
 
-  const chunks = html.split(/class="jdgm-rev\b/gi);
-  for (let index = 1; index < chunks.length; index += 1) {
-    const chunk = chunks[index];
-    const idMatch = chunk.match(/data-review-id="(\d+)"/i);
-    const authorMatch = chunk.match(/class="jdgm-rev__author"[^>]*>([^<]+)</i);
-    if (!idMatch || !authorMatch) continue;
+  const authors = [];
+  const authorRegex = /class=["']jdgm-rev__author["'][^>]*>([^<]+)</gi;
+  let authorMatch;
+  while ((authorMatch = authorRegex.exec(html)) !== null) {
     const name = stripJudgeMeHtml(authorMatch[1]);
-    if (!name || name.toLowerCase() === "anonymous") continue;
-    namesByReviewId[String(idMatch[1])] = name;
+    if (name && name.toLowerCase() !== "anonymous") authors.push(name);
   }
+
+  const idRegex = /data-review-id=["'](\d+)["']/gi;
+  let idMatch;
+  while ((idMatch = idRegex.exec(html)) !== null) {
+    const reviewId = String(idMatch[1] || "").trim();
+    if (!reviewId) continue;
+    const slice = html.slice(idMatch.index, idMatch.index + 4000);
+    const localAuthorMatch = slice.match(/jdgm-rev__author[^>]*>([^<]+)</i);
+    if (!localAuthorMatch) continue;
+    const name = stripJudgeMeHtml(localAuthorMatch[1]);
+    if (!name || name.toLowerCase() === "anonymous") continue;
+    namesByReviewId[reviewId] = name;
+  }
+
+  if (!Object.keys(namesByReviewId).length && authors.length) {
+    const reviewIds = reviewIdsInOrder.map((id) => String(id || "").trim()).filter(Boolean);
+    if (reviewIds.length === authors.length) {
+      reviewIds.forEach((reviewId, index) => {
+        namesByReviewId[reviewId] = authors[index];
+      });
+    }
+  }
+
   return namesByReviewId;
 }
 
-async function fetchJudgeMeWidgetDisplayNames(externalId) {
+function extractJudgeMeWidgetHtml(data) {
+  if (!data || typeof data !== "object") return "";
+  return String(
+    data.widget || data.html || data.product_review || data.review_widget || data.body || ""
+  ).trim();
+}
+
+async function fetchJudgeMeWidgetDisplayNames(externalId, handle = "", reviewIdsInOrder = []) {
+  const merged = {};
+  const attempts = [];
   const productId = String(externalId || "").trim();
-  if (!productId) return {};
-  try {
-    const data = await judgeMeRequest("widgets/product_review", {
-      external_id: productId,
-      per_page: 100,
-      page: 1,
-    });
-    return parseJudgeMeWidgetDisplayNames(data?.widget || data?.html || "");
-  } catch (error) {
-    console.warn("Judge.me widget display names failed:", productId, error.message);
-    return {};
+  const safeHandle = String(handle || "").trim();
+  if (productId) attempts.push({ external_id: productId });
+  if (safeHandle) attempts.push({ handle: safeHandle });
+
+  if (productId) {
+    try {
+      const productData = await judgeMeRequest("products/-1", { external_id: productId });
+      const internalId = productData?.product?.id ?? productData?.id;
+      if (internalId) attempts.push({ id: internalId });
+    } catch (error) {
+      console.warn("Judge.me product lookup for widget failed:", error.message);
+    }
   }
+
+  for (const params of attempts) {
+    try {
+      const data = await judgeMeRequest("widgets/product_review", {
+        ...params,
+        per_page: 100,
+        page: 1,
+      });
+      const widgetHtml = extractJudgeMeWidgetHtml(data);
+      const batch = parseJudgeMeWidgetDisplayNames(widgetHtml, reviewIdsInOrder);
+      Object.assign(merged, batch);
+      if (Object.keys(batch).length) break;
+    } catch (error) {
+      console.warn("Judge.me widget display names failed:", params, error.message);
+    }
+  }
+
+  if (!Object.keys(merged).length) {
+    console.warn("Judge.me widget returned no review display names for product", productId || safeHandle);
+  }
+  return merged;
+}
+
+async function fetchShopifyProductReviewDisplayNames(shopifyProductGid) {
+  const productId = String(shopifyProductGid || "").trim();
+  if (!productId) return [];
+  const query = `
+    query ProductReviewMetaobjects($first: Int!) {
+      metaobjects(first: $first, type: "product_review") {
+        edges {
+          node {
+            rating: field(key: "rating") { value }
+            title: field(key: "title") { value }
+            body: field(key: "body") { value }
+            authorDisplayName: field(key: "author_display_name") { value }
+            product: field(key: "product") { value }
+          }
+        }
+      }
+    }
+  `;
+  try {
+    const data = await adminGraphql(query, { first: 100 });
+    const edges = data?.metaobjects?.edges || [];
+    return edges
+      .map((edge) => edge?.node)
+      .filter(Boolean)
+      .map((node) => ({
+        product: String(node?.product?.value || "").trim(),
+        rating: String(node?.rating?.value || "").trim(),
+        title: normalizeReviewText(node?.title?.value),
+        body: normalizeReviewText(node?.body?.value),
+        authorDisplayName: stripJudgeMeHtml(node?.authorDisplayName?.value),
+      }))
+      .filter((item) => item.product === productId && item.authorDisplayName);
+  } catch (error) {
+    console.warn("Shopify product_review metaobjects lookup failed:", error.message);
+    return [];
+  }
+}
+
+function matchShopifyReviewDisplayName(review, metaReviews = [], shopifyProductGid) {
+  const productId = String(shopifyProductGid || "").trim();
+  if (!productId) return "";
+  const rating = String(Math.max(1, Math.min(5, Number(review?.rating) || 0)));
+  const title = normalizeReviewText(review?.title);
+  const body = normalizeReviewText(review?.body);
+  const candidates = metaReviews.filter((item) => item.product === productId && item.rating === rating);
+  if (!candidates.length) return "";
+
+  let match = candidates.find((item) => item.title && title && item.title === title);
+  if (!match && body) {
+    match = candidates.find((item) => {
+      if (!item.body) return false;
+      if (body === item.body) return true;
+      return body.startsWith(item.body) || item.body.startsWith(body);
+    });
+  }
+  if (!match && candidates.length === 1) match = candidates[0];
+  return match?.authorDisplayName || "";
+}
+
+async function augmentDisplayNamesFromShopifyMetaobjects(
+  rawReviews = [],
+  shopifyProductGid,
+  displayNamesByReviewId = {}
+) {
+  const metaReviews = await fetchShopifyProductReviewDisplayNames(shopifyProductGid);
+  if (!metaReviews.length) return displayNamesByReviewId;
+  const merged = { ...displayNamesByReviewId };
+  rawReviews.forEach((review) => {
+    const reviewId = String(review?.id || "").trim();
+    if (!reviewId || merged[reviewId]) return;
+    const shopifyName = matchShopifyReviewDisplayName(review, metaReviews, shopifyProductGid);
+    if (shopifyName) merged[reviewId] = shopifyName;
+  });
+  return merged;
+}
+
+function cacheReviewDisplayNames(displayNamesByReviewId = {}) {
+  const entries = Object.entries(displayNamesByReviewId || {});
+  if (!entries.length) return;
+  const overrides = loadReviewAuthorOverrides();
+  let changed = false;
+  entries.forEach(([reviewId, name]) => {
+    const id = String(reviewId || "").trim();
+    const value = String(name || "").trim().slice(0, 120);
+    if (!id || !value || overrides[id] === value) return;
+    overrides[id] = value;
+    changed = true;
+  });
+  if (!changed) return;
+  fs.mkdirSync(path.dirname(REVIEW_AUTHOR_OVERRIDES_PATH), { recursive: true });
+  fs.writeFileSync(REVIEW_AUTHOR_OVERRIDES_PATH, JSON.stringify(overrides, null, 2));
+}
+
+function buildJudgeMeDisplayNamesByReviewId(rawReviews = [], widgetNames = {}) {
+  const displayNamesByReviewId = { ...widgetNames };
+  rawReviews.forEach((review) => {
+    const reviewId = String(review?.id || "").trim();
+    if (!reviewId || displayNamesByReviewId[reviewId]) return;
+    const apiName = extractJudgeMeReviewerDisplayName(review);
+    if (apiName) displayNamesByReviewId[reviewId] = apiName;
+  });
+  return displayNamesByReviewId;
 }
 
 function resolveJudgeMeReviewAuthor(review, displayNamesByReviewId = {}, authorOverrides = {}) {
   const reviewId = String(review?.id || "").trim();
   const widgetName = reviewId ? stripJudgeMeHtml(displayNamesByReviewId[reviewId]) : "";
   const overrideName = reviewId ? stripJudgeMeHtml(authorOverrides[reviewId]) : "";
-  const apiName = extractJudgeMeReviewerDisplayName(review);
-  return widgetName || overrideName || apiName || "Customer";
+  const reviewLevelName = extractJudgeMeReviewerDisplayName(review);
+  return widgetName || overrideName || reviewLevelName || "Customer";
 }
 
 async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
@@ -1205,12 +1371,20 @@ async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
     }
   }
 
-  let displayNamesByReviewId = {};
-  if (externalId) {
-    displayNamesByReviewId = await fetchJudgeMeWidgetDisplayNames(externalId);
-  }
-
-  const enrichedReviews = await enrichJudgeMeReviewsWithPictures(rawReviews);
+  const sortedRawReviews = sortJudgeMeReviewsNewestFirst(rawReviews);
+  const sortedReviewIds = sortedRawReviews.map((review) => String(review?.id || "").trim()).filter(Boolean);
+  const widgetNames =
+    externalId || handle
+      ? await fetchJudgeMeWidgetDisplayNames(externalId, handle, sortedReviewIds)
+      : {};
+  const enrichedReviews = await enrichJudgeMeReviewDetails(rawReviews);
+  let displayNamesByReviewId = buildJudgeMeDisplayNamesByReviewId(enrichedReviews, widgetNames);
+  displayNamesByReviewId = await augmentDisplayNamesFromShopifyMetaobjects(
+    enrichedReviews,
+    shopifyProductGid,
+    displayNamesByReviewId
+  );
+  cacheReviewDisplayNames(displayNamesByReviewId);
   return mapJudgeMeReviewBundle(enrichedReviews, handle, writeReviewUrl, displayNamesByReviewId);
 }
 
@@ -1319,6 +1493,7 @@ async function handleProductReviewSubmit(req, res, handle) {
       platform: "shopify",
       id: Number(externalId),
       name,
+      reviewer_name: name,
       email,
       rating,
       title: title || "Review",
