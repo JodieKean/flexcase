@@ -544,6 +544,7 @@ async function judgeMePostJson(path, body = {}) {
 const REVIEW_MEDIA_DIR = path.join(__dirname, "data", "review-media");
 const REVIEW_AUTHOR_OVERRIDES_PATH = path.join(__dirname, "data", "review-author-overrides.json");
 const REVIEW_MEDIA_OVERRIDES_PATH = path.join(__dirname, "data", "review-media-overrides.json");
+const REVIEW_BODY_HIDE_PATH = path.join(__dirname, "data", "review-body-hide.json");
 const REVIEW_MEDIA_MAX_BYTES = 12 * 1024 * 1024;
 const REVIEW_MEDIA_MAX_FILES = 6;
 const REVIEW_MEDIA_ALLOWED_TYPES = new Set([
@@ -551,9 +552,6 @@ const REVIEW_MEDIA_ALLOWED_TYPES = new Set([
   "image/png",
   "image/webp",
   "image/gif",
-  "video/mp4",
-  "video/quicktime",
-  "video/webm",
 ]);
 
 function loadReviewAuthorOverrides() {
@@ -596,16 +594,33 @@ function normalizeReviewMediaBundle(value) {
   const pictures = Array.isArray(value?.pictures)
     ? value.pictures.map((url) => String(url || "").trim()).filter(Boolean)
     : [];
-  const videos = Array.isArray(value?.videos)
-    ? value.videos.map((url) => String(url || "").trim()).filter(Boolean)
-    : [];
-  return { pictures, videos };
+  return { pictures };
+}
+
+function loadReviewBodyHideIds() {
+  try {
+    if (!fs.existsSync(REVIEW_BODY_HIDE_PATH)) return new Set();
+    const parsed = JSON.parse(fs.readFileSync(REVIEW_BODY_HIDE_PATH, "utf8"));
+    const ids = Array.isArray(parsed) ? parsed : Object.keys(parsed || {});
+    return new Set(ids.map((id) => String(id).trim()).filter(Boolean));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveReviewBodyHide(reviewId) {
+  const id = String(reviewId || "").trim();
+  if (!id) return;
+  const hidden = loadReviewBodyHideIds();
+  hidden.add(id);
+  fs.mkdirSync(path.dirname(REVIEW_BODY_HIDE_PATH), { recursive: true });
+  fs.writeFileSync(REVIEW_BODY_HIDE_PATH, JSON.stringify([...hidden], null, 2));
 }
 
 function saveReviewMediaOverride(reviewId, media = {}) {
   const id = String(reviewId || "").trim();
   const bundle = normalizeReviewMediaBundle(media);
-  if (!id || (!bundle.pictures.length && !bundle.videos.length)) return;
+  if (!id || !bundle.pictures.length) return;
   const overrides = loadReviewMediaOverrides();
   overrides[id] = bundle;
   fs.mkdirSync(path.dirname(REVIEW_MEDIA_OVERRIDES_PATH), { recursive: true });
@@ -634,15 +649,8 @@ function inferReviewMediaMimeType(mimeType, filename = "") {
     ".png": "image/png",
     ".webp": "image/webp",
     ".gif": "image/gif",
-    ".mp4": "video/mp4",
-    ".mov": "video/quicktime",
-    ".webm": "video/webm",
   };
   return byExt[ext] || normalized;
-}
-
-function isReviewImageMimeType(mimeType) {
-  return String(mimeType || "").startsWith("image/");
 }
 
 function readMultipartBody(req, maxBytes = 15 * 1024 * 1024) {
@@ -727,9 +735,6 @@ function reviewMediaExtension(mimeType) {
     "image/png": ".png",
     "image/webp": ".webp",
     "image/gif": ".gif",
-    "video/mp4": ".mp4",
-    "video/quicktime": ".mov",
-    "video/webm": ".webm",
   };
   return map[mimeType] || "";
 }
@@ -774,43 +779,37 @@ async function publishReviewImageToShopify(publicUrl) {
 
 async function saveReviewMediaFiles(files = []) {
   if (!files.length) {
-    return { picturesForJudgeMe: [], picturesForDisplay: [], videos: [] };
+    return { picturesForJudgeMe: [], picturesForDisplay: [] };
   }
   fs.mkdirSync(REVIEW_MEDIA_DIR, { recursive: true });
   const picturesForJudgeMe = [];
   const picturesForDisplay = [];
-  const videos = [];
   for (const file of files.slice(0, REVIEW_MEDIA_MAX_FILES)) {
     if (!file?.buffer?.length) continue;
     if (file.buffer.length > REVIEW_MEDIA_MAX_BYTES) {
-      throw new Error("Each photo or video must be 12 MB or smaller.");
+      throw new Error("Each photo must be 12 MB or smaller.");
     }
     const mimeType = inferReviewMediaMimeType(file.mimeType, file.filename);
     if (!REVIEW_MEDIA_ALLOWED_TYPES.has(mimeType)) {
-      throw new Error("Only JPG, PNG, WebP, GIF, MP4, MOV, and WebM files are supported.");
+      throw new Error("Only JPG, PNG, WebP, and GIF files are supported.");
     }
     const ext = reviewMediaExtension(mimeType) || path.extname(file.filename || "").toLowerCase();
     const filename = `${crypto.randomUUID()}${ext}`;
     const filepath = path.join(REVIEW_MEDIA_DIR, filename);
     fs.writeFileSync(filepath, file.buffer);
     const publicUrl = `${API_ORIGIN.replace(/\/$/, "")}/review-media/${filename}`;
-    if (isReviewImageMimeType(mimeType)) {
-      let remoteUrl = publicUrl;
-      try {
-        remoteUrl = await publishReviewImageToShopify(publicUrl);
-      } catch (error) {
-        console.warn("Shopify review image publish failed, using API URL:", error.message);
-      }
-      picturesForJudgeMe.push(remoteUrl);
-      picturesForDisplay.push(publicUrl);
-    } else {
-      videos.push(publicUrl);
+    let remoteUrl = publicUrl;
+    try {
+      remoteUrl = await publishReviewImageToShopify(publicUrl);
+    } catch (error) {
+      console.warn("Shopify review image publish failed, using API URL:", error.message);
     }
+    picturesForJudgeMe.push(remoteUrl);
+    picturesForDisplay.push(publicUrl);
   }
   return {
     picturesForJudgeMe: mergeReviewMediaLists([], picturesForJudgeMe).slice(0, REVIEW_MEDIA_MAX_FILES),
     picturesForDisplay: mergeReviewMediaLists([], picturesForDisplay).slice(0, REVIEW_MEDIA_MAX_FILES),
-    videos: mergeReviewMediaLists([], videos).slice(0, REVIEW_MEDIA_MAX_FILES),
   };
 }
 
@@ -834,32 +833,12 @@ function serveReviewMedia(req, res, pathname) {
     ".png": "image/png",
     ".webp": "image/webp",
     ".gif": "image/gif",
-    ".mp4": "video/mp4",
-    ".mov": "video/quicktime",
-    ".webm": "video/webm",
   };
   res.writeHead(200, {
     "Content-Type": contentTypes[ext] || "application/octet-stream",
     "Cache-Control": "public, max-age=31536000, immutable",
   });
   fs.createReadStream(filepath).pipe(res);
-}
-
-function mapJudgeMeReviewVideos(review) {
-  const videos = [];
-  const rawVideos = Array.isArray(review?.videos) ? review.videos : [];
-  rawVideos.forEach((item) => {
-    if (!item || item.hidden) return;
-    const url = String(
-      item?.url ||
-        item?.urls?.original ||
-        item?.urls?.compact ||
-        item?.urls?.small ||
-        ""
-    ).trim();
-    if (url) videos.push(url);
-  });
-  return videos;
 }
 
 function isPublishedJudgeMeReview(review) {
@@ -873,6 +852,29 @@ function stripJudgeMeHtml(value) {
     .replace(/<[^>]*>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function normalizeReviewText(value) {
+  return stripJudgeMeHtml(value).replace(/\s+/g, " ").trim();
+}
+
+function isGenericReviewTitle(title) {
+  const value = normalizeReviewText(title).toLowerCase();
+  return !value || value === "review" || value === "product review";
+}
+
+function reviewBodyForDisplay(title, body, hideBody = false) {
+  if (hideBody) return "";
+  const normalizedTitle = normalizeReviewText(title);
+  const normalizedBody = normalizeReviewText(body);
+  if (!normalizedBody) return "";
+  if (isGenericReviewTitle(title)) return stripJudgeMeHtml(body);
+  if (normalizedTitle && normalizedTitle === normalizedBody) return "";
+  if (normalizedTitle && normalizedBody.startsWith(normalizedTitle)) {
+    const remainder = normalizedBody.slice(normalizedTitle.length).trim();
+    if (!remainder) return "";
+  }
+  return stripJudgeMeHtml(body);
 }
 
 async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
@@ -912,6 +914,7 @@ async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
 function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
   const authorOverrides = loadReviewAuthorOverrides();
   const mediaOverrides = loadReviewMediaOverrides();
+  const bodyHideIds = loadReviewBodyHideIds();
   const items = rawReviews
     .filter(isPublishedJudgeMeReview)
     .map((review) => {
@@ -920,25 +923,24 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
         .filter((pic) => pic && !pic.hidden)
         .map((pic) => String(pic?.urls?.compact || pic?.urls?.small || pic?.urls?.original || "").trim())
         .filter(Boolean);
-      const apiVideos = mapJudgeMeReviewVideos(review);
       const reviewId = String(review.id || "").trim();
       const storedMedia = normalizeReviewMediaBundle(reviewId && mediaOverrides[reviewId]);
-      const pictures = mergeReviewMediaLists(apiPictures, storedMedia.pictures);
-      const videos = mergeReviewMediaLists(apiVideos, storedMedia.videos);
+      const pictures =
+        apiPictures.length > 0 ? apiPictures : mergeReviewMediaLists([], storedMedia.pictures);
       const author =
         (reviewId && authorOverrides[reviewId]) ||
         stripJudgeMeHtml(review.reviewer?.name) ||
         "Customer";
+      const displayTitle = stripJudgeMeHtml(review.title);
       return {
         id: review.id,
         rating,
-        title: stripJudgeMeHtml(review.title),
-        body: stripJudgeMeHtml(review.body),
+        title: displayTitle,
+        body: reviewBodyForDisplay(displayTitle, review.body, bodyHideIds.has(reviewId)),
         author,
         createdAt: review.created_at || null,
         verified: String(review.verified || "").toLowerCase() === "buyer",
         pictures,
-        videos,
       };
     })
     .filter((item) => item.rating > 0);
@@ -1033,7 +1035,7 @@ async function handleProductReviewSubmit(req, res, handle) {
 
   const contentType = String(req.headers["content-type"] || "");
   let body = {};
-  let mediaBundle = { picturesForJudgeMe: [], picturesForDisplay: [], videos: [] };
+  let mediaBundle = { picturesForJudgeMe: [], picturesForDisplay: [] };
   try {
     if (contentType.includes("multipart/form-data")) {
       const parsed = await readMultipartBody(req);
@@ -1135,10 +1137,11 @@ async function handleProductReviewSubmit(req, res, handle) {
       }
     }
     if (reviewId) saveReviewAuthorOverride(reviewId, name);
+    if (reviewId && !titleInput) saveReviewBodyHide(reviewId);
     if (reviewId) {
       saveReviewMediaOverride(reviewId, {
-        pictures: mediaBundle.picturesForDisplay,
-        videos: mediaBundle.videos,
+        pictures:
+          mediaBundle.picturesForJudgeMe.length > 0 ? [] : mediaBundle.picturesForDisplay,
       });
     }
 

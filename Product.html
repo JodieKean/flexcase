@@ -595,14 +595,126 @@
         gap: 8px;
       }
 
-      .review-photos img,
-      .review-photos video {
+      .review-photo-thumb {
+        padding: 0;
+        border: 1px solid #ececf1;
+        border-radius: 10px;
+        background: #f4f4f7;
+        cursor: zoom-in;
+        overflow: hidden;
+        line-height: 0;
+      }
+
+      .review-photo-thumb:focus-visible {
+        outline: 2px solid #b08d57;
+        outline-offset: 2px;
+      }
+
+      .review-photo-thumb img {
         width: 96px;
         height: 96px;
         object-fit: cover;
-        border-radius: 10px;
-        border: 1px solid #ececf1;
-        background: #f4f4f7;
+        display: block;
+      }
+
+      .review-photo-lightbox {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 48px 56px;
+        background: rgba(10, 10, 12, 0.88);
+      }
+
+      .review-photo-lightbox.open {
+        display: flex;
+      }
+
+      .review-photo-lightbox__dialog {
+        position: relative;
+        width: min(920px, 100%);
+        max-height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .review-photo-lightbox__stage {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 200px;
+      }
+
+      .review-photo-lightbox__stage img {
+        max-width: 100%;
+        max-height: min(78vh, 720px);
+        object-fit: contain;
+        border-radius: 12px;
+        background: #111;
+      }
+
+      .review-photo-lightbox__counter {
+        margin: 0;
+        color: #f2f2f4;
+        font-size: 0.86rem;
+      }
+
+      .review-photo-lightbox__close,
+      .review-photo-lightbox__nav {
+        position: absolute;
+        border: 0;
+        background: rgba(255, 255, 255, 0.12);
+        color: #fff;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+
+      .review-photo-lightbox__close:hover,
+      .review-photo-lightbox__nav:hover {
+        background: rgba(255, 255, 255, 0.22);
+      }
+
+      .review-photo-lightbox__close:focus-visible,
+      .review-photo-lightbox__nav:focus-visible {
+        outline: 2px solid #b08d57;
+        outline-offset: 2px;
+      }
+
+      .review-photo-lightbox__close {
+        top: 16px;
+        right: 16px;
+        width: 40px;
+        height: 40px;
+        border-radius: 999px;
+        font-size: 1.5rem;
+        line-height: 1;
+      }
+
+      .review-photo-lightbox__nav {
+        top: 50%;
+        transform: translateY(-50%);
+        width: 44px;
+        height: 44px;
+        border-radius: 999px;
+        font-size: 1.6rem;
+        line-height: 1;
+      }
+
+      .review-photo-lightbox__nav--prev {
+        left: 12px;
+      }
+
+      .review-photo-lightbox__nav--next {
+        right: 12px;
+      }
+
+      .review-photo-lightbox__nav[hidden] {
+        display: none;
       }
 
       .review-media-drop {
@@ -651,8 +763,7 @@
         background: #f4f4f7;
       }
 
-      .review-media-preview img,
-      .review-media-preview video {
+      .review-media-preview img {
         width: 100%;
         height: 100%;
         object-fit: cover;
@@ -942,6 +1053,46 @@
           </button>
         </aside>
         <div class="review-grid" id="review-grid"></div>
+        <div
+          id="review-photo-lightbox"
+          class="review-photo-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-hidden="true"
+          aria-label="Review photos"
+          hidden
+        >
+          <button
+            type="button"
+            class="review-photo-lightbox__close"
+            id="review-photo-lightbox-close"
+            aria-label="Close"
+          >
+            ×
+          </button>
+          <button
+            type="button"
+            class="review-photo-lightbox__nav review-photo-lightbox__nav--prev"
+            id="review-photo-lightbox-prev"
+            aria-label="Previous photo"
+          >
+            ‹
+          </button>
+          <button
+            type="button"
+            class="review-photo-lightbox__nav review-photo-lightbox__nav--next"
+            id="review-photo-lightbox-next"
+            aria-label="Next photo"
+          >
+            ›
+          </button>
+          <div class="review-photo-lightbox__dialog">
+            <div class="review-photo-lightbox__stage">
+              <img id="review-photo-lightbox-img" alt="" />
+            </div>
+            <p class="review-photo-lightbox__counter" id="review-photo-lightbox-counter"></p>
+          </div>
+        </div>
         <div class="review-compose-panel" id="review-compose-panel" hidden>
           <h3>Write a review</h3>
           <p class="review-compose-note">
@@ -984,17 +1135,16 @@
               <textarea id="review-body" name="body" maxlength="5000" required></textarea>
             </div>
             <div>
-              <label>Photos or videos (optional)</label>
+              <label>Photos (optional)</label>
               <div class="review-media-drop" id="review-media-drop" tabindex="0" role="button">
                 <strong>Drop files here or click to upload</strong>
-                JPG, PNG, WebP, GIF, MP4, MOV, or WebM · up to 6 files · 12 MB each.
-                Videos appear on this site; photos also sync to Judge.me when approved.
+                JPG, PNG, WebP, or GIF · up to 6 files · 12 MB each
               </div>
               <input
                 class="review-media-input"
                 id="review-media-input"
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
+                accept="image/jpeg,image/png,image/webp,image/gif"
                 multiple
               />
               <div class="review-media-previews" id="review-media-previews"></div>
@@ -1165,6 +1315,8 @@
           product.descriptionHtml || product.description || "<p>No product description yet.</p>"
         );
 
+        const reviewPhotoGalleries = {};
+
         function renderProductReviews(reviews) {
           const summaryEl = document.getElementById("review-average");
           const starsEl = document.getElementById("review-stars");
@@ -1172,6 +1324,7 @@
           const barsEl = document.getElementById("review-bars");
           const gridEl = document.getElementById("review-grid");
           const writeToggleEl = document.getElementById("write-review-toggle");
+          Object.keys(reviewPhotoGalleries).forEach((key) => delete reviewPhotoGalleries[key]);
           if (!summaryEl || !gridEl) return;
 
           const bundle = reviews && typeof reviews === "object" ? reviews : {};
@@ -1233,7 +1386,13 @@
           }
 
           gridEl.innerHTML = items
-            .map((review) => {
+            .map((review, reviewIndex) => {
+              const reviewKey = String(review.id || "review-" + reviewIndex);
+              const pictureUrls = (review.pictures || [])
+                .map((src) => String(src || "").trim())
+                .filter(Boolean);
+              reviewPhotoGalleries[reviewKey] = pictureUrls;
+
               const date = review.createdAt
                 ? new Date(review.createdAt).toLocaleDateString("en-US", {
                     month: "short",
@@ -1244,24 +1403,29 @@
               const verified = review.verified
                 ? '<span class="review-verified">Verified buyer</span>'
                 : "";
-              const photos = (review.pictures || [])
+              const photos = pictureUrls
                 .map(
-                  (src) =>
+                  (src, photoIndex) =>
+                    '<button type="button" class="review-photo-thumb" data-review-key="' +
+                    escapeGalleryText(reviewKey) +
+                    '" data-photo-index="' +
+                    photoIndex +
+                    '" aria-label="View review photo ' +
+                    (photoIndex + 1) +
+                    ' of ' +
+                    pictureUrls.length +
+                    '">' +
                     '<img src="' +
                     escapeGalleryText(src) +
-                    '" alt="" loading="lazy" />'
+                    '" alt="" loading="lazy" />' +
+                    "</button>"
                 )
                 .join("");
-              const videos = (review.videos || [])
-                .map(
-                  (src) =>
-                    '<video src="' +
-                    escapeGalleryText(src) +
-                    '" muted playsinline controls preload="metadata"></video>'
-                )
-                .join("");
-              const media = photos + videos;
-              const photosHtml = media ? '<div class="review-photos">' + media + "</div>" : "";
+              const photosHtml = photos ? '<div class="review-photos">' + photos + "</div>" : "";
+              const bodyText = String(review.body || "").trim();
+              const bodyHtml = bodyText
+                ? "<p>" + escapeGalleryText(bodyText) + "</p>"
+                : "";
               return (
                 '<article class="review-card">' +
                 '<div class="review-head"><span>' +
@@ -1273,9 +1437,7 @@
                 "<h3>" +
                 escapeGalleryText(review.title || "Review") +
                 "</h3>" +
-                "<p>" +
-                escapeGalleryText(review.body || "") +
-                "</p>" +
+                bodyHtml +
                 photosHtml +
                 "</article>"
               );
@@ -1283,7 +1445,92 @@
             .join("");
         }
 
+        function initReviewPhotoLightbox() {
+          const lightboxEl = document.getElementById("review-photo-lightbox");
+          const imgEl = document.getElementById("review-photo-lightbox-img");
+          const counterEl = document.getElementById("review-photo-lightbox-counter");
+          const closeEl = document.getElementById("review-photo-lightbox-close");
+          const prevEl = document.getElementById("review-photo-lightbox-prev");
+          const nextEl = document.getElementById("review-photo-lightbox-next");
+          const gridEl = document.getElementById("review-grid");
+          if (!lightboxEl || !imgEl || !gridEl || gridEl.dataset.lightboxReady === "1") return;
+          gridEl.dataset.lightboxReady = "1";
+
+          let activeUrls = [];
+          let activeIndex = 0;
+          let lastFocusEl = null;
+
+          function renderLightboxSlide() {
+            const url = activeUrls[activeIndex] || "";
+            imgEl.src = url;
+            imgEl.alt = "Review photo " + (activeIndex + 1);
+            if (counterEl) {
+              counterEl.textContent =
+                activeUrls.length > 1
+                  ? "Photo " + (activeIndex + 1) + " of " + activeUrls.length
+                  : "";
+            }
+            const showNav = activeUrls.length > 1;
+            if (prevEl) prevEl.hidden = !showNav;
+            if (nextEl) nextEl.hidden = !showNav;
+          }
+
+          function openReviewPhotoLightbox(urls, startIndex) {
+            if (!urls.length) return;
+            lastFocusEl = document.activeElement;
+            activeUrls = urls;
+            activeIndex = Math.max(0, Math.min(startIndex, urls.length - 1));
+            renderLightboxSlide();
+            lightboxEl.hidden = false;
+            lightboxEl.classList.add("open");
+            lightboxEl.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+            closeEl?.focus();
+          }
+
+          function closeReviewPhotoLightbox() {
+            lightboxEl.classList.remove("open");
+            lightboxEl.hidden = true;
+            lightboxEl.setAttribute("aria-hidden", "true");
+            document.body.style.overflow = "";
+            imgEl.removeAttribute("src");
+            activeUrls = [];
+            activeIndex = 0;
+            if (lastFocusEl && typeof lastFocusEl.focus === "function") lastFocusEl.focus();
+            lastFocusEl = null;
+          }
+
+          function stepReviewPhotoLightbox(delta) {
+            if (activeUrls.length < 2) return;
+            activeIndex = (activeIndex + delta + activeUrls.length) % activeUrls.length;
+            renderLightboxSlide();
+          }
+
+          gridEl.addEventListener("click", (event) => {
+            const thumb = event.target.closest(".review-photo-thumb");
+            if (!thumb) return;
+            const reviewKey = String(thumb.dataset.reviewKey || "");
+            const urls = reviewPhotoGalleries[reviewKey] || [];
+            const photoIndex = Number(thumb.dataset.photoIndex || "0");
+            openReviewPhotoLightbox(urls, photoIndex);
+          });
+
+          closeEl?.addEventListener("click", closeReviewPhotoLightbox);
+          prevEl?.addEventListener("click", () => stepReviewPhotoLightbox(-1));
+          nextEl?.addEventListener("click", () => stepReviewPhotoLightbox(1));
+          lightboxEl.addEventListener("click", (event) => {
+            if (event.target === lightboxEl) closeReviewPhotoLightbox();
+          });
+          document.addEventListener("keydown", (event) => {
+            if (!lightboxEl.classList.contains("open")) return;
+            if (event.key === "Escape") closeReviewPhotoLightbox();
+            if (event.key === "ArrowLeft") stepReviewPhotoLightbox(-1);
+            if (event.key === "ArrowRight") stepReviewPhotoLightbox(1);
+          });
+        }
+
         renderProductReviews(product.reviews);
+        initReviewPhotoLightbox();
 
         function initReviewCompose() {
           if (!product.reviews?.configured) return;
@@ -1340,12 +1587,7 @@
             if (!mediaPreviewsEl) return;
             mediaPreviewsEl.innerHTML = mediaFiles
               .map((item, index) => {
-                const isVideo = String(item.file.type || "").startsWith("video/");
-                const mediaTag = isVideo
-                  ? '<video src="' +
-                    escapeGalleryText(item.previewUrl) +
-                    '" muted playsinline></video>'
-                  : '<img src="' + escapeGalleryText(item.previewUrl) + '" alt="" />';
+                const mediaTag = '<img src="' + escapeGalleryText(item.previewUrl) + '" alt="" />';
                 return (
                   '<div class="review-media-preview">' +
                   mediaTag +
@@ -1365,9 +1607,6 @@
             if (name.endsWith(".png")) return "image/png";
             if (name.endsWith(".webp")) return "image/webp";
             if (name.endsWith(".gif")) return "image/gif";
-            if (name.endsWith(".mp4")) return "video/mp4";
-            if (name.endsWith(".mov")) return "video/quicktime";
-            if (name.endsWith(".webm")) return "video/webm";
             return type;
           }
 
@@ -1375,7 +1614,7 @@
             const incoming = Array.from(fileList || []);
             for (const file of incoming) {
               if (mediaFiles.length >= MAX_REVIEW_MEDIA) {
-                setComposeMessage("You can attach up to 6 photos or videos.", "error");
+                setComposeMessage("You can attach up to 6 photos.", "error");
                 break;
               }
               if (file.size > MAX_REVIEW_MEDIA_BYTES) {
@@ -1383,13 +1622,8 @@
                 continue;
               }
               const type = inferClientMediaType(file);
-              const allowed =
-                type.startsWith("image/") ||
-                type === "video/mp4" ||
-                type === "video/quicktime" ||
-                type === "video/webm";
-              if (!allowed) {
-                setComposeMessage("Only image or video files are supported.", "error");
+              if (!type.startsWith("image/")) {
+                setComposeMessage("Only image files are supported.", "error");
                 continue;
               }
               mediaFiles.push({
@@ -1539,11 +1773,7 @@
               formEl.reset();
               setRating(0);
               clearReviewMedia();
-              setComposeMessage(
-                data.message ||
-                  "Thanks for flexing with us! Your review has been submitted.",
-                "success"
-              );
+              closeComposePanel();
             } catch (error) {
               setComposeMessage(error.message || "Could not submit review.", "error");
             } finally {
