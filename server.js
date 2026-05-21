@@ -3582,6 +3582,12 @@ const server = http.createServer(async (req, res) => {
     await handleShopifyCheckout(req, res);
     return;
   }
+  const productReviewMatch = reqUrl.pathname.match(/^\/api\/product\/([^/]+)\/reviews$/);
+  if (req.method === "POST" && productReviewMatch) {
+    const handle = decodeURIComponent(productReviewMatch[1] || "").trim();
+    await handleProductReviewSubmit(req, res, handle);
+    return;
+  }
 
   if (req.method !== "GET") {
     res.writeHead(405);
@@ -3668,12 +3674,6 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/catalog") {
     await handleCatalog(req, res);
-    return;
-  }
-  const productReviewMatch = reqUrl.pathname.match(/^\/api\/product\/([^/]+)\/reviews$/);
-  if (req.method === "POST" && productReviewMatch) {
-    const handle = decodeURIComponent(productReviewMatch[1] || "").trim();
-    await handleProductReviewSubmit(req, res, handle);
     return;
   }
   if (reqUrl.pathname.startsWith("/api/product/")) {

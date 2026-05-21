@@ -868,7 +868,7 @@
         <div class="review-compose-panel" id="review-compose-panel" hidden>
           <h3>Write a review</h3>
           <p class="review-compose-note">
-            Share your experience with this product. Reviews are moderated in Judge.me before they appear here.
+            Share your experience with this product.
           </p>
           <form id="review-compose-form" class="review-compose" novalidate>
             <div>
@@ -1311,7 +1311,19 @@
                   }
                 );
               }
-              const data = await res.json();
+              const raw = await res.text();
+              let data = {};
+              if (raw) {
+                try {
+                  data = JSON.parse(raw);
+                } catch (_) {
+                  throw new Error(
+                    res.ok
+                      ? "Could not submit review."
+                      : raw.trim() || `Could not submit review (${res.status}).`
+                  );
+                }
+              }
               if (!res.ok || !data.ok) {
                 throw new Error(data.error || "Could not submit review.");
               }
