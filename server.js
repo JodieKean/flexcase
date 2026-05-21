@@ -847,6 +847,100 @@ function isPublishedJudgeMeReview(review) {
   return curated === "ok" || curated === "true";
 }
 
+function upgradeReviewPhotoUrl(url) {
+  const value = String(url || "").trim();
+  if (!value) return "";
+  return value
+    .replace(/\/(compact|small|thumb|mini)\//gi, "/original/")
+    .replace(/_(compact|small|thumb|mini)\./gi, "_original.");
+}
+
+function normalizeReviewPictureItem(item) {
+  if (!item) return null;
+  if (typeof item === "string") {
+    const url = String(item).trim();
+    if (!url) return null;
+    const full = upgradeReviewPhotoUrl(url);
+    return { thumb: url, full };
+  }
+  const thumb = String(item.thumb || item.full || "").trim();
+  const full = upgradeReviewPhotoUrl(String(item.full || item.thumb || "").trim());
+  if (!thumb && !full) return null;
+  return { thumb: thumb || full, full: full || thumb };
+}
+
+function mergeApiAndStoredPictures(apiPictures = [], storedPictures = []) {
+  if (!apiPictures.length) return storedPictures;
+  if (!storedPictures.length) return apiPictures;
+  return apiPictures.map((api, index) => {
+    const stored = storedPictures[index];
+    if (!stored) return api;
+    return {
+      thumb: api.thumb || stored.thumb,
+      full: stored.full || api.full,
+    };
+  });
+}
+
+function dedupeReviewPictureItems(items = []) {
+  const seen = new Set();
+  const merged = [];
+  items.forEach((item) => {
+    const normalized = normalizeReviewPictureItem(item);
+    if (!normalized) return;
+    const key = normalized.full || normalized.thumb;
+    if (!key || seen.has(key)) return;
+    seen.add(key);
+    merged.push(normalized);
+  });
+  return merged;
+}
+
+function extractJudgeMePictures(review) {
+  const raw = Array.isArray(review?.pictures) ? review.pictures : [];
+  return dedupeReviewPictureItems(
+    raw.map((pic) => {
+      if (!pic) return null;
+      const thumb = String(
+        pic?.urls?.compact || pic?.urls?.small || pic?.urls?.huge || pic?.urls?.original || pic?.url || ""
+      ).trim();
+      const full = String(
+        pic?.urls?.original || pic?.urls?.huge || pic?.urls?.compact || pic?.urls?.small || pic?.url || ""
+      ).trim();
+      if (!thumb && !full) return null;
+      return {
+        thumb: thumb || full,
+        full: upgradeReviewPhotoUrl(full || thumb),
+      };
+    })
+  );
+}
+
+async function enrichJudgeMeReviewsWithPictures(rawReviews = []) {
+  const list = Array.isArray(rawReviews) ? rawReviews : [];
+  return Promise.all(
+    list.map(async (review) => {
+      if (extractJudgeMePictures(review).length) return review;
+      const hasPublishedPictures =
+        review?.has_published_pictures === true ||
+        String(review?.has_published_pictures || "").toLowerCase() === "true";
+      if (!hasPublishedPictures) return review;
+      const reviewId = String(review?.id || "").trim();
+      if (!reviewId) return review;
+      try {
+        const data = await judgeMeRequest(`reviews/${reviewId}`);
+        const full = data?.review || data;
+        if (Array.isArray(full?.pictures) && full.pictures.length) {
+          return { ...review, pictures: full.pictures };
+        }
+      } catch (error) {
+        console.warn("Judge.me review picture lookup failed:", reviewId, error.message);
+      }
+      return review;
+    })
+  );
+}
+
 function stripJudgeMeHtml(value) {
   return String(value || "")
     .replace(/<[^>]*>/g, " ")
@@ -919,14 +1013,14 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
     .filter(isPublishedJudgeMeReview)
     .map((review) => {
       const rating = Math.max(1, Math.min(5, Number(review.rating) || 0));
-      const apiPictures = (Array.isArray(review.pictures) ? review.pictures : [])
-        .filter((pic) => pic && !pic.hidden)
-        .map((pic) => String(pic?.urls?.compact || pic?.urls?.small || pic?.urls?.original || "").trim())
-        .filter(Boolean);
+      const apiPictures = extractJudgeMePictures(review);
       const reviewId = String(review.id || "").trim();
       const storedMedia = normalizeReviewMediaBundle(reviewId && mediaOverrides[reviewId]);
+      const storedPictures = dedupeReviewPictureItems(storedMedia.pictures);
       const pictures =
-        apiPictures.length > 0 ? apiPictures : mergeReviewMediaLists([], storedMedia.pictures);
+        apiPictures.length > 0
+          ? mergeApiAndStoredPictures(apiPictures, storedPictures)
+          : storedPictures;
       const author =
         (reviewId && authorOverrides[reviewId]) ||
         stripJudgeMeHtml(review.reviewer?.name) ||
@@ -1001,7 +1095,8 @@ async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
     }
   }
 
-  return mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl);
+  const enrichedReviews = await enrichJudgeMeReviewsWithPictures(rawReviews);
+  return mapJudgeMeReviewBundle(enrichedReviews, handle, writeReviewUrl);
 }
 
 async function resolveActiveProductNodeByHandle(handle) {
@@ -1138,10 +1233,9 @@ async function handleProductReviewSubmit(req, res, handle) {
     }
     if (reviewId) saveReviewAuthorOverride(reviewId, name);
     if (reviewId && !titleInput) saveReviewBodyHide(reviewId);
-    if (reviewId) {
+    if (reviewId && mediaBundle.picturesForDisplay.length) {
       saveReviewMediaOverride(reviewId, {
-        pictures:
-          mediaBundle.picturesForJudgeMe.length > 0 ? [] : mediaBundle.picturesForDisplay,
+        pictures: mediaBundle.picturesForDisplay,
       });
     }
 

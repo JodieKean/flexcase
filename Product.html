@@ -651,9 +651,12 @@
       }
 
       .review-photo-lightbox__stage img {
-        max-width: 100%;
-        max-height: min(78vh, 720px);
+        width: auto;
+        height: auto;
+        max-width: min(96vw, 1200px);
+        max-height: min(82vh, 900px);
         object-fit: contain;
+        image-rendering: auto;
         border-radius: 12px;
         background: #111;
       }
@@ -1388,10 +1391,18 @@
           gridEl.innerHTML = items
             .map((review, reviewIndex) => {
               const reviewKey = String(review.id || "review-" + reviewIndex);
-              const pictureUrls = (review.pictures || [])
-                .map((src) => String(src || "").trim())
+              const pictureItems = (review.pictures || [])
+                .map((item) => {
+                  if (typeof item === "string") {
+                    const url = String(item || "").trim();
+                    return url ? { thumb: url, full: url } : null;
+                  }
+                  const thumb = String(item?.thumb || item?.full || "").trim();
+                  const full = String(item?.full || item?.thumb || "").trim();
+                  return thumb || full ? { thumb: thumb || full, full: full || thumb } : null;
+                })
                 .filter(Boolean);
-              reviewPhotoGalleries[reviewKey] = pictureUrls;
+              reviewPhotoGalleries[reviewKey] = pictureItems;
 
               const date = review.createdAt
                 ? new Date(review.createdAt).toLocaleDateString("en-US", {
@@ -1403,9 +1414,9 @@
               const verified = review.verified
                 ? '<span class="review-verified">Verified buyer</span>'
                 : "";
-              const photos = pictureUrls
+              const photos = pictureItems
                 .map(
-                  (src, photoIndex) =>
+                  (item, photoIndex) =>
                     '<button type="button" class="review-photo-thumb" data-review-key="' +
                     escapeGalleryText(reviewKey) +
                     '" data-photo-index="' +
@@ -1413,11 +1424,11 @@
                     '" aria-label="View review photo ' +
                     (photoIndex + 1) +
                     ' of ' +
-                    pictureUrls.length +
+                    pictureItems.length +
                     '">' +
                     '<img src="' +
-                    escapeGalleryText(src) +
-                    '" alt="" loading="lazy" />' +
+                    escapeGalleryText(item.thumb || item.full) +
+                    '" alt="" loading="lazy" decoding="async" />' +
                     "</button>"
                 )
                 .join("");
@@ -1456,30 +1467,31 @@
           if (!lightboxEl || !imgEl || !gridEl || gridEl.dataset.lightboxReady === "1") return;
           gridEl.dataset.lightboxReady = "1";
 
-          let activeUrls = [];
+          let activePictures = [];
           let activeIndex = 0;
           let lastFocusEl = null;
 
           function renderLightboxSlide() {
-            const url = activeUrls[activeIndex] || "";
-            imgEl.src = url;
+            const item = activePictures[activeIndex] || {};
+            const fullUrl = String(item.full || item.thumb || "").trim();
+            imgEl.src = fullUrl;
             imgEl.alt = "Review photo " + (activeIndex + 1);
             if (counterEl) {
               counterEl.textContent =
-                activeUrls.length > 1
-                  ? "Photo " + (activeIndex + 1) + " of " + activeUrls.length
+                activePictures.length > 1
+                  ? "Photo " + (activeIndex + 1) + " of " + activePictures.length
                   : "";
             }
-            const showNav = activeUrls.length > 1;
+            const showNav = activePictures.length > 1;
             if (prevEl) prevEl.hidden = !showNav;
             if (nextEl) nextEl.hidden = !showNav;
           }
 
-          function openReviewPhotoLightbox(urls, startIndex) {
-            if (!urls.length) return;
+          function openReviewPhotoLightbox(pictures, startIndex) {
+            if (!pictures.length) return;
             lastFocusEl = document.activeElement;
-            activeUrls = urls;
-            activeIndex = Math.max(0, Math.min(startIndex, urls.length - 1));
+            activePictures = pictures;
+            activeIndex = Math.max(0, Math.min(startIndex, pictures.length - 1));
             renderLightboxSlide();
             lightboxEl.hidden = false;
             lightboxEl.classList.add("open");
@@ -1494,15 +1506,15 @@
             lightboxEl.setAttribute("aria-hidden", "true");
             document.body.style.overflow = "";
             imgEl.removeAttribute("src");
-            activeUrls = [];
+            activePictures = [];
             activeIndex = 0;
             if (lastFocusEl && typeof lastFocusEl.focus === "function") lastFocusEl.focus();
             lastFocusEl = null;
           }
 
           function stepReviewPhotoLightbox(delta) {
-            if (activeUrls.length < 2) return;
-            activeIndex = (activeIndex + delta + activeUrls.length) % activeUrls.length;
+            if (activePictures.length < 2) return;
+            activeIndex = (activeIndex + delta + activePictures.length) % activePictures.length;
             renderLightboxSlide();
           }
 
@@ -1510,9 +1522,9 @@
             const thumb = event.target.closest(".review-photo-thumb");
             if (!thumb) return;
             const reviewKey = String(thumb.dataset.reviewKey || "");
-            const urls = reviewPhotoGalleries[reviewKey] || [];
+            const pictures = reviewPhotoGalleries[reviewKey] || [];
             const photoIndex = Number(thumb.dataset.photoIndex || "0");
-            openReviewPhotoLightbox(urls, photoIndex);
+            openReviewPhotoLightbox(pictures, photoIndex);
           });
 
           closeEl?.addEventListener("click", closeReviewPhotoLightbox);
