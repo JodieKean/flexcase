@@ -595,12 +595,88 @@
         gap: 6px;
       }
 
-      .review-photos img {
+      .review-photos img,
+      .review-photos video {
         width: 56px;
         height: 56px;
         object-fit: cover;
         border-radius: 8px;
         border: 1px solid #ececf1;
+      }
+
+      .review-media-drop {
+        border: 1px dashed #d5d5dc;
+        border-radius: 12px;
+        padding: 16px;
+        text-align: center;
+        color: #7a7a80;
+        font-size: 0.86rem;
+        background: #fafafa;
+        cursor: pointer;
+        transition: border-color 0.15s ease, background 0.15s ease;
+      }
+
+      .review-media-drop.is-dragover {
+        border-color: #b08d57;
+        background: #fffaf2;
+        color: #5f4d2c;
+      }
+
+      .review-media-drop strong {
+        display: block;
+        color: #1a1a1e;
+        font-size: 0.9rem;
+        margin-bottom: 4px;
+      }
+
+      .review-media-input {
+        display: none;
+      }
+
+      .review-media-previews {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .review-media-preview {
+        position: relative;
+        width: 72px;
+        height: 72px;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid #ececf1;
+        background: #f4f4f7;
+      }
+
+      .review-media-preview img,
+      .review-media-preview video {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+
+      .review-media-preview button {
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 20px;
+        height: 20px;
+        border: 0;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.65);
+        color: #fff;
+        font-size: 0.72rem;
+        line-height: 1;
+        cursor: pointer;
+      }
+
+      .review-name-hint {
+        margin: 4px 0 0;
+        font-size: 0.78rem;
+        color: #7a7a80;
       }
 
       .bar-line {
@@ -883,8 +959,15 @@
             </div>
             <div class="review-compose-row">
               <div>
-                <label for="review-author-name">Name</label>
-                <input id="review-author-name" name="name" type="text" autocomplete="name" required />
+                <label for="review-author-name">Name shown in review</label>
+                <input
+                  id="review-author-name"
+                  name="name"
+                  type="text"
+                  autocomplete="off"
+                  required
+                />
+                <p class="review-name-hint">This name is shown on your review, not your account name.</p>
               </div>
               <div>
                 <label for="review-author-email">Email</label>
@@ -898,6 +981,21 @@
             <div>
               <label for="review-body">Your review</label>
               <textarea id="review-body" name="body" maxlength="5000" required></textarea>
+            </div>
+            <div>
+              <label>Photos or videos (optional)</label>
+              <div class="review-media-drop" id="review-media-drop" tabindex="0" role="button">
+                <strong>Drop files here or click to upload</strong>
+                JPG, PNG, WebP, GIF, MP4, MOV, or WebM · up to 6 files · 12 MB each
+              </div>
+              <input
+                class="review-media-input"
+                id="review-media-input"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
+                multiple
+              />
+              <div class="review-media-previews" id="review-media-previews"></div>
             </div>
             <label class="review-compose-honeypot" aria-hidden="true">
               Website
@@ -1152,9 +1250,16 @@
                     '" alt="" loading="lazy" />'
                 )
                 .join("");
-              const photosHtml = photos
-                ? '<div class="review-photos">' + photos + "</div>"
-                : "";
+              const videos = (review.videos || [])
+                .map(
+                  (src) =>
+                    '<video src="' +
+                    escapeGalleryText(src) +
+                    '" muted playsinline controls preload="metadata"></video>'
+                )
+                .join("");
+              const media = photos + videos;
+              const photosHtml = media ? '<div class="review-photos">' + media + "</div>" : "";
               return (
                 '<article class="review-card">' +
                 '<div class="review-head"><span>' +
@@ -1191,6 +1296,12 @@
           if (!panelEl || !toggleEl || !formEl || !ratingEl) return;
 
           let selectedRating = 0;
+          const mediaFiles = [];
+          const mediaDropEl = document.getElementById("review-media-drop");
+          const mediaInputEl = document.getElementById("review-media-input");
+          const mediaPreviewsEl = document.getElementById("review-media-previews");
+          const MAX_REVIEW_MEDIA = 6;
+          const MAX_REVIEW_MEDIA_BYTES = 12 * 1024 * 1024;
 
           function setComposeMessage(text, kind) {
             if (!messageEl) return;
@@ -1211,6 +1322,66 @@
           function closeComposePanel() {
             panelEl.hidden = true;
             setComposeMessage("");
+            clearReviewMedia();
+          }
+
+          function clearReviewMedia() {
+            mediaFiles.forEach((item) => {
+              if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            });
+            mediaFiles.length = 0;
+            if (mediaPreviewsEl) mediaPreviewsEl.innerHTML = "";
+            if (mediaInputEl) mediaInputEl.value = "";
+          }
+
+          function renderReviewMediaPreviews() {
+            if (!mediaPreviewsEl) return;
+            mediaPreviewsEl.innerHTML = mediaFiles
+              .map((item, index) => {
+                const isVideo = String(item.file.type || "").startsWith("video/");
+                const mediaTag = isVideo
+                  ? '<video src="' +
+                    escapeGalleryText(item.previewUrl) +
+                    '" muted playsinline></video>'
+                  : '<img src="' + escapeGalleryText(item.previewUrl) + '" alt="" />';
+                return (
+                  '<div class="review-media-preview">' +
+                  mediaTag +
+                  '<button type="button" data-remove-media="' +
+                  index +
+                  '" aria-label="Remove file">×</button></div>'
+                );
+              })
+              .join("");
+          }
+
+          function addReviewMediaFiles(fileList) {
+            const incoming = Array.from(fileList || []);
+            for (const file of incoming) {
+              if (mediaFiles.length >= MAX_REVIEW_MEDIA) {
+                setComposeMessage("You can attach up to 6 photos or videos.", "error");
+                break;
+              }
+              if (file.size > MAX_REVIEW_MEDIA_BYTES) {
+                setComposeMessage("Each file must be 12 MB or smaller.", "error");
+                continue;
+              }
+              const type = String(file.type || "").toLowerCase();
+              const allowed =
+                type.startsWith("image/") ||
+                type === "video/mp4" ||
+                type === "video/quicktime" ||
+                type === "video/webm";
+              if (!allowed) {
+                setComposeMessage("Only image or video files are supported.", "error");
+                continue;
+              }
+              mediaFiles.push({
+                file,
+                previewUrl: URL.createObjectURL(file),
+              });
+            }
+            renderReviewMediaPreviews();
           }
 
           function openComposePanel() {
@@ -1223,6 +1394,38 @@
             else closeComposePanel();
           });
           cancelEl?.addEventListener("click", () => closeComposePanel());
+
+          mediaDropEl?.addEventListener("click", () => mediaInputEl?.click());
+          mediaDropEl?.addEventListener("keydown", (event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              mediaInputEl?.click();
+            }
+          });
+          mediaInputEl?.addEventListener("change", () => {
+            addReviewMediaFiles(mediaInputEl.files);
+            mediaInputEl.value = "";
+          });
+          mediaDropEl?.addEventListener("dragover", (event) => {
+            event.preventDefault();
+            mediaDropEl.classList.add("is-dragover");
+          });
+          mediaDropEl?.addEventListener("dragleave", () => {
+            mediaDropEl.classList.remove("is-dragover");
+          });
+          mediaDropEl?.addEventListener("drop", (event) => {
+            event.preventDefault();
+            mediaDropEl.classList.remove("is-dragover");
+            addReviewMediaFiles(event.dataTransfer?.files);
+          });
+          mediaPreviewsEl?.addEventListener("click", (event) => {
+            const btn = event.target.closest("[data-remove-media]");
+            if (!btn) return;
+            const index = Number(btn.dataset.removeMedia);
+            const removed = mediaFiles.splice(index, 1)[0];
+            if (removed?.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+            renderReviewMediaPreviews();
+          });
 
           ratingEl.addEventListener("click", (event) => {
             const btn = event.target.closest("[data-rating]");
@@ -1241,10 +1444,7 @@
               const data = await res.json();
               if (!data?.authenticated || !data.customer) return;
               const c = data.customer;
-              const nameInput = document.getElementById("review-author-name");
               const emailInput = document.getElementById("review-author-email");
-              const fullName = [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
-              if (nameInput && !nameInput.value && fullName) nameInput.value = fullName;
               if (emailInput && !emailInput.value && c.email) emailInput.value = c.email;
             } catch (_) {
               /* optional prefill */
@@ -1275,6 +1475,15 @@
 
             if (submitEl) submitEl.disabled = true;
             try {
+              const formData = new FormData();
+              formData.append("rating", String(selectedRating));
+              formData.append("name", name);
+              formData.append("email", email);
+              formData.append("title", title);
+              formData.append("body", body);
+              formData.append("website", website);
+              mediaFiles.forEach((item) => formData.append("media", item.file, item.file.name));
+
               let res;
               try {
                 res = await fetch(
@@ -1282,15 +1491,7 @@
                   {
                     method: "POST",
                     credentials: "include",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      rating: selectedRating,
-                      name,
-                      email,
-                      title,
-                      body,
-                      website,
-                    }),
+                    body: formData,
                   }
                 );
               } catch (_) {
@@ -1299,15 +1500,7 @@
                   {
                     method: "POST",
                     credentials: "include",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      rating: selectedRating,
-                      name,
-                      email,
-                      title,
-                      body,
-                      website,
-                    }),
+                    body: formData,
                   }
                 );
               }
@@ -1329,9 +1522,10 @@
               }
               formEl.reset();
               setRating(0);
+              clearReviewMedia();
               setComposeMessage(
                 data.message ||
-                  "Thanks! Your review was submitted and will appear after it is approved.",
+                  "Thanks for flexing with us! Your review has been submitted.",
                 "success"
               );
             } catch (error) {

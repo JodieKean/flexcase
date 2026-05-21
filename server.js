@@ -541,6 +541,196 @@ async function judgeMePostJson(path, body = {}) {
   return data;
 }
 
+const REVIEW_MEDIA_DIR = path.join(__dirname, "data", "review-media");
+const REVIEW_AUTHOR_OVERRIDES_PATH = path.join(__dirname, "data", "review-author-overrides.json");
+const REVIEW_MEDIA_MAX_BYTES = 12 * 1024 * 1024;
+const REVIEW_MEDIA_MAX_FILES = 6;
+const REVIEW_MEDIA_ALLOWED_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "video/mp4",
+  "video/quicktime",
+  "video/webm",
+]);
+
+function loadReviewAuthorOverrides() {
+  try {
+    if (!fs.existsSync(REVIEW_AUTHOR_OVERRIDES_PATH)) return {};
+    const parsed = JSON.parse(fs.readFileSync(REVIEW_AUTHOR_OVERRIDES_PATH, "utf8"));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveReviewAuthorOverride(reviewId, displayName) {
+  const id = String(reviewId || "").trim();
+  const name = String(displayName || "").trim().slice(0, 120);
+  if (!id || !name) return;
+  const overrides = loadReviewAuthorOverrides();
+  overrides[id] = name;
+  fs.mkdirSync(path.dirname(REVIEW_AUTHOR_OVERRIDES_PATH), { recursive: true });
+  fs.writeFileSync(REVIEW_AUTHOR_OVERRIDES_PATH, JSON.stringify(overrides, null, 2));
+}
+
+function readMultipartBody(req, maxBytes = 15 * 1024 * 1024) {
+  return new Promise((resolve, reject) => {
+    const contentType = String(req.headers["content-type"] || "");
+    const boundaryMatch = contentType.match(/boundary=([^;]+)/i);
+    if (!boundaryMatch) {
+      reject(new Error("Expected multipart form data."));
+      return;
+    }
+    const boundary = boundaryMatch[1].trim().replace(/^"|"$/g, "");
+    const chunks = [];
+    let total = 0;
+    req.on("data", (chunk) => {
+      total += chunk.length;
+      if (total > maxBytes) {
+        reject(new Error("Upload too large."));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on("end", () => {
+      try {
+        resolve(parseMultipartBuffer(Buffer.concat(chunks), boundary));
+      } catch (error) {
+        reject(error);
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+function parseMultipartBuffer(buffer, boundary) {
+  const delimiter = Buffer.from(`--${boundary}`);
+  const fields = {};
+  const files = [];
+  let offset = buffer.indexOf(delimiter);
+  if (offset < 0) return { fields, files };
+
+  offset += delimiter.length;
+  if (buffer[offset] === 13 && buffer[offset + 1] === 10) offset += 2;
+  else if (buffer[offset] === 45 && buffer[offset + 1] === 45) return { fields, files };
+
+  while (offset < buffer.length) {
+    const next = buffer.indexOf(delimiter, offset);
+    const end = next < 0 ? buffer.length : next;
+    let part = buffer.subarray(offset, end);
+    if (part.length >= 2 && part[part.length - 2] === 13 && part[part.length - 1] === 10) {
+      part = part.subarray(0, part.length - 2);
+    }
+    const headerEnd = part.indexOf("\r\n\r\n");
+    if (headerEnd >= 0) {
+      const headerText = part.subarray(0, headerEnd).toString("utf8");
+      const body = part.subarray(headerEnd + 4);
+      const nameMatch = headerText.match(/name="([^"]+)"/i);
+      const filenameMatch = headerText.match(/filename="([^"]*)"/i);
+      const typeMatch = headerText.match(/Content-Type:\s*([^\r\n]+)/i);
+      const fieldName = nameMatch?.[1] || "field";
+      if (filenameMatch && filenameMatch[1]) {
+        files.push({
+          fieldname: fieldName,
+          filename: filenameMatch[1],
+          mimeType: String(typeMatch?.[1] || "application/octet-stream").trim().toLowerCase(),
+          buffer: body,
+        });
+      } else {
+        fields[fieldName] = body.toString("utf8");
+      }
+    }
+    if (next < 0) break;
+    offset = next + delimiter.length;
+    if (buffer[offset] === 13 && buffer[offset + 1] === 10) offset += 2;
+    if (buffer[offset] === 45 && buffer[offset + 1] === 45) break;
+  }
+  return { fields, files };
+}
+
+function reviewMediaExtension(mimeType) {
+  const map = {
+    "image/jpeg": ".jpg",
+    "image/png": ".png",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/webm": ".webm",
+  };
+  return map[mimeType] || "";
+}
+
+async function saveReviewMediaFiles(files = []) {
+  if (!files.length) return [];
+  fs.mkdirSync(REVIEW_MEDIA_DIR, { recursive: true });
+  const publicUrls = [];
+  for (const file of files.slice(0, REVIEW_MEDIA_MAX_FILES)) {
+    if (!file?.buffer?.length) continue;
+    if (file.buffer.length > REVIEW_MEDIA_MAX_BYTES) {
+      throw new Error("Each photo or video must be 12 MB or smaller.");
+    }
+    const mimeType = String(file.mimeType || "").toLowerCase();
+    if (!REVIEW_MEDIA_ALLOWED_TYPES.has(mimeType)) {
+      throw new Error("Only JPG, PNG, WebP, GIF, MP4, MOV, and WebM files are supported.");
+    }
+    const ext = reviewMediaExtension(mimeType) || path.extname(file.filename || "").toLowerCase();
+    const filename = `${crypto.randomUUID()}${ext}`;
+    const filepath = path.join(REVIEW_MEDIA_DIR, filename);
+    fs.writeFileSync(filepath, file.buffer);
+    publicUrls.push(`${API_ORIGIN.replace(/\/$/, "")}/review-media/${filename}`);
+  }
+  return publicUrls;
+}
+
+function serveReviewMedia(req, res, pathname) {
+  const filename = path.basename(pathname.replace(/^\/review-media\//, ""));
+  if (!filename || filename.includes("..")) {
+    res.writeHead(400);
+    res.end("Bad request");
+    return;
+  }
+  const filepath = path.join(REVIEW_MEDIA_DIR, filename);
+  if (!filepath.startsWith(REVIEW_MEDIA_DIR) || !fs.existsSync(filepath) || !fs.statSync(filepath).isFile()) {
+    res.writeHead(404);
+    res.end("Not found");
+    return;
+  }
+  const ext = path.extname(filepath).toLowerCase();
+  const contentTypes = {
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".png": "image/png",
+    ".webp": "image/webp",
+    ".gif": "image/gif",
+    ".mp4": "video/mp4",
+    ".mov": "video/quicktime",
+    ".webm": "video/webm",
+  };
+  res.writeHead(200, { "Content-Type": contentTypes[ext] || "application/octet-stream" });
+  fs.createReadStream(filepath).pipe(res);
+}
+
+function mapJudgeMeReviewVideos(review) {
+  const videos = [];
+  const rawVideos = Array.isArray(review?.videos) ? review.videos : [];
+  rawVideos.forEach((item) => {
+    if (!item || item.hidden) return;
+    const url = String(
+      item?.url ||
+        item?.urls?.original ||
+        item?.urls?.compact ||
+        item?.urls?.small ||
+        ""
+    ).trim();
+    if (url) videos.push(url);
+  });
+  return videos;
+}
+
 function isPublishedJudgeMeReview(review) {
   if (!review || review.hidden) return false;
   const curated = String(review.curated || "").toLowerCase();
@@ -589,6 +779,7 @@ async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
 }
 
 function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
+  const authorOverrides = loadReviewAuthorOverrides();
   const items = rawReviews
     .filter(isPublishedJudgeMeReview)
     .map((review) => {
@@ -597,15 +788,25 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
         .filter((pic) => pic && !pic.hidden)
         .map((pic) => String(pic?.urls?.compact || pic?.urls?.small || pic?.urls?.original || "").trim())
         .filter(Boolean);
+      const reviewId = String(review.id || "").trim();
+      const reviewerEmail = String(review.reviewer?.email || "").trim().toLowerCase();
+      const emailHandleKey =
+        reviewerEmail && handle ? `email:${reviewerEmail}:${handle}` : "";
+      const author =
+        (reviewId && authorOverrides[reviewId]) ||
+        (emailHandleKey && authorOverrides[emailHandleKey]) ||
+        stripJudgeMeHtml(review.reviewer?.name) ||
+        "Customer";
       return {
         id: review.id,
         rating,
         title: stripJudgeMeHtml(review.title),
         body: stripJudgeMeHtml(review.body),
-        author: stripJudgeMeHtml(review.reviewer?.name) || "Customer",
+        author,
         createdAt: review.created_at || null,
         verified: String(review.verified || "").toLowerCase() === "buyer",
         pictures,
+        videos: mapJudgeMeReviewVideos(review),
       };
     })
     .filter((item) => item.rating > 0);
@@ -698,16 +899,37 @@ async function handleProductReviewSubmit(req, res, handle) {
     return;
   }
 
+  const contentType = String(req.headers["content-type"] || "");
   let body = {};
+  let pictureUrls = [];
   try {
-    body = await readJsonBody(req);
+    if (contentType.includes("multipart/form-data")) {
+      const parsed = await readMultipartBody(req);
+      body = parsed.fields || {};
+      const mediaFiles = (parsed.files || []).filter((file) => {
+        const field = String(file.fieldname || "").toLowerCase();
+        return field === "media" || field === "media[]" || field.startsWith("media");
+      });
+      pictureUrls = await saveReviewMediaFiles(mediaFiles);
+    } else {
+      body = await readJsonBody(req);
+      if (Array.isArray(body.picture_urls)) {
+        pictureUrls = body.picture_urls
+          .map((url) => String(url || "").trim())
+          .filter((url) => /^https?:\/\//i.test(url))
+          .slice(0, REVIEW_MEDIA_MAX_FILES);
+      }
+    }
   } catch (error) {
     json(res, 400, { error: error.message || "Invalid request." });
     return;
   }
 
   if (String(body.website || "").trim()) {
-    json(res, 200, { ok: true, message: "Thanks! Your review was submitted." });
+    json(res, 200, {
+      ok: true,
+      message: "Thanks for flexing with us! Your review has been submitted.",
+    });
     return;
   }
 
@@ -741,7 +963,7 @@ async function handleProductReviewSubmit(req, res, handle) {
       return;
     }
 
-    await judgeMePostJson("reviews", {
+    const payload = {
       platform: "shopify",
       id: Number(externalId),
       name,
@@ -749,12 +971,18 @@ async function handleProductReviewSubmit(req, res, handle) {
       rating,
       title: title || "Product review",
       body: reviewBody,
-    });
+      reviewer_name_format: "",
+    };
+    if (pictureUrls.length) payload.picture_urls = pictureUrls;
+
+    const created = await judgeMePostJson("reviews", payload);
+    const reviewId = created?.review?.id ?? created?.id;
+    if (reviewId) saveReviewAuthorOverride(reviewId, name);
+    saveReviewAuthorOverride(`email:${email}:${handle}`, name);
 
     json(res, 200, {
       ok: true,
-      message:
-        "Thanks! Your review was submitted and will appear on this page after Judge.me approves it.",
+      message: "Thanks for flexing with us! Your review has been submitted.",
     });
   } catch (error) {
     console.error("Judge.me review submit failed:", error.message);
@@ -3674,6 +3902,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/catalog") {
     await handleCatalog(req, res);
+    return;
+  }
+  if (reqUrl.pathname.startsWith("/review-media/")) {
+    serveReviewMedia(req, res, reqUrl.pathname);
     return;
   }
   if (reqUrl.pathname.startsWith("/api/product/")) {
