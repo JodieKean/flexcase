@@ -413,6 +413,62 @@
         font-size: 0.88rem;
       }
 
+      .review-summary .review-stars {
+        margin: 0 0 4px;
+        color: #b08d57;
+        font-size: 1.1rem;
+        letter-spacing: 0.06em;
+      }
+
+      .review-write-link {
+        display: inline-block;
+        margin-top: 10px;
+        color: #b08d57;
+        font-size: 0.92rem;
+        text-decoration: none;
+      }
+
+      @media (hover: hover) and (pointer: fine) {
+        .review-write-link:hover {
+          text-decoration: underline;
+          text-underline-offset: 2px;
+        }
+      }
+
+      .review-empty {
+        grid-column: 1 / -1;
+        background: #ffffff;
+        border: 1px solid #ececf1;
+        border-radius: 18px;
+        padding: 18px;
+        color: #6e6e73;
+        font-size: 0.92rem;
+        line-height: 1.55;
+      }
+
+      .review-verified {
+        color: #b08d57;
+        font-size: 0.72rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+      }
+
+      .review-photos {
+        margin-top: 10px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .review-photos img {
+        width: 56px;
+        height: 56px;
+        object-fit: cover;
+        border-radius: 8px;
+        border: 1px solid #ececf1;
+      }
+
       .bar-line {
         display: grid;
         grid-template-columns: 16px 1fr 24px;
@@ -662,10 +718,13 @@
 
       <section class="reviews-wrap" id="reviews">
         <aside class="review-summary">
-          <h2>-</h2>
-          <p>Reviews load from Shopify storefront data.</p>
+          <h2 id="review-average">—</h2>
+          <p class="review-stars" id="review-stars" aria-hidden="true"></p>
+          <p id="review-count">Loading reviews…</p>
+          <div id="review-bars"></div>
+          <a id="write-review-link" class="review-write-link" href="#" target="_blank" rel="noopener noreferrer" hidden>Write a review</a>
         </aside>
-        <div class="review-grid"></div>
+        <div class="review-grid" id="review-grid"></div>
       </section>
 
       <section class="setup" aria-label="Related products">
@@ -818,6 +877,127 @@
         setProductDescription(
           product.descriptionHtml || product.description || "<p>No product description yet.</p>"
         );
+
+        function renderProductReviews(reviews) {
+          const summaryEl = document.getElementById("review-average");
+          const starsEl = document.getElementById("review-stars");
+          const countEl = document.getElementById("review-count");
+          const barsEl = document.getElementById("review-bars");
+          const gridEl = document.getElementById("review-grid");
+          const writeLinkEl = document.getElementById("write-review-link");
+          if (!summaryEl || !gridEl) return;
+
+          const bundle = reviews && typeof reviews === "object" ? reviews : {};
+          const count = Number(bundle.count) || 0;
+          const average = bundle.averageRating;
+          const distribution = bundle.distribution || {};
+          const items = Array.isArray(bundle.items) ? bundle.items : [];
+
+          if (!bundle.configured) {
+            summaryEl.textContent = "—";
+            if (starsEl) starsEl.textContent = "";
+            if (countEl) {
+              countEl.textContent =
+                "Connect Judge.me in the API (JUDGE_ME_API_TOKEN) to show reviews on this headless store.";
+            }
+            if (barsEl) barsEl.innerHTML = "";
+            gridEl.innerHTML =
+              '<div class="review-empty">Judge.me widgets cannot auto-install on flexcase.my. Add your API token on the server to load reviews here.</div>';
+            if (writeLinkEl) writeLinkEl.hidden = true;
+            return;
+          }
+
+          summaryEl.textContent = count && average != null ? String(average) : "—";
+          if (starsEl) {
+            const filled = count && average != null ? Math.round(average) : 0;
+            starsEl.textContent = filled
+              ? "★★★★★".slice(0, filled) + "☆☆☆☆☆".slice(0, 5 - filled)
+              : "";
+          }
+          if (countEl) {
+            countEl.textContent =
+              count === 1 ? "1 review" : count ? `${count} reviews` : "No reviews yet";
+          }
+
+          if (barsEl) {
+            barsEl.innerHTML = [5, 4, 3, 2, 1]
+              .map((star) => {
+                const n = Number(distribution[star]) || 0;
+                const pct = count ? Math.round((n / count) * 100) : 0;
+                return (
+                  '<div class="bar-line"><span>' +
+                  star +
+                  '</span><div class="bar"><span style="width:' +
+                  pct +
+                  '%"></span></div><span>' +
+                  n +
+                  "</span></div>"
+                );
+              })
+              .join("");
+          }
+
+          if (writeLinkEl) {
+            const url = String(bundle.writeReviewUrl || "").trim();
+            if (url) {
+              writeLinkEl.href = url;
+              writeLinkEl.hidden = false;
+            } else {
+              writeLinkEl.hidden = true;
+            }
+          }
+
+          if (!items.length) {
+            gridEl.innerHTML =
+              '<div class="review-empty">No published reviews yet. Be the first to share your experience.</div>';
+            return;
+          }
+
+          gridEl.innerHTML = items
+            .map((review) => {
+              const date = review.createdAt
+                ? new Date(review.createdAt).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "";
+              const verified = review.verified
+                ? '<span class="review-verified">Verified buyer</span>'
+                : "";
+              const photos = (review.pictures || [])
+                .map(
+                  (src) =>
+                    '<img src="' +
+                    escapeGalleryText(src) +
+                    '" alt="" loading="lazy" />'
+                )
+                .join("");
+              const photosHtml = photos
+                ? '<div class="review-photos">' + photos + "</div>"
+                : "";
+              return (
+                '<article class="review-card">' +
+                '<div class="review-head"><span>' +
+                escapeGalleryText(review.author || "Customer") +
+                "</span><span>" +
+                escapeGalleryText(date) +
+                "</span></div>" +
+                verified +
+                "<h3>" +
+                escapeGalleryText(review.title || "Review") +
+                "</h3>" +
+                "<p>" +
+                escapeGalleryText(review.body || "") +
+                "</p>" +
+                photosHtml +
+                "</article>"
+              );
+            })
+            .join("");
+        }
+
+        renderProductReviews(product.reviews);
 
         const variants = product.variants?.nodes || [];
         let selectedOptionValues = {};

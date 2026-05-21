@@ -92,6 +92,14 @@ if (!SHOP_FROM_ENV || !CLIENT_ID_FROM_ENV || !CLIENT_SECRET_FROM_ENV) {
 let cachedToken = "";
 let tokenExpiresAt = 0;
 const STOREFRONT_ACCESS_TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
+const JUDGE_ME_API_TOKEN = process.env.JUDGE_ME_API_TOKEN || "";
+const JUDGE_ME_SHOP_DOMAIN =
+  process.env.JUDGE_ME_SHOP_DOMAIN ||
+  (SHOP_FROM_ENV
+    ? String(SHOP_FROM_ENV).includes(".")
+      ? String(SHOP_FROM_ENV)
+      : `${String(SHOP_FROM_ENV)}.myshopify.com`
+    : "");
 
 async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiresAt - 60_000) return cachedToken;
@@ -452,6 +460,152 @@ function computeProductPriceRanges(variantNodes, productId, handle, discountMap)
 
 function isActiveShopifyProduct(node) {
   return String(node?.status || "").toUpperCase() === "ACTIVE";
+}
+
+function parseShopifyResourceNumericId(gid, resource) {
+  const s = String(gid || "");
+  const re = new RegExp(`${resource}/(\\d+)`);
+  const m = s.match(re);
+  return m ? m[1] : "";
+}
+
+function judgeMeConfigured() {
+  return Boolean(JUDGE_ME_API_TOKEN && JUDGE_ME_SHOP_DOMAIN);
+}
+
+async function judgeMeRequest(path, query = {}) {
+  if (!judgeMeConfigured()) return null;
+  const url = new URL(`https://judge.me/api/v1/${String(path).replace(/^\//, "")}`);
+  url.searchParams.set("shop_domain", JUDGE_ME_SHOP_DOMAIN);
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  }
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      "X-Api-Token": JUDGE_ME_API_TOKEN,
+    },
+  });
+  const text = await response.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = { raw: text };
+  }
+  if (!response.ok) {
+    const msg =
+      data?.error ||
+      data?.message ||
+      (typeof data?.raw === "string" ? data.raw.slice(0, 200) : null) ||
+      `Judge.me HTTP ${response.status}`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
+function isPublishedJudgeMeReview(review) {
+  if (!review || review.hidden) return false;
+  const curated = String(review.curated || "").toLowerCase();
+  return curated === "ok" || curated === "true";
+}
+
+function stripJudgeMeHtml(value) {
+  return String(value || "")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildJudgeMeWriteReviewUrl(handle) {
+  const productUrl = `${FRONTEND_ORIGIN}/Product.html?handle=${encodeURIComponent(handle)}`;
+  const params = new URLSearchParams({
+    url: productUrl,
+    shop_domain: JUDGE_ME_SHOP_DOMAIN,
+  });
+  return `https://judge.me/reviews/new?${params.toString()}`;
+}
+
+function mapJudgeMeReviewBundle(rawReviews, handle) {
+  const items = rawReviews
+    .filter(isPublishedJudgeMeReview)
+    .map((review) => {
+      const rating = Math.max(1, Math.min(5, Number(review.rating) || 0));
+      const pictures = (Array.isArray(review.pictures) ? review.pictures : [])
+        .filter((pic) => pic && !pic.hidden)
+        .map((pic) => String(pic?.urls?.compact || pic?.urls?.small || pic?.urls?.original || "").trim())
+        .filter(Boolean);
+      return {
+        id: review.id,
+        rating,
+        title: stripJudgeMeHtml(review.title),
+        body: stripJudgeMeHtml(review.body),
+        author: stripJudgeMeHtml(review.reviewer?.name) || "Customer",
+        createdAt: review.created_at || null,
+        verified: String(review.verified || "").toLowerCase() === "buyer",
+        pictures,
+      };
+    })
+    .filter((item) => item.rating > 0);
+
+  const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  let sum = 0;
+  items.forEach((item) => {
+    sum += item.rating;
+    distribution[item.rating] = (distribution[item.rating] || 0) + 1;
+  });
+  const count = items.length;
+  const averageRating = count ? Math.round((sum / count) * 10) / 10 : null;
+
+  return {
+    configured: judgeMeConfigured(),
+    averageRating,
+    count,
+    distribution,
+    items,
+    writeReviewUrl: buildJudgeMeWriteReviewUrl(handle),
+  };
+}
+
+async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
+  const empty = mapJudgeMeReviewBundle([], handle);
+  if (!judgeMeConfigured()) return empty;
+
+  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
+  const attempts = [];
+  if (externalId) attempts.push({ external_id: externalId });
+  if (handle) attempts.push({ handle });
+
+  let rawReviews = [];
+  for (const extra of attempts) {
+    try {
+      const data = await judgeMeRequest("reviews", { per_page: 50, page: 1, ...extra });
+      const batch = Array.isArray(data?.reviews) ? data.reviews : [];
+      const filtered = batch.filter(isPublishedJudgeMeReview);
+      if (filtered.length) {
+        rawReviews = filtered;
+        break;
+      }
+    } catch (error) {
+      console.warn("Judge.me reviews query failed:", extra, error.message);
+    }
+  }
+
+  if (!rawReviews.length && handle) {
+    try {
+      const data = await judgeMeRequest("reviews", { per_page: 100, page: 1 });
+      rawReviews = (Array.isArray(data?.reviews) ? data.reviews : []).filter(
+        (review) => String(review.product_handle || "") === handle && isPublishedJudgeMeReview(review)
+      );
+    } catch (error) {
+      console.warn("Judge.me reviews fallback failed:", error.message);
+      return empty;
+    }
+  }
+
+  return mapJudgeMeReviewBundle(rawReviews, handle);
 }
 
 function mapProduct(node, discountMap = new Map()) {
@@ -990,6 +1144,7 @@ async function handleProduct(req, res, handle) {
     }
     const product = mapProduct(node, discountMap);
     product.mediaGallery = mapProductMediaToGallery(node);
+    product.reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
     json(res, 200, { product });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -3295,6 +3450,10 @@ const server = http.createServer(async (req, res) => {
           CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT &&
           CUSTOMER_ACCOUNT_TOKEN_ENDPOINT
       ),
+      judgeMeConfigured: judgeMeConfigured(),
+      judgeMeHint: judgeMeConfigured()
+        ? null
+        : "Set JUDGE_ME_API_TOKEN and JUDGE_ME_SHOP_DOMAIN for headless Judge.me reviews.",
     });
     return;
   }
