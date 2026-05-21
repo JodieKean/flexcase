@@ -3,4 +3,5 @@ node_modules
 .DS_Store
 data/review-media/
 data/review-author-overrides.json
+data/review-media-overrides.json
 

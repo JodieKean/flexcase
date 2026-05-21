@@ -589,19 +589,20 @@
       }
 
       .review-photos {
-        margin-top: 10px;
+        margin-top: 12px;
         display: flex;
         flex-wrap: wrap;
-        gap: 6px;
+        gap: 8px;
       }
 
       .review-photos img,
       .review-photos video {
-        width: 56px;
-        height: 56px;
+        width: 96px;
+        height: 96px;
         object-fit: cover;
-        border-radius: 8px;
+        border-radius: 10px;
         border: 1px solid #ececf1;
+        background: #f4f4f7;
       }
 
       .review-media-drop {
@@ -986,7 +987,8 @@
               <label>Photos or videos (optional)</label>
               <div class="review-media-drop" id="review-media-drop" tabindex="0" role="button">
                 <strong>Drop files here or click to upload</strong>
-                JPG, PNG, WebP, GIF, MP4, MOV, or WebM · up to 6 files · 12 MB each
+                JPG, PNG, WebP, GIF, MP4, MOV, or WebM · up to 6 files · 12 MB each.
+                Videos appear on this site; photos also sync to Judge.me when approved.
               </div>
               <input
                 class="review-media-input"
@@ -1355,6 +1357,20 @@
               .join("");
           }
 
+          function inferClientMediaType(file) {
+            const type = String(file?.type || "").toLowerCase();
+            if (type && type !== "application/octet-stream") return type;
+            const name = String(file?.name || "").toLowerCase();
+            if (name.endsWith(".jpg") || name.endsWith(".jpeg")) return "image/jpeg";
+            if (name.endsWith(".png")) return "image/png";
+            if (name.endsWith(".webp")) return "image/webp";
+            if (name.endsWith(".gif")) return "image/gif";
+            if (name.endsWith(".mp4")) return "video/mp4";
+            if (name.endsWith(".mov")) return "video/quicktime";
+            if (name.endsWith(".webm")) return "video/webm";
+            return type;
+          }
+
           function addReviewMediaFiles(fileList) {
             const incoming = Array.from(fileList || []);
             for (const file of incoming) {
@@ -1366,7 +1382,7 @@
                 setComposeMessage("Each file must be 12 MB or smaller.", "error");
                 continue;
               }
-              const type = String(file.type || "").toLowerCase();
+              const type = inferClientMediaType(file);
               const allowed =
                 type.startsWith("image/") ||
                 type === "video/mp4" ||
