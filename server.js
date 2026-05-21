@@ -546,7 +546,7 @@ const REVIEW_AUTHOR_OVERRIDES_PATH = path.join(__dirname, "data", "review-author
 const REVIEW_MEDIA_OVERRIDES_PATH = path.join(__dirname, "data", "review-media-overrides.json");
 const REVIEW_BODY_HIDE_PATH = path.join(__dirname, "data", "review-body-hide.json");
 const REVIEW_MEDIA_MAX_BYTES = 12 * 1024 * 1024;
-const REVIEW_MEDIA_MAX_FILES = 6;
+const REVIEW_MEDIA_MAX_FILES = 3;
 const REVIEW_MEDIA_ALLOWED_TYPES = new Set([
   "image/jpeg",
   "image/png",
@@ -1058,6 +1058,61 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "") {
   };
 }
 
+function buildSubmittedReviewItem({
+  reviewId,
+  name,
+  rating,
+  title,
+  reviewBody,
+  hideDuplicateBody = false,
+  picturesForDisplay = [],
+}) {
+  const displayTitle = title || "Review";
+  const pictures = dedupeReviewPictureItems(
+    picturesForDisplay
+      .map((url) => {
+        const value = String(url || "").trim();
+        return value ? { thumb: value, full: value } : null;
+      })
+      .filter(Boolean)
+  );
+  return {
+    id: reviewId || `pending-${Date.now()}`,
+    rating,
+    title: displayTitle,
+    body: reviewBodyForDisplay(displayTitle, reviewBody, hideDuplicateBody),
+    author: name,
+    createdAt: new Date().toISOString(),
+    verified: false,
+    pictures,
+  };
+}
+
+function upsertSubmittedReviewInBundle(bundle, submitted) {
+  if (!submitted) return bundle;
+  const items = Array.isArray(bundle?.items) ? bundle.items : [];
+  const id = String(submitted.id || "");
+  const merged = [
+    submitted,
+    ...items.filter((item) => String(item?.id || "") !== id),
+  ];
+  const distribution = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  let sum = 0;
+  merged.forEach((item) => {
+    const stars = Math.max(1, Math.min(5, Number(item.rating) || 0));
+    sum += stars;
+    distribution[stars] = (distribution[stars] || 0) + 1;
+  });
+  const count = merged.length;
+  return {
+    ...bundle,
+    count,
+    averageRating: count ? Math.round((sum / count) * 10) / 10 : null,
+    distribution,
+    items: merged,
+  };
+}
+
 async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
   const writeReviewUrl = await buildJudgeMeWriteReviewUrl(handle, shopifyProductGid);
   const empty = mapJudgeMeReviewBundle([], handle, writeReviewUrl);
@@ -1159,7 +1214,7 @@ async function handleProductReviewSubmit(req, res, handle) {
   if (String(body.website || "").trim()) {
     json(res, 200, {
       ok: true,
-      message: "Thanks for flexing with us! Your review has been submitted.",
+      message: "Thanks for Flexing.",
     });
     return;
   }
@@ -1239,9 +1294,22 @@ async function handleProductReviewSubmit(req, res, handle) {
       });
     }
 
+    let reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
+    const submitted = buildSubmittedReviewItem({
+      reviewId,
+      name,
+      rating,
+      title,
+      reviewBody,
+      hideDuplicateBody: !titleInput,
+      picturesForDisplay: mediaBundle.picturesForDisplay,
+    });
+    reviews = upsertSubmittedReviewInBundle(reviews, submitted);
+
     json(res, 200, {
       ok: true,
-      message: "Thanks for flexing with us! Your review has been submitted.",
+      message: "Thanks for Flexing.",
+      reviews,
     });
   } catch (error) {
     console.error("Judge.me review submit failed:", error.message);

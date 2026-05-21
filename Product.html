@@ -560,6 +560,55 @@
         color: #3d6b3f;
       }
 
+      .review-submit-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 1300;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+        background: rgba(10, 10, 12, 0.55);
+        backdrop-filter: blur(6px);
+      }
+
+      .review-submit-overlay[hidden] {
+        display: none !important;
+      }
+
+      .review-submit-overlay__panel {
+        width: min(320px, 100%);
+        background: #ffffff;
+        border-radius: 20px;
+        padding: 28px 32px;
+        text-align: center;
+        box-shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+      }
+
+      .review-submit-overlay__spinner {
+        width: 42px;
+        height: 42px;
+        margin: 0 auto 16px;
+        border: 3px solid #ececf1;
+        border-top-color: #1d1d1f;
+        border-radius: 50%;
+        animation: review-submit-spin 0.75s linear infinite;
+      }
+
+      @keyframes review-submit-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+
+      .review-submit-overlay__text {
+        margin: 0;
+        font-size: 1.08rem;
+        font-weight: 600;
+        color: #1d1d1f;
+      }
+
       .review-compose-honeypot {
         position: absolute;
         left: -9999px;
@@ -889,6 +938,31 @@
         gap: 14px;
       }
 
+      .review-see-more {
+        grid-column: 1 / -1;
+        justify-self: center;
+        margin-top: 2px;
+        padding: 12px 28px;
+        border: 1px solid #d8d8de;
+        border-radius: 999px;
+        background: #ffffff;
+        color: #1d1d1f;
+        font-size: 0.92rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease;
+      }
+
+      .review-see-more:hover {
+        background: #fafafa;
+        border-color: #b08d57;
+      }
+
+      .review-see-more:focus-visible {
+        outline: 2px solid #b08d57;
+        outline-offset: 2px;
+      }
+
       .review-card {
         background: #ffffff;
         border: 1px solid #ececf1;
@@ -1164,6 +1238,17 @@
             </button>
           </div>
         </div>
+        <div
+          id="review-submit-overlay"
+          class="review-submit-overlay"
+          hidden
+          aria-hidden="true"
+        >
+          <div class="review-submit-overlay__panel" role="status" aria-live="polite">
+            <div class="review-submit-overlay__spinner" aria-hidden="true"></div>
+            <p class="review-submit-overlay__text">Thanks for Flexing.</p>
+          </div>
+        </div>
         <div class="review-compose-panel" id="review-compose-panel" hidden>
           <h3>Write a review</h3>
           <p class="review-compose-note">
@@ -1209,7 +1294,7 @@
               <label>Photos (optional)</label>
               <div class="review-media-drop" id="review-media-drop" tabindex="0" role="button">
                 <strong>Drop files here or click to upload</strong>
-                JPG, PNG, WebP, or GIF · up to 6 files · 12 MB each
+                JPG, PNG, WebP, or GIF · up to 3 files · 12 MB each
               </div>
               <input
                 class="review-media-input"
@@ -1387,6 +1472,83 @@
         );
 
         const reviewPhotoGalleries = {};
+        let reviewsShowAll = false;
+
+        function sortReviewsNewestFirst(items) {
+          return [...items].sort((a, b) => {
+            const timeA = Date.parse(a?.createdAt || "") || 0;
+            const timeB = Date.parse(b?.createdAt || "") || 0;
+            if (timeB !== timeA) return timeB - timeA;
+            return String(b?.id || "").localeCompare(String(a?.id || ""));
+          });
+        }
+
+        function getReviewPreviewLimit() {
+          return window.matchMedia("(max-width: 768px)").matches ? 3 : 10;
+        }
+
+        function buildReviewCardMarkup(review, reviewIndex) {
+          const reviewKey = String(review.id || "review-" + reviewIndex);
+          const pictureItems = (review.pictures || [])
+            .map((item) => {
+              if (typeof item === "string") {
+                const url = String(item || "").trim();
+                return url ? { thumb: url, full: url } : null;
+              }
+              const thumb = String(item?.thumb || item?.full || "").trim();
+              const full = String(item?.full || item?.thumb || "").trim();
+              return thumb || full ? { thumb: thumb || full, full: full || thumb } : null;
+            })
+            .filter(Boolean);
+          reviewPhotoGalleries[reviewKey] = pictureItems;
+
+          const date = review.createdAt
+            ? new Date(review.createdAt).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })
+            : "";
+          const verified = review.verified
+            ? '<span class="review-verified">Verified buyer</span>'
+            : "";
+          const photos = pictureItems
+            .map(
+              (item, photoIndex) =>
+                '<button type="button" class="review-photo-thumb" data-review-key="' +
+                escapeGalleryText(reviewKey) +
+                '" data-photo-index="' +
+                photoIndex +
+                '" aria-label="View review photo ' +
+                (photoIndex + 1) +
+                ' of ' +
+                pictureItems.length +
+                '">' +
+                '<img src="' +
+                escapeGalleryText(item.thumb || item.full) +
+                '" alt="" loading="lazy" decoding="async" />' +
+                "</button>"
+            )
+            .join("");
+          const photosHtml = photos ? '<div class="review-photos">' + photos + "</div>" : "";
+          const bodyText = String(review.body || "").trim();
+          const bodyHtml = bodyText ? "<p>" + escapeGalleryText(bodyText) + "</p>" : "";
+          return (
+            '<article class="review-card">' +
+            '<div class="review-head"><span>' +
+            escapeGalleryText(review.author || "Customer") +
+            "</span><span>" +
+            escapeGalleryText(date) +
+            "</span></div>" +
+            verified +
+            "<h3>" +
+            escapeGalleryText(review.title || "Review") +
+            "</h3>" +
+            bodyHtml +
+            photosHtml +
+            "</article>"
+          );
+        }
 
         function renderProductReviews(reviews) {
           const summaryEl = document.getElementById("review-average");
@@ -1456,72 +1618,35 @@
             return;
           }
 
-          gridEl.innerHTML = items
-            .map((review, reviewIndex) => {
-              const reviewKey = String(review.id || "review-" + reviewIndex);
-              const pictureItems = (review.pictures || [])
-                .map((item) => {
-                  if (typeof item === "string") {
-                    const url = String(item || "").trim();
-                    return url ? { thumb: url, full: url } : null;
-                  }
-                  const thumb = String(item?.thumb || item?.full || "").trim();
-                  const full = String(item?.full || item?.thumb || "").trim();
-                  return thumb || full ? { thumb: thumb || full, full: full || thumb } : null;
-                })
-                .filter(Boolean);
-              reviewPhotoGalleries[reviewKey] = pictureItems;
-
-              const date = review.createdAt
-                ? new Date(review.createdAt).toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    year: "numeric",
-                  })
-                : "";
-              const verified = review.verified
-                ? '<span class="review-verified">Verified buyer</span>'
-                : "";
-              const photos = pictureItems
-                .map(
-                  (item, photoIndex) =>
-                    '<button type="button" class="review-photo-thumb" data-review-key="' +
-                    escapeGalleryText(reviewKey) +
-                    '" data-photo-index="' +
-                    photoIndex +
-                    '" aria-label="View review photo ' +
-                    (photoIndex + 1) +
-                    ' of ' +
-                    pictureItems.length +
-                    '">' +
-                    '<img src="' +
-                    escapeGalleryText(item.thumb || item.full) +
-                    '" alt="" loading="lazy" decoding="async" />' +
-                    "</button>"
-                )
-                .join("");
-              const photosHtml = photos ? '<div class="review-photos">' + photos + "</div>" : "";
-              const bodyText = String(review.body || "").trim();
-              const bodyHtml = bodyText
-                ? "<p>" + escapeGalleryText(bodyText) + "</p>"
-                : "";
-              return (
-                '<article class="review-card">' +
-                '<div class="review-head"><span>' +
-                escapeGalleryText(review.author || "Customer") +
-                "</span><span>" +
-                escapeGalleryText(date) +
-                "</span></div>" +
-                verified +
-                "<h3>" +
-                escapeGalleryText(review.title || "Review") +
-                "</h3>" +
-                bodyHtml +
-                photosHtml +
-                "</article>"
-              );
-            })
+          const sortedItems = sortReviewsNewestFirst(items);
+          const previewLimit = getReviewPreviewLimit();
+          const visibleItems = reviewsShowAll
+            ? sortedItems
+            : sortedItems.slice(0, previewLimit);
+          const hiddenCount = sortedItems.length - visibleItems.length;
+          const cardsHtml = visibleItems
+            .map((review, reviewIndex) => buildReviewCardMarkup(review, reviewIndex))
             .join("");
+          const seeMoreHtml =
+            hiddenCount > 0
+              ? '<button type="button" class="review-see-more" data-review-see-more aria-label="Show ' +
+                hiddenCount +
+                ' more reviews">See more</button>'
+              : "";
+          gridEl.innerHTML = cardsHtml + seeMoreHtml;
+        }
+
+        const reviewsSectionEl = document.getElementById("reviews");
+        if (reviewsSectionEl && reviewsSectionEl.dataset.seeMoreReady !== "1") {
+          reviewsSectionEl.dataset.seeMoreReady = "1";
+          reviewsSectionEl.addEventListener("click", (event) => {
+            if (!event.target.closest("[data-review-see-more]")) return;
+            reviewsShowAll = true;
+            renderProductReviews(product.reviews);
+          });
+          window
+            .matchMedia("(max-width: 768px)")
+            .addEventListener("change", () => renderProductReviews(product.reviews));
         }
 
         function initReviewPhotoLightbox() {
@@ -1680,14 +1805,19 @@
           const messageEl = document.getElementById("review-compose-message");
           const submitEl = document.getElementById("review-compose-submit");
           const cancelEl = document.getElementById("review-compose-cancel");
+          const submitOverlayEl = document.getElementById("review-submit-overlay");
           if (!panelEl || !toggleEl || !formEl || !ratingEl) return;
+
+          if (submitOverlayEl && submitOverlayEl.parentElement !== document.body) {
+            document.body.appendChild(submitOverlayEl);
+          }
 
           let selectedRating = 0;
           const mediaFiles = [];
           const mediaDropEl = document.getElementById("review-media-drop");
           const mediaInputEl = document.getElementById("review-media-input");
           const mediaPreviewsEl = document.getElementById("review-media-previews");
-          const MAX_REVIEW_MEDIA = 6;
+          const MAX_REVIEW_MEDIA = 3;
           const MAX_REVIEW_MEDIA_BYTES = 12 * 1024 * 1024;
 
           function setComposeMessage(text, kind) {
@@ -1696,6 +1826,22 @@
             messageEl.classList.remove("is-error", "is-success");
             if (kind === "error") messageEl.classList.add("is-error");
             if (kind === "success") messageEl.classList.add("is-success");
+          }
+
+          function showReviewSubmitOverlay() {
+            if (!submitOverlayEl) return;
+            submitOverlayEl.hidden = false;
+            submitOverlayEl.setAttribute("aria-hidden", "false");
+            document.body.style.overflow = "hidden";
+          }
+
+          function hideReviewSubmitOverlay() {
+            if (!submitOverlayEl) return;
+            submitOverlayEl.hidden = true;
+            submitOverlayEl.setAttribute("aria-hidden", "true");
+            if (!document.getElementById("review-photo-lightbox")?.classList.contains("open")) {
+              document.body.style.overflow = "";
+            }
           }
 
           function setRating(value) {
@@ -1752,7 +1898,7 @@
             const incoming = Array.from(fileList || []);
             for (const file of incoming) {
               if (mediaFiles.length >= MAX_REVIEW_MEDIA) {
-                setComposeMessage("You can attach up to 6 photos.", "error");
+                setComposeMessage("You can attach up to 3 photos.", "error");
                 break;
               }
               if (file.size > MAX_REVIEW_MEDIA_BYTES) {
@@ -1862,6 +2008,7 @@
             }
 
             if (submitEl) submitEl.disabled = true;
+            showReviewSubmitOverlay();
             try {
               const formData = new FormData();
               formData.append("rating", String(selectedRating));
@@ -1908,6 +2055,12 @@
               if (!res.ok || !data.ok) {
                 throw new Error(data.error || "Could not submit review.");
               }
+              if (data.reviews && typeof data.reviews === "object") {
+                product.reviews = data.reviews;
+                renderProductReviews(product.reviews);
+                const newestCard = document.querySelector("#review-grid .review-card");
+                newestCard?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+              }
               formEl.reset();
               setRating(0);
               clearReviewMedia();
@@ -1915,6 +2068,7 @@
             } catch (error) {
               setComposeMessage(error.message || "Could not submit review.", "error");
             } finally {
+              hideReviewSubmitOverlay();
               if (submitEl) submitEl.disabled = false;
             }
           });
