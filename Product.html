@@ -619,13 +619,19 @@
 
       .review-photo-lightbox {
         position: fixed;
-        inset: 0;
+        left: 0;
+        right: 0;
+        top: var(--vv-offset-top, 0px);
+        height: var(--vv-height, 100dvh);
         z-index: 1200;
         display: none;
         align-items: center;
         justify-content: center;
         padding: 48px 56px;
-        background: rgba(10, 10, 12, 0.88);
+        box-sizing: border-box;
+        background: rgba(10, 10, 12, 0.92);
+        overscroll-behavior: contain;
+        touch-action: pan-y pinch-zoom;
       }
 
       .review-photo-lightbox.open {
@@ -634,12 +640,14 @@
 
       .review-photo-lightbox__dialog {
         position: relative;
+        z-index: 1;
         width: min(920px, 100%);
         max-height: 100%;
         display: flex;
         flex-direction: column;
         align-items: center;
         gap: 12px;
+        pointer-events: none;
       }
 
       .review-photo-lightbox__stage {
@@ -647,14 +655,17 @@
         align-items: center;
         justify-content: center;
         width: 100%;
-        min-height: 200px;
+        min-height: 0;
+        max-height: 100%;
+        pointer-events: auto;
+        touch-action: pan-y;
       }
 
       .review-photo-lightbox__stage img {
         width: auto;
         height: auto;
         max-width: min(96vw, 1200px);
-        max-height: min(82vh, 900px);
+        max-height: min(calc(var(--vv-height, 100dvh) - 7rem), 900px);
         object-fit: contain;
         image-rendering: auto;
         border-radius: 12px;
@@ -662,19 +673,41 @@
       }
 
       .review-photo-lightbox__counter {
+        position: absolute;
+        left: 50%;
+        bottom: 18px;
+        transform: translateX(-50%);
         margin: 0;
         color: #f2f2f4;
         font-size: 0.86rem;
+        pointer-events: none;
+        text-align: center;
+        white-space: nowrap;
+      }
+
+      .review-photo-lightbox__counter:empty {
+        display: none;
+      }
+
+      .review-photo-lightbox__chrome {
+        position: absolute;
+        inset: 0;
+        z-index: 20;
+        pointer-events: none;
       }
 
       .review-photo-lightbox__close,
       .review-photo-lightbox__nav {
         position: absolute;
         border: 0;
-        background: rgba(255, 255, 255, 0.12);
+        background: rgba(18, 18, 22, 0.72);
         color: #fff;
         cursor: pointer;
+        pointer-events: auto;
         transition: background 0.15s ease;
+        -webkit-tap-highlight-color: transparent;
+        box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+        backdrop-filter: blur(8px);
       }
 
       .review-photo-lightbox__close:hover,
@@ -689,10 +722,10 @@
       }
 
       .review-photo-lightbox__close {
-        top: 16px;
-        right: 16px;
-        width: 40px;
-        height: 40px;
+        top: max(12px, env(safe-area-inset-top, 0px));
+        right: max(12px, env(safe-area-inset-right, 0px));
+        width: 44px;
+        height: 44px;
         border-radius: 999px;
         font-size: 1.5rem;
         line-height: 1;
@@ -701,23 +734,56 @@
       .review-photo-lightbox__nav {
         top: 50%;
         transform: translateY(-50%);
-        width: 44px;
-        height: 44px;
+        width: 48px;
+        height: 48px;
         border-radius: 999px;
         font-size: 1.6rem;
         line-height: 1;
       }
 
       .review-photo-lightbox__nav--prev {
-        left: 12px;
+        left: max(12px, env(safe-area-inset-left, 0px));
       }
 
       .review-photo-lightbox__nav--next {
-        right: 12px;
+        right: max(12px, env(safe-area-inset-right, 0px));
       }
 
       .review-photo-lightbox__nav[hidden] {
         display: none;
+      }
+
+      @media (max-width: 768px) {
+        .review-photo-lightbox {
+          padding: calc(env(safe-area-inset-top, 0px) + 56px) 12px
+            calc(env(safe-area-inset-bottom, 0px) + 88px);
+        }
+
+        .review-photo-lightbox__stage img {
+          max-width: 100%;
+          max-height: calc(var(--vv-height, 100dvh) - 9.5rem);
+        }
+
+        .review-photo-lightbox__counter {
+          bottom: max(18px, env(safe-area-inset-bottom, 0px));
+          padding: 6px 12px;
+          border-radius: 999px;
+          background: rgba(18, 18, 22, 0.72);
+        }
+
+        .review-photo-lightbox__nav {
+          top: auto;
+          bottom: max(18px, env(safe-area-inset-bottom, 0px));
+          transform: none;
+        }
+
+        .review-photo-lightbox__nav--prev {
+          left: max(12px, env(safe-area-inset-left, 0px));
+        }
+
+        .review-photo-lightbox__nav--next {
+          right: max(12px, env(safe-area-inset-right, 0px));
+        }
       }
 
       .review-media-drop {
@@ -1065,35 +1131,37 @@
           aria-label="Review photos"
           hidden
         >
-          <button
-            type="button"
-            class="review-photo-lightbox__close"
-            id="review-photo-lightbox-close"
-            aria-label="Close"
-          >
-            ×
-          </button>
-          <button
-            type="button"
-            class="review-photo-lightbox__nav review-photo-lightbox__nav--prev"
-            id="review-photo-lightbox-prev"
-            aria-label="Previous photo"
-          >
-            ‹
-          </button>
-          <button
-            type="button"
-            class="review-photo-lightbox__nav review-photo-lightbox__nav--next"
-            id="review-photo-lightbox-next"
-            aria-label="Next photo"
-          >
-            ›
-          </button>
           <div class="review-photo-lightbox__dialog">
-            <div class="review-photo-lightbox__stage">
+            <div class="review-photo-lightbox__stage" id="review-photo-lightbox-stage">
               <img id="review-photo-lightbox-img" alt="" />
             </div>
+          </div>
+          <div class="review-photo-lightbox__chrome">
+            <button
+              type="button"
+              class="review-photo-lightbox__close"
+              id="review-photo-lightbox-close"
+              aria-label="Close"
+            >
+              ×
+            </button>
             <p class="review-photo-lightbox__counter" id="review-photo-lightbox-counter"></p>
+            <button
+              type="button"
+              class="review-photo-lightbox__nav review-photo-lightbox__nav--prev"
+              id="review-photo-lightbox-prev"
+              aria-label="Previous photo"
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              class="review-photo-lightbox__nav review-photo-lightbox__nav--next"
+              id="review-photo-lightbox-next"
+              aria-label="Next photo"
+            >
+              ›
+            </button>
           </div>
         </div>
         <div class="review-compose-panel" id="review-compose-panel" hidden>
@@ -1459,6 +1527,7 @@
         function initReviewPhotoLightbox() {
           const lightboxEl = document.getElementById("review-photo-lightbox");
           const imgEl = document.getElementById("review-photo-lightbox-img");
+          const stageEl = document.getElementById("review-photo-lightbox-stage");
           const counterEl = document.getElementById("review-photo-lightbox-counter");
           const closeEl = document.getElementById("review-photo-lightbox-close");
           const prevEl = document.getElementById("review-photo-lightbox-prev");
@@ -1467,9 +1536,46 @@
           if (!lightboxEl || !imgEl || !gridEl || gridEl.dataset.lightboxReady === "1") return;
           gridEl.dataset.lightboxReady = "1";
 
+          if (lightboxEl.parentElement !== document.body) {
+            document.body.appendChild(lightboxEl);
+          }
+
           let activePictures = [];
           let activeIndex = 0;
           let lastFocusEl = null;
+          let touchStartX = 0;
+          let viewportSyncHandler = null;
+
+          function syncReviewPhotoLightboxViewport() {
+            const viewport = window.visualViewport;
+            const height = Math.round(viewport?.height || window.innerHeight);
+            const top = Math.round(viewport?.offsetTop || 0);
+            lightboxEl.style.setProperty("--vv-height", height + "px");
+            lightboxEl.style.setProperty("--vv-offset-top", top + "px");
+            lightboxEl.style.height = height + "px";
+            lightboxEl.style.top = top + "px";
+          }
+
+          function bindReviewPhotoLightboxViewportSync() {
+            if (viewportSyncHandler) return;
+            viewportSyncHandler = syncReviewPhotoLightboxViewport;
+            syncReviewPhotoLightboxViewport();
+            window.visualViewport?.addEventListener("resize", viewportSyncHandler);
+            window.visualViewport?.addEventListener("scroll", viewportSyncHandler);
+            window.addEventListener("resize", viewportSyncHandler);
+          }
+
+          function unbindReviewPhotoLightboxViewportSync() {
+            if (!viewportSyncHandler) return;
+            window.visualViewport?.removeEventListener("resize", viewportSyncHandler);
+            window.visualViewport?.removeEventListener("scroll", viewportSyncHandler);
+            window.removeEventListener("resize", viewportSyncHandler);
+            viewportSyncHandler = null;
+            lightboxEl.style.removeProperty("height");
+            lightboxEl.style.removeProperty("top");
+            lightboxEl.style.removeProperty("--vv-height");
+            lightboxEl.style.removeProperty("--vv-offset-top");
+          }
 
           function renderLightboxSlide() {
             const item = activePictures[activeIndex] || {};
@@ -1493,6 +1599,7 @@
             activePictures = pictures;
             activeIndex = Math.max(0, Math.min(startIndex, pictures.length - 1));
             renderLightboxSlide();
+            bindReviewPhotoLightboxViewportSync();
             lightboxEl.hidden = false;
             lightboxEl.classList.add("open");
             lightboxEl.setAttribute("aria-hidden", "false");
@@ -1504,6 +1611,7 @@
             lightboxEl.classList.remove("open");
             lightboxEl.hidden = true;
             lightboxEl.setAttribute("aria-hidden", "true");
+            unbindReviewPhotoLightboxViewportSync();
             document.body.style.overflow = "";
             imgEl.removeAttribute("src");
             activePictures = [];
@@ -1530,6 +1638,24 @@
           closeEl?.addEventListener("click", closeReviewPhotoLightbox);
           prevEl?.addEventListener("click", () => stepReviewPhotoLightbox(-1));
           nextEl?.addEventListener("click", () => stepReviewPhotoLightbox(1));
+          stageEl?.addEventListener(
+            "touchstart",
+            (event) => {
+              touchStartX = event.changedTouches[0]?.clientX ?? 0;
+            },
+            { passive: true }
+          );
+          stageEl?.addEventListener(
+            "touchend",
+            (event) => {
+              if (activePictures.length < 2) return;
+              const touchEndX = event.changedTouches[0]?.clientX ?? 0;
+              const deltaX = touchEndX - touchStartX;
+              if (Math.abs(deltaX) < 48) return;
+              stepReviewPhotoLightbox(deltaX > 0 ? -1 : 1);
+            },
+            { passive: true }
+          );
           lightboxEl.addEventListener("click", (event) => {
             if (event.target === lightboxEl) closeReviewPhotoLightbox();
           });
