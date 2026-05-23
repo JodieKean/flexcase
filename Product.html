@@ -2211,6 +2211,178 @@
             .replace(/"/g, "&quot;");
         }
 
+        const GALLERY_VIDEO_CANPLAY_SLOW_MS = 2800;
+        const GALLERY_VIDEO_STALL_DOWNGRADE_MS = 1500;
+        let disposeActiveGalleryVideo = null;
+
+        function getGalleryVideoSources(item) {
+          if (!item || item.kind !== "video") return [];
+          if (Array.isArray(item.videoSources) && item.videoSources.length) {
+            return item.videoSources
+              .map((source) => ({
+                url: String(source?.url || "").trim(),
+                width: Number(source?.width || 0),
+                height: Number(source?.height || 0),
+                fileSize: Number(source?.fileSize || 0),
+              }))
+              .filter((source) => source.url);
+          }
+          const fallback = String(item.videoUrl || "").trim();
+          return fallback ? [{ url: fallback, width: 0, height: 0, fileSize: 0 }] : [];
+        }
+
+        function galleryItemHasPlayableVideo(item) {
+          return item?.kind === "video" && getGalleryVideoSources(item).length > 0;
+        }
+
+        function getGalleryConnectionHints() {
+          const conn =
+            navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+          return {
+            saveData: Boolean(conn?.saveData),
+            effectiveType: String(conn?.effectiveType || "").toLowerCase(),
+            downlink: Number(conn?.downlink || 0),
+            mobile: isMobileGalleryView(),
+          };
+        }
+
+        function scoreGalleryConnectionTier(hints) {
+          if (hints.saveData) return 0;
+          if (hints.effectiveType === "slow-2g" || hints.effectiveType === "2g") return 0;
+          if (hints.effectiveType === "3g") return 1;
+          if (hints.mobile && hints.downlink > 0 && hints.downlink < 1.5) return 1;
+          if (hints.mobile) return 2;
+          if (hints.downlink > 0 && hints.downlink < 2) return 1;
+          if (hints.downlink > 0 && hints.downlink < 5) return 2;
+          return 3;
+        }
+
+        function pickInitialGalleryVideoSourceIndex(sources) {
+          const count = sources.length;
+          if (count <= 1) return 0;
+          const tier = scoreGalleryConnectionTier(getGalleryConnectionHints());
+          if (tier <= 0) return 0;
+          if (tier === 1) return Math.min(1, count - 1);
+          if (tier === 2) return Math.floor((count - 1) / 2);
+          return count - 1;
+        }
+
+        function mountAdaptiveGalleryVideo(galleryMain, options) {
+          const sources = options.sources || [];
+          const poster = String(options.poster || "").trim();
+          const alt = escapeGalleryText(options.alt || "Product video");
+          const mobileView = Boolean(options.mobileView);
+          let sourceIndex = pickInitialGalleryVideoSourceIndex(sources);
+          let loadStartedAt = 0;
+          let slowTimer = null;
+          let stallTimer = null;
+          let disposed = false;
+
+          const videoClass = "gallery-video" + (mobileView ? " gallery-video--chromeless" : "");
+          galleryMain.innerHTML =
+            '<video class="' +
+            videoClass +
+            '" poster="' +
+            escapeGalleryText(poster) +
+            '" playsinline autoplay loop muted preload="metadata" disablepictureinpicture disableremoteplayback aria-label="' +
+            alt +
+            '"></video>';
+          const video = galleryMain.querySelector("video");
+          if (!video) return () => {};
+
+          video.controls = !mobileView;
+          video.muted = true;
+
+          function clearTimers() {
+            if (slowTimer) {
+              clearTimeout(slowTimer);
+              slowTimer = null;
+            }
+            if (stallTimer) {
+              clearTimeout(stallTimer);
+              stallTimer = null;
+            }
+          }
+
+          function teardownListeners() {
+            video.removeEventListener("canplay", onCanPlay);
+            video.removeEventListener("waiting", onWaiting);
+            video.removeEventListener("playing", onPlaying);
+          }
+
+          function dispose() {
+            if (disposed) return;
+            disposed = true;
+            clearTimers();
+            teardownListeners();
+            try {
+              video.pause();
+            } catch (_error) {
+              /* ignore */
+            }
+            video.removeAttribute("src");
+            video.load();
+          }
+
+          function tryDowngrade() {
+            if (disposed || sourceIndex <= 0) return false;
+            sourceIndex -= 1;
+            loadCurrentSource();
+            return true;
+          }
+
+          function onCanPlay() {
+            if (disposed) return;
+            clearTimers();
+            const elapsed = performance.now() - loadStartedAt;
+            if (elapsed > GALLERY_VIDEO_CANPLAY_SLOW_MS && sourceIndex > 0) {
+              if (tryDowngrade()) return;
+            }
+            void video.play?.().catch(() => {});
+          }
+
+          function onWaiting() {
+            if (disposed || sourceIndex <= 0) return;
+            if (stallTimer) clearTimeout(stallTimer);
+            stallTimer = setTimeout(() => {
+              if (disposed || video.readyState >= 3) return;
+              tryDowngrade();
+            }, GALLERY_VIDEO_STALL_DOWNGRADE_MS);
+          }
+
+          function onPlaying() {
+            if (stallTimer) {
+              clearTimeout(stallTimer);
+              stallTimer = null;
+            }
+          }
+
+          function loadCurrentSource() {
+            if (disposed) return;
+            const source = sources[sourceIndex];
+            if (!source?.url) return;
+
+            clearTimers();
+            teardownListeners();
+            loadStartedAt = performance.now();
+
+            video.addEventListener("canplay", onCanPlay);
+            video.addEventListener("waiting", onWaiting);
+            video.addEventListener("playing", onPlaying);
+
+            video.src = source.url;
+            video.load();
+
+            slowTimer = setTimeout(() => {
+              if (disposed || video.readyState >= 2) return;
+              tryDowngrade();
+            }, GALLERY_VIDEO_CANPLAY_SLOW_MS);
+          }
+
+          loadCurrentSource();
+          return dispose;
+        }
+
         function getLegacyProductImages() {
           const fromNodes = product.images?.nodes;
           const fromArray = Array.isArray(product.images) ? product.images : null;
@@ -2237,7 +2409,7 @@
             return mg
               .filter((item) => {
                 const u = String(item?.url || "").trim();
-                const v = String(item?.videoUrl || "").trim();
+                const v = galleryItemHasPlayableVideo(item);
                 const e = String(item?.embedUrl || "").trim();
                 return Boolean(u || v || e);
               })
@@ -2270,37 +2442,25 @@
         function setGalleryMain(index) {
           const item = galleryItems[index];
           if (!item) return;
+          if (disposeActiveGalleryVideo) {
+            disposeActiveGalleryVideo();
+            disposeActiveGalleryVideo = null;
+          }
           galleryActiveIndex = index;
           const alt = escapeGalleryText(item.altText || product.title);
-          const videoUrl = String(item.videoUrl || "").trim();
+          const videoSources = getGalleryVideoSources(item);
+          const hasPlayableVideo = galleryItemHasPlayableVideo(item);
           const poster = String(item.poster || item.url || "").trim();
           const embedUrl = String(item.embedUrl || "").trim();
 
-          if (item.kind === "video" && videoUrl) {
-            const src = escapeGalleryText(videoUrl);
-            const posterEsc = escapeGalleryText(poster);
+          if (hasPlayableVideo) {
             const mobileView = isMobileGalleryView();
-            const videoClass =
-              "gallery-video" + (mobileView ? " gallery-video--chromeless" : "");
-            const controlsAttr = mobileView ? "" : " controls";
-            galleryMain.innerHTML =
-              '<video class="' +
-              videoClass +
-              '" src="' +
-              src +
-              '" poster="' +
-              posterEsc +
-              '" playsinline autoplay loop muted' +
-              controlsAttr +
-              ' preload="metadata" disablepictureinpicture disableremoteplayback aria-label="' +
-              alt +
-              '"></video>';
-            const vidEl = galleryMain.querySelector("video");
-            if (vidEl) {
-              vidEl.controls = !mobileView;
-              vidEl.muted = true;
-              void vidEl.play?.().catch(() => {});
-            }
+            disposeActiveGalleryVideo = mountAdaptiveGalleryVideo(galleryMain, {
+              sources: videoSources,
+              poster,
+              alt: item.altText || product.title,
+              mobileView,
+            });
           } else if (item.kind === "video" && poster) {
             const src = escapeGalleryText(poster);
             galleryMain.innerHTML = '<img src="' + src + '" alt="' + alt + '" />';
@@ -2318,7 +2478,7 @@
           }
 
           const fillMedia =
-            (item.kind === "video" && videoUrl) || (item.kind === "external_video" && embedUrl);
+            hasPlayableVideo || (item.kind === "external_video" && embedUrl);
           galleryMain.classList.toggle("gallery-main--fill-media", Boolean(fillMedia));
 
           galleryThumbs.querySelectorAll(".thumb").forEach((el, idx) => {
@@ -2347,7 +2507,7 @@
           galleryThumbs.innerHTML = galleryItems
             .map((item, i) => {
               const alt = escapeGalleryText(item.altText || product.title);
-              const isVideo = item.kind === "video" && String(item.videoUrl || "").trim();
+              const isVideo = galleryItemHasPlayableVideo(item);
               const isExternal = item.kind === "external_video" && String(item.embedUrl || "").trim();
               const posterOnly = item.kind === "video" && !isVideo && String(item.poster || item.url || "").trim();
               const thumbSrc = escapeGalleryText(

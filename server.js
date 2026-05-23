@@ -848,6 +848,206 @@ function isPublishedJudgeMeReview(review) {
   return curated === "ok" || curated === "true";
 }
 
+let judgeMePublishedReviewsCache = null;
+let judgeMePublishedReviewsCacheAt = 0;
+const JUDGE_ME_PUBLISHED_REVIEWS_CACHE_MS = 60_000;
+
+function invalidateJudgeMePublishedReviewsCache() {
+  judgeMePublishedReviewsCache = null;
+  judgeMePublishedReviewsCacheAt = 0;
+}
+
+function mergeUniqueJudgeMeReviews(existing = [], incoming = []) {
+  const seen = new Set(existing.map((review) => String(review?.id || "")).filter(Boolean));
+  const merged = [...existing];
+  incoming.forEach((review) => {
+    const reviewId = String(review?.id || "").trim();
+    if (!reviewId || seen.has(reviewId)) return;
+    seen.add(reviewId);
+    merged.push(review);
+  });
+  return merged;
+}
+
+function extractReviewProductExternalIds(review) {
+  const ids = new Set();
+  const add = (value) => {
+    const id = String(value ?? "").trim();
+    if (id) ids.add(id);
+  };
+  add(review?.product_external_id);
+  if (Array.isArray(review?.product_external_ids)) {
+    review.product_external_ids.forEach(add);
+  }
+  if (Array.isArray(review?.products)) {
+    review.products.forEach((product) => {
+      add(product?.external_id);
+      add(product?.product_external_id);
+      add(parseShopifyResourceNumericId(product?.id, "Product"));
+    });
+  }
+  return ids;
+}
+
+function extractReviewProductHandles(review) {
+  const handles = new Set();
+  const add = (value) => {
+    const handle = String(value ?? "").trim().toLowerCase();
+    if (handle) handles.add(handle);
+  };
+  add(review?.product_handle);
+  if (Array.isArray(review?.product_handles)) {
+    review.product_handles.forEach(add);
+  }
+  if (Array.isArray(review?.products)) {
+    review.products.forEach((product) => {
+      add(product?.handle);
+      add(product?.product_handle);
+    });
+  }
+  return handles;
+}
+
+function extractReviewOrderExternalId(review) {
+  return String(
+    review?.order_external_id ||
+      review?.shopify_order_id ||
+      review?.order?.external_id ||
+      review?.order_id ||
+      review?.order_number ||
+      ""
+  ).trim();
+}
+
+function reviewBelongsToProduct(review, handle, externalId) {
+  const targetHandle = String(handle || "").trim().toLowerCase();
+  const targetExternalId = String(externalId || "").trim();
+  const externalIds = extractReviewProductExternalIds(review);
+  const handles = extractReviewProductHandles(review);
+
+  if (targetExternalId && externalIds.has(targetExternalId)) return true;
+  if (targetHandle && handles.has(targetHandle)) return true;
+  return false;
+}
+
+async function fetchShopifyOrderProductExternalIds(orderExternalId) {
+  const token = String(orderExternalId || "").trim();
+  if (!token) return new Set();
+
+  const queryAttempts = [];
+  if (/^\d+$/.test(token)) {
+    queryAttempts.push(`id:${token}`);
+  }
+  if (token.startsWith("#")) {
+    queryAttempts.push(`name:${token}`);
+  } else if (/^\d+$/.test(token)) {
+    queryAttempts.push(`name:#${token}`);
+  } else {
+    queryAttempts.push(`name:${token}`);
+    queryAttempts.push(token);
+  }
+
+  const productIds = new Set();
+  const gql = `
+    query JudgeMeOrderProducts($query: String!) {
+      orders(first: 1, query: $query) {
+        edges {
+          node {
+            lineItems(first: 50) {
+              edges {
+                node {
+                  product {
+                    id
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  `;
+
+  for (const query of queryAttempts) {
+    try {
+      const data = await adminGraphql(gql, { query });
+      const order = data?.orders?.edges?.[0]?.node;
+      const lines = order?.lineItems?.edges || [];
+      lines.forEach((edge) => {
+        const productGid = edge?.node?.product?.id;
+        const numericId = parseShopifyResourceNumericId(productGid, "Product");
+        if (numericId) productIds.add(numericId);
+      });
+      if (productIds.size) break;
+    } catch (error) {
+      console.warn("Shopify order lookup for review failed:", query, error.message);
+    }
+  }
+  return productIds;
+}
+
+async function reviewMatchesProductViaOrder(review, targetExternalId, orderProductCache) {
+  const externalId = String(targetExternalId || "").trim();
+  if (!externalId) return false;
+  const orderKey = extractReviewOrderExternalId(review);
+  if (!orderKey) return false;
+
+  if (!orderProductCache.has(orderKey)) {
+    orderProductCache.set(orderKey, await fetchShopifyOrderProductExternalIds(orderKey));
+  }
+  return orderProductCache.get(orderKey)?.has(externalId) || false;
+}
+
+async function fetchAllPublishedJudgeMeReviews(maxPages = 20) {
+  const merged = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    try {
+      const data = await judgeMeRequest("reviews", { per_page: 100, page });
+      const batch = (Array.isArray(data?.reviews) ? data.reviews : []).filter(isPublishedJudgeMeReview);
+      if (!batch.length) break;
+      mergeUniqueJudgeMeReviews(merged, batch);
+      if (batch.length < 100) break;
+    } catch (error) {
+      console.warn("Judge.me reviews page fetch failed:", page, error.message);
+      break;
+    }
+  }
+  return merged;
+}
+
+async function getPublishedJudgeMeReviewsPool() {
+  const now = Date.now();
+  if (
+    judgeMePublishedReviewsCache &&
+    now - judgeMePublishedReviewsCacheAt < JUDGE_ME_PUBLISHED_REVIEWS_CACHE_MS
+  ) {
+    return judgeMePublishedReviewsCache;
+  }
+  const pool = await fetchAllPublishedJudgeMeReviews();
+  judgeMePublishedReviewsCache = pool;
+  judgeMePublishedReviewsCacheAt = now;
+  return pool;
+}
+
+async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid) {
+  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
+  const pool = await getPublishedJudgeMeReviewsPool();
+  const orderProductCache = new Map();
+  const selected = [];
+
+  for (const review of pool) {
+    if (reviewBelongsToProduct(review, handle, externalId)) {
+      selected.push(review);
+      continue;
+    }
+    if (await reviewMatchesProductViaOrder(review, externalId, orderProductCache)) {
+      selected.push(review);
+    }
+  }
+
+  return sortJudgeMeReviewsNewestFirst(selected);
+}
+
 function upgradeReviewPhotoUrl(url) {
   const value = String(url || "").trim();
   if (!value) return "";
@@ -1340,44 +1540,13 @@ async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
   if (!judgeMeConfigured()) return empty;
 
   const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
-  const attempts = [];
-  if (externalId) attempts.push({ external_id: externalId });
-  if (handle) attempts.push({ handle });
-
-  let rawReviews = [];
-  for (const extra of attempts) {
-    try {
-      const data = await judgeMeRequest("reviews", { per_page: 50, page: 1, ...extra });
-      const batch = Array.isArray(data?.reviews) ? data.reviews : [];
-      const filtered = batch.filter(isPublishedJudgeMeReview);
-      if (filtered.length) {
-        rawReviews = filtered;
-        break;
-      }
-    } catch (error) {
-      console.warn("Judge.me reviews query failed:", extra, error.message);
-    }
-  }
-
-  if (!rawReviews.length && handle) {
-    try {
-      const data = await judgeMeRequest("reviews", { per_page: 100, page: 1 });
-      rawReviews = (Array.isArray(data?.reviews) ? data.reviews : []).filter(
-        (review) => String(review.product_handle || "") === handle && isPublishedJudgeMeReview(review)
-      );
-    } catch (error) {
-      console.warn("Judge.me reviews fallback failed:", error.message);
-      return empty;
-    }
-  }
-
-  const sortedRawReviews = sortJudgeMeReviewsNewestFirst(rawReviews);
+  const sortedRawReviews = await selectJudgeMeReviewsForProduct(handle, shopifyProductGid);
   const sortedReviewIds = sortedRawReviews.map((review) => String(review?.id || "").trim()).filter(Boolean);
   const widgetNames =
     externalId || handle
       ? await fetchJudgeMeWidgetDisplayNames(externalId, handle, sortedReviewIds)
       : {};
-  const enrichedReviews = await enrichJudgeMeReviewDetails(rawReviews);
+  const enrichedReviews = await enrichJudgeMeReviewDetails(sortedRawReviews);
   let displayNamesByReviewId = buildJudgeMeDisplayNamesByReviewId(enrichedReviews, widgetNames);
   displayNamesByReviewId = await augmentDisplayNamesFromShopifyMetaobjects(
     enrichedReviews,
@@ -1529,6 +1698,7 @@ async function handleProductReviewSubmit(req, res, handle) {
       });
     }
 
+    invalidateJudgeMePublishedReviewsCache();
     let reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
     const submitted = buildSubmittedReviewItem({
       reviewId,
@@ -1825,39 +1995,54 @@ function isShopifyHlsVideoSource(s) {
   );
 }
 
+function normalizeShopifyVideoSourceEntry(source) {
+  if (!source?.url || isShopifyHlsVideoSource(source)) return null;
+  const url = String(source.url).trim();
+  if (!url) return null;
+  return {
+    url,
+    width: Number(source.width || 0),
+    height: Number(source.height || 0),
+    fileSize: Number(source.fileSize || 0),
+  };
+}
+
+/** Progressive MP4/WebM renditions, smallest → largest (for adaptive gallery playback). */
+function collectShopifyVideoProgressiveSources(videoNode) {
+  const entries = [];
+  const seen = new Set();
+  const add = (source) => {
+    const normalized = normalizeShopifyVideoSourceEntry(source);
+    if (!normalized || seen.has(normalized.url)) return;
+    seen.add(normalized.url);
+    entries.push(normalized);
+  };
+
+  const list = Array.isArray(videoNode?.sources) ? videoNode.sources : [];
+  list.forEach(add);
+  if (videoNode?.originalSource) add(videoNode.originalSource);
+
+  entries.sort((a, b) => {
+    const pxA = a.width * a.height;
+    const pxB = b.width * b.height;
+    if (pxA !== pxB) return pxA - pxB;
+    return a.fileSize - b.fileSize;
+  });
+  return entries;
+}
+
 /**
- * Prefer Shopify's uploaded original, else the largest progressive rendition
- * (by pixel area, then file size). Avoids picking the first low-res MP4 transcode.
+ * Largest progressive rendition (legacy default URL). HLS-only falls back to playlist URL.
  */
 function pickShopifyVideoPlayableUrl(videoNode) {
-  const list = Array.isArray(videoNode?.sources) ? videoNode.sources : [];
+  const progressive = collectShopifyVideoProgressiveSources(videoNode);
+  if (progressive.length) return progressive[progressive.length - 1].url;
+
   const orig = videoNode?.originalSource;
-
-  if (orig?.url && !isShopifyHlsVideoSource(orig)) {
-    return String(orig.url).trim();
-  }
-
-  const progressive = list.filter((s) => s?.url && !isShopifyHlsVideoSource(s));
-  if (!progressive.length) {
-    if (orig?.url) return String(orig.url).trim();
-    const any = list.find((s) => s?.url);
-    return any ? String(any.url).trim() : "";
-  }
-
-  let best = progressive[0];
-  let bestPx = Number(best?.width || 0) * Number(best?.height || 0);
-  let bestFs = Number(best?.fileSize || 0);
-  for (let i = 1; i < progressive.length; i += 1) {
-    const s = progressive[i];
-    const px = Number(s?.width || 0) * Number(s?.height || 0);
-    const fs = Number(s?.fileSize || 0);
-    if (px > bestPx || (px === bestPx && fs > bestFs)) {
-      best = s;
-      bestPx = px;
-      bestFs = fs;
-    }
-  }
-  return best?.url ? String(best.url).trim() : "";
+  if (orig?.url) return String(orig.url).trim();
+  const list = Array.isArray(videoNode?.sources) ? videoNode.sources : [];
+  const any = list.find((s) => s?.url);
+  return any ? String(any.url).trim() : "";
 }
 
 /**
@@ -1886,13 +2071,18 @@ function mapProductMediaToGallery(node) {
 
     if (mct === "VIDEO") {
       const poster = String(m.preview?.image?.url || "").trim();
-      const videoUrl = pickShopifyVideoPlayableUrl(m);
+      let videoSources = collectShopifyVideoProgressiveSources(m);
+      let videoUrl = videoSources.length ? videoSources[videoSources.length - 1].url : pickShopifyVideoPlayableUrl(m);
+      if (!videoSources.length && videoUrl) {
+        videoSources = [{ url: videoUrl, width: 0, height: 0, fileSize: 0 }];
+      }
       const altText = altBase || String(m.preview?.image?.altText || node?.title || "Product video").trim();
       if (!videoUrl && !poster) continue;
       out.push({
         kind: "video",
         url: poster || videoUrl,
         videoUrl,
+        videoSources,
         poster,
         altText,
         status: String(m.status || ""),
