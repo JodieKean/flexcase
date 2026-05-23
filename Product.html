@@ -2277,6 +2277,7 @@
           let slowTimer = null;
           let stallTimer = null;
           let disposed = false;
+          let qualityLocked = false;
 
           const videoClass = "gallery-video" + (mobileView ? " gallery-video--chromeless" : "");
           galleryMain.innerHTML =
@@ -2324,8 +2325,15 @@
             video.load();
           }
 
+          function lockPlaybackQuality() {
+            if (qualityLocked) return;
+            qualityLocked = true;
+            clearTimers();
+            video.removeEventListener("waiting", onWaiting);
+          }
+
           function tryDowngrade() {
-            if (disposed || sourceIndex <= 0) return false;
+            if (disposed || qualityLocked || sourceIndex <= 0) return false;
             sourceIndex -= 1;
             loadCurrentSource();
             return true;
@@ -2334,18 +2342,20 @@
           function onCanPlay() {
             if (disposed) return;
             clearTimers();
-            const elapsed = performance.now() - loadStartedAt;
-            if (elapsed > GALLERY_VIDEO_CANPLAY_SLOW_MS && sourceIndex > 0) {
-              if (tryDowngrade()) return;
+            if (!qualityLocked) {
+              const elapsed = performance.now() - loadStartedAt;
+              if (elapsed > GALLERY_VIDEO_CANPLAY_SLOW_MS && sourceIndex > 0) {
+                if (tryDowngrade()) return;
+              }
             }
             void video.play?.().catch(() => {});
           }
 
           function onWaiting() {
-            if (disposed || sourceIndex <= 0) return;
+            if (disposed || qualityLocked || sourceIndex <= 0) return;
             if (stallTimer) clearTimeout(stallTimer);
             stallTimer = setTimeout(() => {
-              if (disposed || video.readyState >= 3) return;
+              if (disposed || qualityLocked || video.readyState >= 3) return;
               tryDowngrade();
             }, GALLERY_VIDEO_STALL_DOWNGRADE_MS);
           }
@@ -2355,6 +2365,7 @@
               clearTimeout(stallTimer);
               stallTimer = null;
             }
+            lockPlaybackQuality();
           }
 
           function loadCurrentSource() {
@@ -2374,7 +2385,7 @@
             video.load();
 
             slowTimer = setTimeout(() => {
-              if (disposed || video.readyState >= 2) return;
+              if (disposed || qualityLocked || video.readyState >= 2) return;
               tryDowngrade();
             }, GALLERY_VIDEO_CANPLAY_SLOW_MS);
           }
