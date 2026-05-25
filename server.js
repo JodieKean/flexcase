@@ -842,14 +842,16 @@ function serveReviewMedia(req, res, pathname) {
   fs.createReadStream(filepath).pipe(res);
 }
 
-function isPublishedJudgeMeReview(review) {
+function isVisibleJudgeMeReview(review) {
   if (!review || review.hidden) return false;
   if (review.published === false) return false;
-  if (review.published === true || review.published_at) return true;
   const curated = String(review.curated || "").toLowerCase();
   if (curated === "spam" || curated === "reject" || curated === "rejected") return false;
-  if (curated === "not-yet" || curated === "pending") return false;
-  return curated === "ok" || curated === "true" || curated === "published";
+  return true;
+}
+
+function isPublishedJudgeMeReview(review) {
+  return isVisibleJudgeMeReview(review);
 }
 
 function normalizeReviewProductExternalId(value) {
@@ -937,14 +939,19 @@ function extractReviewOrderExternalId(review) {
   ).trim();
 }
 
-function reviewBelongsToProduct(review, handle, externalId) {
+function reviewBelongsToProduct(review, handle, externalId, productTitle = "") {
   const targetHandle = String(handle || "").trim().toLowerCase();
   const targetExternalId = normalizeReviewProductExternalId(externalId);
+  const targetTitle = String(productTitle || "").trim().toLowerCase();
   const externalIds = extractReviewProductExternalIds(review);
   const handles = extractReviewProductHandles(review);
 
   if (targetExternalId && externalIds.has(targetExternalId)) return true;
   if (targetHandle && handles.has(targetHandle)) return true;
+  if (targetTitle) {
+    const reviewTitle = String(review?.product_title || "").trim().toLowerCase();
+    if (reviewTitle && reviewTitle === targetTitle) return true;
+  }
   return false;
 }
 
@@ -1043,14 +1050,14 @@ async function resolveJudgeMeInternalProductId(externalId, handle = "") {
   return null;
 }
 
-async function fetchPublishedJudgeMeReviewsFromQuery(query = {}, maxPages = 20) {
+async function fetchJudgeMeReviewsRawFromQuery(query = {}, maxPages = 20) {
   const merged = [];
   for (let page = 1; page <= maxPages; page += 1) {
     try {
       const data = await judgeMeRequest("reviews", { per_page: 100, page, ...query });
       const raw = Array.isArray(data?.reviews) ? data.reviews : [];
       if (!raw.length) break;
-      mergeUniqueJudgeMeReviews(merged, raw.filter(isPublishedJudgeMeReview));
+      mergeUniqueJudgeMeReviews(merged, raw);
       if (raw.length < 100) break;
     } catch (error) {
       console.warn("Judge.me reviews page fetch failed:", page, error.message);
@@ -1058,6 +1065,10 @@ async function fetchPublishedJudgeMeReviewsFromQuery(query = {}, maxPages = 20) 
     }
   }
   return merged;
+}
+
+async function fetchPublishedJudgeMeReviewsFromQuery(query = {}, maxPages = 20) {
+  return (await fetchJudgeMeReviewsRawFromQuery(query, maxPages)).filter(isPublishedJudgeMeReview);
 }
 
 async function fetchAllPublishedJudgeMeReviews(maxPages = 20) {
@@ -1122,7 +1133,7 @@ async function appendOrderMatchedReviews(selected, handle, externalId, pool, ord
   }
 }
 
-async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid) {
+async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle = "") {
   const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
   const orderProductCache = new Map();
   const selected = [];
@@ -1130,18 +1141,17 @@ async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid) {
 
   const addReview = (review) => {
     const reviewId = String(review?.id || "").trim();
-    if (!reviewId || seen.has(reviewId) || !isPublishedJudgeMeReview(review)) return;
+    if (!reviewId || seen.has(reviewId) || !isVisibleJudgeMeReview(review)) return;
     seen.add(reviewId);
     selected.push(review);
   };
 
+  const belongs = (review) => reviewBelongsToProduct(review, handle, externalId, productTitle);
+
   const internalProductId = await resolveJudgeMeInternalProductId(externalId, handle);
   if (internalProductId) {
-    const productScoped = await fetchPublishedJudgeMeReviewsFromQuery(
-      { product_id: internalProductId },
-      20
-    );
-    productScoped.forEach(addReview);
+    const productScoped = await fetchJudgeMeReviewsRawFromQuery({ product_id: internalProductId }, 20);
+    productScoped.filter(isVisibleJudgeMeReview).forEach(addReview);
   }
 
   const pool = await getPublishedJudgeMeReviewsPool();
@@ -1156,7 +1166,7 @@ async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid) {
   for (const review of pool) {
     const reviewId = String(review?.id || "").trim();
     if (!reviewId || seen.has(reviewId)) continue;
-    if (reviewBelongsToProduct(review, handle, externalId)) {
+    if (belongs(review)) {
       addReview(review);
       continue;
     }
@@ -1165,9 +1175,74 @@ async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid) {
     }
   }
 
+  if (!selected.length) {
+    const shopRaw = await fetchJudgeMeReviewsRawFromQuery({}, 20);
+    shopRaw.filter(isVisibleJudgeMeReview).forEach((review) => {
+      if (belongs(review) || widgetIdSet.has(String(review?.id || "").trim())) addReview(review);
+    });
+  }
+
   await appendOrderMatchedReviews(selected, handle, externalId, pool, orderProductCache, seen);
 
+  if (!selected.length) {
+    console.warn("Judge.me returned no reviews for product", {
+      handle,
+      externalId,
+      internalProductId,
+      widgetReviewIds: widgetReviewIds.length,
+      poolSize: pool.length,
+    });
+  }
+
   return sortJudgeMeReviewsNewestFirst(selected);
+}
+
+async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle = "") {
+  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
+  const internalProductId = await resolveJudgeMeInternalProductId(externalId, handle);
+  let shopRawCount = 0;
+  let productRawCount = 0;
+  let sample = [];
+
+  try {
+    const shopRaw = await fetchJudgeMeReviewsRawFromQuery({}, 1);
+    shopRawCount = shopRaw.length;
+    sample = shopRaw.slice(0, 5).map((review) => ({
+      id: review?.id,
+      product_handle: review?.product_handle,
+      product_external_id: review?.product_external_id,
+      curated: review?.curated,
+      hidden: review?.hidden,
+      published: review?.published,
+    }));
+  } catch (error) {
+    sample = [{ error: error.message }];
+  }
+
+  if (internalProductId) {
+    try {
+      const productRaw = await fetchJudgeMeReviewsRawFromQuery({ product_id: internalProductId }, 1);
+      productRawCount = productRaw.length;
+    } catch (error) {
+      productRawCount = -1;
+    }
+  }
+
+  const widgetReviewIds = await fetchJudgeMeWidgetReviewIds(externalId, handle);
+  const selected = await selectJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle);
+
+  return {
+    judgeMeShop: JUDGE_ME_SHOP_DOMAIN,
+    handle,
+    externalId,
+    productTitle,
+    internalProductId,
+    shopRawCount,
+    productRawCount,
+    widgetReviewIds: widgetReviewIds.length,
+    selectedCount: selected.length,
+    sample,
+  };
 }
 
 function upgradeReviewPhotoUrl(url) {
@@ -1675,13 +1750,17 @@ function upsertSubmittedReviewInBundle(bundle, submitted) {
   };
 }
 
-async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
+async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle = "") {
   const writeReviewUrl = await buildJudgeMeWriteReviewUrl(handle, shopifyProductGid);
   const empty = mapJudgeMeReviewBundle([], handle, writeReviewUrl);
   if (!judgeMeConfigured()) return empty;
 
   const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
-  const sortedRawReviews = await selectJudgeMeReviewsForProduct(handle, shopifyProductGid);
+  const sortedRawReviews = await selectJudgeMeReviewsForProduct(
+    handle,
+    shopifyProductGid,
+    productTitle
+  );
   const sortedReviewIds = sortedRawReviews.map((review) => String(review?.id || "").trim()).filter(Boolean);
   const widgetNames =
     externalId || handle
@@ -1840,7 +1919,7 @@ async function handleProductReviewSubmit(req, res, handle) {
     }
 
     invalidateJudgeMePublishedReviewsCache();
-    let reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
+    let reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id, node.title);
     const submitted = buildSubmittedReviewItem({
       reviewId,
       name,
@@ -2302,6 +2381,7 @@ async function handleCatalog(req, res) {
 }
 
 async function handleProduct(req, res, handle) {
+  const reqUrl = new URL(req.url, "http://localhost");
   const query = `
     query ProductByHandle($query: String!) {
       products(first: 1, query: $query) {
@@ -2419,7 +2499,10 @@ async function handleProduct(req, res, handle) {
     }
     const product = mapProduct(node, discountMap);
     product.mediaGallery = mapProductMediaToGallery(node);
-    product.reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
+    product.reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id, node.title);
+    if (String(reqUrl.searchParams.get("debug") || "") === "1") {
+      product.reviewsDebug = await buildJudgeMeReviewsDebug(node.handle, node.id, node.title);
+    }
     json(res, 200, { product });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -4802,7 +4885,11 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (reqUrl.pathname.startsWith("/api/product/")) {
-    const handle = reqUrl.pathname.replace("/api/product/", "").trim();
+    const handle = reqUrl.pathname
+      .replace("/api/product/", "")
+      .replace(/\/reviews\/?$/, "")
+      .split("/")[0]
+      .trim();
     await handleProduct(req, res, handle);
     return;
   }
