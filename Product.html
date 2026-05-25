@@ -394,6 +394,18 @@
         gap: 18px;
       }
 
+      .reviews-wrap.reviews-wrap--judgeme-widget {
+        grid-template-columns: 1fr;
+      }
+
+      .reviews-wrap.reviews-wrap--judgeme-widget .review-summary {
+        display: none;
+      }
+
+      .reviews-wrap.reviews-wrap--judgeme-widget .jdgm-widget {
+        width: 100%;
+      }
+
       .review-summary {
         background: #ffffff;
         border: 1px solid #ececf1;
@@ -1550,6 +1562,60 @@
           );
         }
 
+        function ensureJudgeMeWidgetScript(onReady) {
+          const done = typeof onReady === "function" ? onReady : () => {};
+          if (typeof window.jdgm_preloader === "function") {
+            done();
+            return;
+          }
+          const existing = document.getElementById("judgeme-widget-preloader");
+          if (existing) {
+            existing.addEventListener("load", () => done(), { once: true });
+            return;
+          }
+          const script = document.createElement("script");
+          script.id = "judgeme-widget-preloader";
+          script.async = true;
+          script.src = "https://cdn.judge.me/widget_preloader.js";
+          script.setAttribute("data-cfasync", "false");
+          script.addEventListener("load", () => done(), { once: true });
+          document.body.appendChild(script);
+        }
+
+        function mountJudgeMeReviewWidget(bundle) {
+          const reviewsSectionEl = document.getElementById("reviews");
+          const summaryAside = reviewsSectionEl?.querySelector(".review-summary");
+          const gridEl = document.getElementById("review-grid");
+          const countEl = document.getElementById("review-count");
+          if (!gridEl) return false;
+
+          const shopDomain = String(bundle.shopDomain || "").trim();
+          const publicToken = String(bundle.publicToken || "").trim();
+          const externalId = String(product?.id || "")
+            .replace(/^gid:\/\/shopify\/Product\//i, "")
+            .trim();
+          if (!shopDomain || !publicToken || !externalId) return false;
+
+          reviewsSectionEl?.classList.add("reviews-wrap--judgeme-widget");
+          if (summaryAside) summaryAside.hidden = true;
+          if (countEl) countEl.textContent = "Loading reviews…";
+
+          gridEl.innerHTML =
+            '<div class="jdgm-widget jdgm-review-widget jdgm-outside-widget" data-id="' +
+            escapeGalleryText(externalId) +
+            '"></div>';
+
+          window.jdgm = window.jdgm || {};
+          window.jdgm.SHOP_DOMAIN = shopDomain;
+          window.jdgm.PLATFORM = "shopify";
+          window.jdgm.PUBLIC_TOKEN = publicToken;
+
+          ensureJudgeMeWidgetScript(() => {
+            if (typeof window.jdgm_preloader === "function") window.jdgm_preloader();
+          });
+          return true;
+        }
+
         function renderProductReviews(reviews) {
           const summaryEl = document.getElementById("review-average");
           const starsEl = document.getElementById("review-stars");
@@ -1557,8 +1623,13 @@
           const barsEl = document.getElementById("review-bars");
           const gridEl = document.getElementById("review-grid");
           const writeToggleEl = document.getElementById("write-review-toggle");
+          const reviewsSectionEl = document.getElementById("reviews");
+          const summaryAside = reviewsSectionEl?.querySelector(".review-summary");
           Object.keys(reviewPhotoGalleries).forEach((key) => delete reviewPhotoGalleries[key]);
           if (!summaryEl || !gridEl) return;
+
+          reviewsSectionEl?.classList.remove("reviews-wrap--judgeme-widget");
+          if (summaryAside) summaryAside.hidden = false;
 
           const bundle = reviews && typeof reviews === "object" ? reviews : {};
           const count = Number(bundle.count) || 0;
@@ -1613,6 +1684,7 @@
           if (writeToggleEl) writeToggleEl.hidden = false;
 
           if (!items.length) {
+            if (mountJudgeMeReviewWidget(bundle)) return;
             gridEl.innerHTML =
               '<div class="review-empty">No published reviews yet. Be the first to share your experience.</div>';
             return;

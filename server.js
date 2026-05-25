@@ -93,6 +93,7 @@ let cachedToken = "";
 let tokenExpiresAt = 0;
 const STOREFRONT_ACCESS_TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
 const JUDGE_ME_API_TOKEN = process.env.JUDGE_ME_API_TOKEN || "";
+const JUDGE_ME_PUBLIC_TOKEN = String(process.env.JUDGE_ME_PUBLIC_TOKEN || "").trim();
 const JUDGE_ME_SHOP_DOMAIN =
   process.env.JUDGE_ME_SHOP_DOMAIN ||
   (SHOP_FROM_ENV
@@ -1139,6 +1140,12 @@ async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid, product
   const selected = [];
   const seen = new Set();
 
+  const widgetHtml = await fetchJudgeMeProductWidgetHtml(externalId, handle);
+  const widgetParsed = parseJudgeMeWidgetReviews(widgetHtml);
+  if (widgetParsed.length) {
+    return sortJudgeMeReviewsNewestFirst(widgetParsed);
+  }
+
   const addReview = (review) => {
     const reviewId = String(review?.id || "").trim();
     if (!reviewId || seen.has(reviewId) || !isVisibleJudgeMeReview(review)) return;
@@ -1155,7 +1162,7 @@ async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid, product
   }
 
   const pool = await getPublishedJudgeMeReviewsPool();
-  const widgetReviewIds = await fetchJudgeMeWidgetReviewIds(externalId, handle);
+  const widgetReviewIds = parseJudgeMeWidgetReviewIds(widgetHtml);
   const widgetIdSet = new Set(widgetReviewIds);
 
   if (widgetReviewIds.length) {
@@ -1228,18 +1235,23 @@ async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle 
     }
   }
 
-  const widgetReviewIds = await fetchJudgeMeWidgetReviewIds(externalId, handle);
+  const widgetHtml = await fetchJudgeMeProductWidgetHtml(externalId, handle);
+  const widgetReviewIds = parseJudgeMeWidgetReviewIds(widgetHtml);
+  const widgetParsedCount = parseJudgeMeWidgetReviews(widgetHtml).length;
   const selected = await selectJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle);
 
   return {
     judgeMeShop: JUDGE_ME_SHOP_DOMAIN,
+    hasPublicToken: Boolean(JUDGE_ME_PUBLIC_TOKEN),
     handle,
     externalId,
     productTitle,
     internalProductId,
     shopRawCount,
     productRawCount,
+    widgetHtmlLength: widgetHtml.length,
     widgetReviewIds: widgetReviewIds.length,
+    widgetParsedCount,
     selectedCount: selected.length,
     sample,
   };
@@ -1393,6 +1405,47 @@ function sortJudgeMeReviewsNewestFirst(reviews = []) {
     if (timeB !== timeA) return timeB - timeA;
     return String(b?.id || "").localeCompare(String(a?.id || ""));
   });
+}
+
+function parseJudgeMeWidgetReviews(widgetHtml) {
+  const html = String(widgetHtml || "");
+  if (!html) return [];
+  const reviews = [];
+  const seen = new Set();
+  const idRegex = /data-review-id=["'](\d+)["']/gi;
+  let idMatch;
+  while ((idMatch = idRegex.exec(html)) !== null) {
+    const reviewId = String(idMatch[1] || "").trim();
+    if (!reviewId || seen.has(reviewId)) continue;
+    seen.add(reviewId);
+    const slice = html.slice(idMatch.index, idMatch.index + 12000);
+    const authorMatch = slice.match(/jdgm-rev__author[^>]*>([^<]+)</i);
+    const titleMatch = slice.match(/jdgm-rev__title[^>]*>([^<]+)</i);
+    const bodyMatch = slice.match(/jdgm-rev__body[^>]*>([\s\S]*?)<\/div>/i);
+    const ratingMatch =
+      slice.match(/jdgm-rev__rating[^>]*data-score=["']([0-9.]+)["']/i) ||
+      slice.match(/data-score=["']([0-9.]+)["']/i);
+    const timeMatch = slice.match(/jdgm-rev__timestamp[^>]*data-content=["']([^"']+)["']/i);
+    const rating = Math.max(1, Math.min(5, Math.round(Number(ratingMatch?.[1] || 0))));
+    if (!rating) continue;
+    const author = stripJudgeMeHtml(authorMatch?.[1]);
+    const title = stripJudgeMeHtml(titleMatch?.[1]);
+    const body = stripJudgeMeHtml(bodyMatch?.[1]).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    reviews.push({
+      id: reviewId,
+      rating,
+      title,
+      body,
+      name: author,
+      reviewer: { name: author },
+      created_at: timeMatch?.[1] || null,
+      verified: /jdgm-rev__buyer-badge|verified-buyer|jdgm-verified/i.test(slice) ? "buyer" : "",
+      pictures: [],
+      curated: "ok",
+      hidden: false,
+    });
+  }
+  return reviews;
 }
 
 function parseJudgeMeWidgetReviewIds(widgetHtml) {
@@ -1692,6 +1745,8 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "", display
     distribution,
     items,
     writeReviewUrl,
+    shopDomain: JUDGE_ME_SHOP_DOMAIN,
+    publicToken: JUDGE_ME_PUBLIC_TOKEN,
   };
 }
 
@@ -4815,8 +4870,12 @@ const server = http.createServer(async (req, res) => {
           CUSTOMER_ACCOUNT_TOKEN_ENDPOINT
       ),
       judgeMeConfigured: judgeMeConfigured(),
+      judgeMePublicTokenConfigured: Boolean(JUDGE_ME_PUBLIC_TOKEN),
+      judgeMeShopDomain: JUDGE_ME_SHOP_DOMAIN || null,
       judgeMeHint: judgeMeConfigured()
-        ? null
+        ? JUDGE_ME_PUBLIC_TOKEN
+          ? null
+          : "Set JUDGE_ME_PUBLIC_TOKEN (Judge.me → Settings → Technical) for the headless review widget fallback."
         : "Set JUDGE_ME_API_TOKEN and JUDGE_ME_SHOP_DOMAIN for headless Judge.me reviews.",
     });
     return;
