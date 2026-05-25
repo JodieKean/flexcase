@@ -1142,6 +1142,34 @@ async function resolveJudgeMeReviewsByIds(reviewIds = [], pool = []) {
   return resolved;
 }
 
+/**
+ * Pre-filtering behavior: reviews?external_id= or ?handle= often returned the
+ * product's reviews (or the shop batch). Trust that response when newer paths are empty.
+ */
+async function fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle = "") {
+  const productId = normalizeReviewProductExternalId(externalId);
+  const safeHandle = String(handle || "").trim().toLowerCase();
+  const attempts = [];
+  if (productId) attempts.push({ external_id: productId });
+  if (safeHandle) attempts.push({ handle: safeHandle });
+
+  for (const params of attempts) {
+    try {
+      const data = await judgeMeRequest("reviews", { per_page: 100, page: 1, ...params });
+      const raw = Array.isArray(data?.reviews) ? data.reviews : [];
+      const visible = raw.filter(isVisibleJudgeMeReview);
+      if (!visible.length) continue;
+      const matched = visible.filter((review) =>
+        reviewBelongsToProduct(review, handle, productId, productTitle)
+      );
+      return matched.length ? matched : visible;
+    } catch (error) {
+      console.warn("Judge.me legacy reviews list failed:", params, error.message);
+    }
+  }
+  return [];
+}
+
 async function appendOrderMatchedReviews(selected, handle, externalId, pool, orderProductCache, seen) {
   for (const review of pool) {
     const reviewId = String(review?.id || "").trim();
@@ -1209,6 +1237,11 @@ async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid, product
     });
   }
 
+  if (!selected.length) {
+    const legacy = await fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle);
+    legacy.forEach(addReview);
+  }
+
   await appendOrderMatchedReviews(selected, handle, externalId, pool, orderProductCache, seen);
 
   if (!selected.length) {
@@ -1229,6 +1262,7 @@ async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle 
   const internalProductId = await resolveJudgeMeInternalProductId(externalId, handle);
   let shopRawCount = 0;
   let productRawCount = 0;
+  let legacyListCount = 0;
   let sample = [];
 
   try {
