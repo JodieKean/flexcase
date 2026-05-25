@@ -104,6 +104,26 @@ const JUDGE_ME_SHOP_DOMAIN =
 /** Optional: paste Judge.me → Collect reviews → Review link if auto URLs fail on headless. */
 const JUDGE_ME_REVIEW_LINK = String(process.env.JUDGE_ME_REVIEW_LINK || "").trim();
 
+function normalizeShopifyShopDomain(value) {
+  const raw = String(value || "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw.includes(".")) return raw;
+  return `${raw}.myshopify.com`;
+}
+
+const SHOPIFY_ADMIN_SHOP_DOMAIN = normalizeShopifyShopDomain(SHOP_FROM_ENV);
+const JUDGE_ME_SHOP_MISMATCH =
+  Boolean(SHOPIFY_ADMIN_SHOP_DOMAIN && JUDGE_ME_SHOP_DOMAIN) &&
+  SHOPIFY_ADMIN_SHOP_DOMAIN !== String(JUDGE_ME_SHOP_DOMAIN).trim().toLowerCase();
+
+if (JUDGE_ME_SHOP_MISMATCH) {
+  console.warn(
+    `Judge.me shop (${JUDGE_ME_SHOP_DOMAIN}) differs from Shopify Admin shop (${SHOPIFY_ADMIN_SHOP_DOMAIN}). ` +
+      "Product IDs and reviews may not line up. Install Judge.me on the same Shopify store you sell from, " +
+      "or point JUDGE_ME_SHOP_DOMAIN at that store's *.myshopify.com domain (not flexcase.my)."
+  );
+}
+
 async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiresAt - 60_000) return cachedToken;
 
@@ -1242,6 +1262,8 @@ async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle 
 
   return {
     judgeMeShop: JUDGE_ME_SHOP_DOMAIN,
+    shopifyAdminShop: SHOPIFY_ADMIN_SHOP_DOMAIN,
+    judgeMeShopMismatch: JUDGE_ME_SHOP_MISMATCH,
     hasPublicToken: Boolean(JUDGE_ME_PUBLIC_TOKEN),
     handle,
     externalId,
@@ -4872,6 +4894,8 @@ const server = http.createServer(async (req, res) => {
       judgeMeConfigured: judgeMeConfigured(),
       judgeMePublicTokenConfigured: Boolean(JUDGE_ME_PUBLIC_TOKEN),
       judgeMeShopDomain: JUDGE_ME_SHOP_DOMAIN || null,
+      shopifyAdminShopDomain: SHOPIFY_ADMIN_SHOP_DOMAIN || null,
+      judgeMeShopMismatch: JUDGE_ME_SHOP_MISMATCH,
       judgeMeHint: judgeMeConfigured()
         ? JUDGE_ME_PUBLIC_TOKEN
           ? null
