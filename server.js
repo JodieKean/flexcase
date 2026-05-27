@@ -1196,78 +1196,22 @@ async function appendOrderMatchedReviews(selected, handle, externalId, pool, ord
 }
 
 async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle = "") {
-  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
-  const orderProductCache = new Map();
-  const selected = [];
-  const seen = new Set();
-
-  const widgetHtml = await fetchJudgeMeProductWidgetHtml(externalId, handle);
-  const widgetParsed = parseJudgeMeWidgetReviews(widgetHtml);
-  if (widgetParsed.length) {
-    return sortJudgeMeReviewsNewestFirst(widgetParsed);
-  }
-
-  const addReview = (review) => {
-    const reviewId = String(review?.id || "").trim();
-    if (!reviewId || seen.has(reviewId) || !isVisibleJudgeMeReview(review)) return;
-    seen.add(reviewId);
-    selected.push(review);
-  };
-
-  const belongs = (review) => reviewBelongsToProduct(review, handle, externalId, productTitle);
-
-  const internalProductId = await resolveJudgeMeInternalProductId(externalId, handle);
-  if (internalProductId) {
-    const productScoped = await fetchJudgeMeReviewsRawFromQuery({ product_id: internalProductId }, 20);
-    productScoped.filter(isVisibleJudgeMeReview).forEach(addReview);
-  }
-
   const pool = await getPublishedJudgeMeReviewsPool();
-  const widgetReviewIds = parseJudgeMeWidgetReviewIds(widgetHtml);
-  const widgetIdSet = new Set(widgetReviewIds);
-
-  if (widgetReviewIds.length) {
-    const widgetReviews = await resolveJudgeMeReviewsByIds(widgetReviewIds, pool);
-    widgetReviews.forEach(addReview);
+  const sharedFromPool = pool.filter(isVisibleJudgeMeReview);
+  if (sharedFromPool.length) {
+    return sortJudgeMeReviewsNewestFirst(sharedFromPool);
   }
 
-  for (const review of pool) {
-    const reviewId = String(review?.id || "").trim();
-    if (!reviewId || seen.has(reviewId)) continue;
-    if (belongs(review)) {
-      addReview(review);
-      continue;
-    }
-    if (widgetIdSet.has(reviewId)) {
-      addReview(review);
-    }
+  const shopRaw = await fetchJudgeMeReviewsRawFromQuery({}, 20);
+  const sharedFromShop = shopRaw.filter(isVisibleJudgeMeReview);
+  if (sharedFromShop.length) {
+    return sortJudgeMeReviewsNewestFirst(sharedFromShop);
   }
 
-  if (!selected.length) {
-    const shopRaw = await fetchJudgeMeReviewsRawFromQuery({}, 20);
-    shopRaw.filter(isVisibleJudgeMeReview).forEach((review) => {
-      if (belongs(review) || widgetIdSet.has(String(review?.id || "").trim())) addReview(review);
-    });
-  }
-
-  if (!selected.length) {
-    const legacy = await fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle);
-    legacy.forEach(addReview);
-  }
-
-  await appendOrderMatchedReviews(selected, handle, externalId, pool, orderProductCache, seen);
-
-  if (!selected.length) {
-    console.warn("Judge.me returned no reviews for product", {
-      handle,
-      externalId,
-      internalProductId,
-      widgetReviewIds: widgetReviewIds.length,
-      poolSize: pool.length,
-    });
-  }
-
-  return sortJudgeMeReviewsNewestFirst(selected);
+  // Keep a legacy fallback to maximize compatibility with older Judge.me responses.
+  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
+  const legacy = await fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle);
+  return sortJudgeMeReviewsNewestFirst(legacy.filter(isVisibleJudgeMeReview));
 }
 
 async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle = "") {
