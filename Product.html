@@ -2140,16 +2140,12 @@
           const wantsCompose =
             params.get("review") === "1" || params.get("writeReview") === "1";
           const hash = String(window.location.hash || "").toLowerCase();
-          const extraOffsetPx = 120;
           const reviewsEl = document.getElementById("reviews");
           if (!reviewsEl) return;
           if (hash !== "#reviews" && !wantsCompose) return;
 
           const scrollToReviews = () => {
             reviewsEl.scrollIntoView({ behavior: "smooth", block: "start" });
-            window.setTimeout(() => {
-              window.scrollBy({ top: extraOffsetPx, behavior: "smooth" });
-            }, 220);
           };
 
           requestAnimationFrame(() => {
