@@ -1051,7 +1051,6 @@
       let shippingRatesRequestId = 0;
       let shippingRatesDebounceTimer = null;
       const MALAYSIA_FREE_SHIPPING_THRESHOLD = 200;
-      const MALAYSIA_FREE_SHIPPING_NOTE = "Orders over RM200 ship free";
 
       const CHECKOUT_API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
       async function fetchCheckoutApi(path, options = {}) {
@@ -1697,23 +1696,7 @@
       }
 
       function buildShippingOptionDescription(opt) {
-        const parts = [];
-        const deliveryTime = String(opt?.deliveryTime || "").trim();
-        if (deliveryTime) {
-          parts.push(deliveryTime);
-        } else {
-          const descLines = String(opt?.description || "")
-            .split(/\r?\n+|\s*·\s*/)
-            .map((s) => s.trim())
-            .filter(Boolean)
-            .filter((line) => !/^tracking\b/i.test(line) && !/\btracking number provided\b/i.test(line));
-          if (descLines.length) parts.push(descLines.join(" · "));
-        }
-        const combined = parts.join(" · ");
-        if (isMalaysiaDomesticShippingOption(opt) && !/rm\s*200/i.test(combined)) {
-          parts.push(MALAYSIA_FREE_SHIPPING_NOTE);
-        }
-        return parts.join(" · ");
+        return String(opt?.cardDescription || opt?.deliveryTime || "").trim();
       }
 
       function formatShippingPriceLabel(opt) {
@@ -1975,13 +1958,8 @@
       function buildShippingMethodText() {
         const opt = getSelectedShippingOption();
         if (!opt) return "—";
-        const deliveryTime = String(opt?.deliveryTime || "").trim();
         const desc = buildShippingOptionDescription(opt);
-        const line1 = deliveryTime
-          ? `${opt.title} (${deliveryTime})`
-          : desc
-            ? `${opt.title} (${desc})`
-            : opt.title;
+        const line1 = desc ? `${opt.title} (${desc})` : opt.title;
         return `${line1}\n${formatShippingPriceLabel(opt)}`;
       }
 

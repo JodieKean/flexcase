@@ -3507,42 +3507,18 @@ function validateFlexcaseCheckoutPayload(checkout) {
   return "";
 }
 
-function isTrackingOnlyShippingLine(line) {
-  const text = String(line || "").trim();
-  if (!text) return false;
-  return /^tracking\b/i.test(text) || /\btracking number provided\b/i.test(text);
-}
+/** Card copy aligned with Shopify Admin → Shipping and delivery (prices still come from Storefront API). */
+const FLEXCASE_SHIPPING_CARD_COPY = {
+  "west-malaysia": "Free for orders RM200.00 and up · 3-5 business days",
+  "east-malaysia": "Free for orders RM200.00 and up · 5-8 business days",
+  international: "14-28 business days",
+  express: "7-14 business days",
+};
 
-function isDeliveryTimeShippingLine(line) {
-  const text = String(line || "").trim();
-  if (!text || isTrackingOnlyShippingLine(text)) return false;
-  return (
-    /\b(business\s+days?|working\s+days?)\b/i.test(text) ||
-    /\b\d+\s*(?:to|-|–)\s*\d+\s*(?:business\s+)?days?\b/i.test(text) ||
-    /\b\d+\s*(?:business\s+)?days?\b/i.test(text)
-  );
-}
-
-function splitShippingDescriptionLines(raw) {
-  return String(raw || "")
-    .split(/\r?\n+|\s*·\s*/)
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-function extractShippingDeliveryTime(opt) {
-  const description = String(opt?.description || "").trim();
-  const lines = splitShippingDescriptionLines(description);
-  const fromDescription = lines.find(isDeliveryTimeShippingLine);
-  if (fromDescription) return fromDescription;
-
-  const code = String(opt?.code || "").trim();
-  if (code && isDeliveryTimeShippingLine(code)) return code;
-
-  const titleMatch = String(opt?.title || "").match(/\(([^)]*(?:business\s*)?days?[^)]*)\)/i);
-  if (titleMatch?.[1]) return titleMatch[1].trim();
-
-  return "";
+function applyFixedShippingCardCopy(option) {
+  const id = String(option?.id || "").trim().toLowerCase();
+  const cardDescription = FLEXCASE_SHIPPING_CARD_COPY[id] || "";
+  return { ...option, id, cardDescription, deliveryTime: cardDescription };
 }
 
 async function fetchCartDeliveryOptions(cartId) {
@@ -3559,13 +3535,10 @@ function parseStorefrontDeliveryOptions(cart) {
       if (!handle || !title) continue;
       const amount = Number(opt?.estimatedCost?.amount || 0);
       const currencyCode = String(opt?.estimatedCost?.currencyCode || SHOP_CURRENCY_CODE).trim();
-      const description = String(opt?.description || "").trim();
       options.push({
         deliveryGroupId: groupId,
         handle,
         title,
-        description,
-        deliveryTime: extractShippingDeliveryTime(opt),
         price: Number.isFinite(amount) ? amount : 0,
         currencyCode: currencyCode || SHOP_CURRENCY_CODE,
       });
@@ -3596,7 +3569,7 @@ function filterDeliveryOptionsForCountry(allOptions, countryCode) {
   for (const rule of rules) {
     const found = allOptions.find((opt) => rule.match(opt.title));
     if (found) {
-      picked.push({ ...found, id: rule.id });
+      picked.push(applyFixedShippingCardCopy({ ...found, id: rule.id }));
     }
   }
   return picked;
