@@ -3225,8 +3225,6 @@ const STOREFRONT_CART_DELIVERY_OPTIONS_QUERY = `
               description
               code
               deliveryMethodType
-              minEstimatedDeliveryDate
-              maxEstimatedDeliveryDate
               estimatedCost {
                 amount
                 currencyCode
@@ -3238,8 +3236,6 @@ const STOREFRONT_CART_DELIVERY_OPTIONS_QUERY = `
     }
   }
 `;
-
-let storefrontDeliveryOptionsQueryUsesEstimatedDates = true;
 
 const STOREFRONT_CART_SELECTED_DELIVERY_UPDATE = `
   mutation FlexcaseCartSelectedDeliveryOptionsUpdate(
@@ -3534,37 +3530,6 @@ function splitShippingDescriptionLines(raw) {
     .filter(Boolean);
 }
 
-function countBusinessDaysBetween(startDate, endDate) {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 0;
-  start.setHours(0, 0, 0, 0);
-  end.setHours(0, 0, 0, 0);
-  let count = 0;
-  const cursor = new Date(start);
-  while (cursor < end) {
-    const day = cursor.getDay();
-    if (day !== 0 && day !== 6) count += 1;
-    cursor.setDate(cursor.getDate() + 1);
-  }
-  return count;
-}
-
-function formatBusinessDaysFromEstimatedDates(minIso, maxIso) {
-  const min = minIso ? new Date(minIso) : null;
-  const max = maxIso ? new Date(maxIso) : null;
-  if (!min || !max || Number.isNaN(min.getTime()) || Number.isNaN(max.getTime())) return "";
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const minDays = countBusinessDaysBetween(today, min);
-  const maxDays = countBusinessDaysBetween(today, max);
-  if (minDays <= 0 && maxDays <= 0) return "";
-  const low = Math.min(minDays, maxDays);
-  const high = Math.max(minDays, maxDays);
-  if (low === high) return `${low} business day${low === 1 ? "" : "s"}`;
-  return `${low} to ${high} business days`;
-}
-
 function extractShippingDeliveryTime(opt) {
   const description = String(opt?.description || "").trim();
   const lines = splitShippingDescriptionLines(description);
@@ -3577,50 +3542,11 @@ function extractShippingDeliveryTime(opt) {
   const titleMatch = String(opt?.title || "").match(/\(([^)]*(?:business\s*)?days?[^)]*)\)/i);
   if (titleMatch?.[1]) return titleMatch[1].trim();
 
-  return formatBusinessDaysFromEstimatedDates(
-    opt?.minEstimatedDeliveryDate,
-    opt?.maxEstimatedDeliveryDate
-  );
+  return "";
 }
 
 async function fetchCartDeliveryOptions(cartId) {
-  try {
-    return await storefrontGraphql(STOREFRONT_CART_DELIVERY_OPTIONS_QUERY, { id: cartId });
-  } catch (error) {
-    const msg = String(error?.message || "");
-    if (
-      storefrontDeliveryOptionsQueryUsesEstimatedDates &&
-      /minEstimatedDeliveryDate|maxEstimatedDeliveryDate|doesn't exist on type/i.test(msg)
-    ) {
-      storefrontDeliveryOptionsQueryUsesEstimatedDates = false;
-      const fallbackQuery = `
-        query FlexcaseCartDeliveryOptions($id: ID!) {
-          cart(id: $id) {
-            deliveryGroups(first: 5) {
-              edges {
-                node {
-                  id
-                  deliveryOptions {
-                    handle
-                    title
-                    description
-                    code
-                    deliveryMethodType
-                    estimatedCost {
-                      amount
-                      currencyCode
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      `;
-      return await storefrontGraphql(fallbackQuery, { id: cartId });
-    }
-    throw error;
-  }
+  return storefrontGraphql(STOREFRONT_CART_DELIVERY_OPTIONS_QUERY, { id: cartId });
 }
 
 function parseStorefrontDeliveryOptions(cart) {
