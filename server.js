@@ -93,49 +93,15 @@ let cachedToken = "";
 let tokenExpiresAt = 0;
 const STOREFRONT_ACCESS_TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
 const JUDGE_ME_API_TOKEN = process.env.JUDGE_ME_API_TOKEN || "";
-const JUDGE_ME_PUBLIC_TOKEN = String(process.env.JUDGE_ME_PUBLIC_TOKEN || "").trim();
-
-function normalizeShopifyShopDomain(value) {
-  const raw = String(value || "").trim().toLowerCase();
-  if (!raw) return "";
-  if (raw.includes(".")) return raw;
-  return `${raw}.myshopify.com`;
-}
-
-const JUDGE_ME_SHOP_DOMAIN = normalizeShopifyShopDomain(
+const JUDGE_ME_SHOP_DOMAIN =
   process.env.JUDGE_ME_SHOP_DOMAIN ||
-    (SHOP_FROM_ENV
-      ? String(SHOP_FROM_ENV).includes(".")
-        ? String(SHOP_FROM_ENV)
-        : `${String(SHOP_FROM_ENV)}.myshopify.com`
-      : "")
-);
-/** Judge.me shop that actually holds your reviews (if different from live Shopify). */
-const JUDGE_ME_REVIEWS_SHOP_DOMAIN = normalizeShopifyShopDomain(
-  process.env.JUDGE_ME_REVIEWS_SHOP_DOMAIN || JUDGE_ME_SHOP_DOMAIN
-);
+  (SHOP_FROM_ENV
+    ? String(SHOP_FROM_ENV).includes(".")
+      ? String(SHOP_FROM_ENV)
+      : `${String(SHOP_FROM_ENV)}.myshopify.com`
+    : "");
 /** Optional: paste Judge.me → Collect reviews → Review link if auto URLs fail on headless. */
 const JUDGE_ME_REVIEW_LINK = String(process.env.JUDGE_ME_REVIEW_LINK || "").trim();
-
-const SHOPIFY_ADMIN_SHOP_DOMAIN = normalizeShopifyShopDomain(SHOP_FROM_ENV);
-const JUDGE_ME_SHOP_MISMATCH =
-  Boolean(SHOPIFY_ADMIN_SHOP_DOMAIN && JUDGE_ME_SHOP_DOMAIN) &&
-  SHOPIFY_ADMIN_SHOP_DOMAIN !== JUDGE_ME_SHOP_DOMAIN;
-const JUDGE_ME_REVIEWS_SHOP_MISMATCH =
-  Boolean(SHOPIFY_ADMIN_SHOP_DOMAIN && JUDGE_ME_REVIEWS_SHOP_DOMAIN) &&
-  SHOPIFY_ADMIN_SHOP_DOMAIN !== JUDGE_ME_REVIEWS_SHOP_DOMAIN;
-
-if (JUDGE_ME_SHOP_MISMATCH) {
-  console.warn(
-    `Judge.me catalog shop (${JUDGE_ME_SHOP_DOMAIN}) differs from Shopify Admin (${SHOPIFY_ADMIN_SHOP_DOMAIN}).`
-  );
-}
-if (JUDGE_ME_REVIEWS_SHOP_MISMATCH) {
-  console.warn(
-    `Judge.me reviews shop (${JUDGE_ME_REVIEWS_SHOP_DOMAIN}) differs from Shopify Admin (${SHOPIFY_ADMIN_SHOP_DOMAIN}). ` +
-      "Set JUDGE_ME_REVIEWS_SHOP_DOMAIN to the *.myshopify.com store where Judge.me reviews were collected, with API tokens from that same Judge.me install."
-  );
-}
 
 async function getAccessToken() {
   if (cachedToken && Date.now() < tokenExpiresAt - 60_000) return cachedToken;
@@ -217,67 +183,40 @@ async function storefrontGraphql(query, variables = {}) {
     });
   }
 
-  const MAX_ATTEMPTS = 3;
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    let response = await callWithHeader(primaryHeaderName);
-    if (response.status === 401) {
-      // Some stores use private storefront tokens that require a different auth header.
-      response = await callWithHeader(secondaryHeaderName);
-    }
-
-    if (!response.ok) {
-      const body = await response.text();
-      let parsed = null;
-      try {
-        parsed = JSON.parse(body);
-      } catch (_) {
-        parsed = null;
-      }
-      const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
-      if (response.status === 401 || errorCode === "UNAUTHORIZED") {
-        throw new Error(
-          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-        );
-      }
-      const isThrottled =
-        response.status === 429 ||
-        errorCode === "THROTTLED" ||
-        /\bthrottled\b/i.test(body);
-      if (isThrottled && attempt < MAX_ATTEMPTS) {
-        const retryAfterHeader = Number(response.headers.get("retry-after") || "0");
-        const waitMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
-          ? Math.max(250, Math.floor(retryAfterHeader * 1000))
-          : 250 * Math.pow(2, attempt - 1);
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        continue;
-      }
-      throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
-    }
-
-    const payload = await response.json();
-    if (payload.errors?.length) {
-      const firstCode = payload.errors?.[0]?.extensions?.code || "";
-      if (firstCode === "UNAUTHORIZED") {
-        throw new Error(
-          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-        );
-      }
-      const hasThrottledError = payload.errors.some((e) => {
-        const code = String(e?.extensions?.code || "");
-        const message = String(e?.message || "");
-        return code === "THROTTLED" || /\bthrottled\b/i.test(message);
-      });
-      if (hasThrottledError && attempt < MAX_ATTEMPTS) {
-        const waitMs = 250 * Math.pow(2, attempt - 1);
-        await new Promise((resolve) => setTimeout(resolve, waitMs));
-        continue;
-      }
-      throw new Error(payload.errors.map((e) => e.message).join(", "));
-    }
-    return payload.data;
+  let response = await callWithHeader(primaryHeaderName);
+  if (response.status === 401) {
+    // Some stores use private storefront tokens that require a different auth header.
+    response = await callWithHeader(secondaryHeaderName);
   }
 
-  throw new Error("Storefront request failed after retries.");
+  if (!response.ok) {
+    const body = await response.text();
+    let parsed = null;
+    try {
+      parsed = JSON.parse(body);
+    } catch (_) {
+      parsed = null;
+    }
+    const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
+    if (response.status === 401 || errorCode === "UNAUTHORIZED") {
+      throw new Error(
+        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+      );
+    }
+    throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
+  }
+
+  const payload = await response.json();
+  if (payload.errors?.length) {
+    const firstCode = payload.errors?.[0]?.extensions?.code || "";
+    if (firstCode === "UNAUTHORIZED") {
+      throw new Error(
+        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+      );
+    }
+    throw new Error(payload.errors.map((e) => e.message).join(", "));
+  }
+  return payload.data;
 }
 
 function parseShopifyTags(raw) {
@@ -533,13 +472,13 @@ function parseShopifyResourceNumericId(gid, resource) {
 }
 
 function judgeMeConfigured() {
-  return Boolean(JUDGE_ME_API_TOKEN && JUDGE_ME_REVIEWS_SHOP_DOMAIN);
+  return Boolean(JUDGE_ME_API_TOKEN && JUDGE_ME_SHOP_DOMAIN);
 }
 
 async function judgeMeRequest(path, query = {}) {
   if (!judgeMeConfigured()) return null;
   const url = new URL(`https://judge.me/api/v1/${String(path).replace(/^\//, "")}`);
-  url.searchParams.set("shop_domain", JUDGE_ME_REVIEWS_SHOP_DOMAIN);
+  url.searchParams.set("shop_domain", JUDGE_ME_SHOP_DOMAIN);
   url.searchParams.set("api_token", JUDGE_ME_API_TOKEN);
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== null && value !== "") {
@@ -575,7 +514,7 @@ async function judgeMePostJson(path, body = {}) {
     throw new Error("Judge.me is not configured.");
   }
   const url = new URL(`https://judge.me/api/v1/${String(path).replace(/^\//, "")}`);
-  const payload = { shop_domain: JUDGE_ME_REVIEWS_SHOP_DOMAIN, ...body };
+  const payload = { shop_domain: JUDGE_ME_SHOP_DOMAIN, ...body };
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -903,406 +842,10 @@ function serveReviewMedia(req, res, pathname) {
   fs.createReadStream(filepath).pipe(res);
 }
 
-function isVisibleJudgeMeReview(review) {
-  if (!review || review.hidden) return false;
-  if (review.published === false) return false;
-  const curated = String(review.curated || "").toLowerCase();
-  if (curated === "spam" || curated === "reject" || curated === "rejected") return false;
-  return true;
-}
-
 function isPublishedJudgeMeReview(review) {
-  return isVisibleJudgeMeReview(review);
-}
-
-function normalizeReviewProductExternalId(value) {
-  const raw = String(value ?? "").trim();
-  if (!raw) return "";
-  const numeric = Number(raw);
-  if (Number.isFinite(numeric) && numeric > 0) return String(Math.trunc(numeric));
-  return raw;
-}
-
-let judgeMePublishedReviewsCache = null;
-let judgeMePublishedReviewsCacheAt = 0;
-const JUDGE_ME_PUBLISHED_REVIEWS_CACHE_MS = 60_000;
-
-function invalidateJudgeMePublishedReviewsCache() {
-  judgeMePublishedReviewsCache = null;
-  judgeMePublishedReviewsCacheAt = 0;
-}
-
-function mergeUniqueJudgeMeReviews(existing = [], incoming = []) {
-  const seen = new Set(existing.map((review) => String(review?.id || "")).filter(Boolean));
-  const merged = [...existing];
-  incoming.forEach((review) => {
-    const reviewId = String(review?.id || "").trim();
-    if (!reviewId || seen.has(reviewId)) return;
-    seen.add(reviewId);
-    merged.push(review);
-  });
-  return merged;
-}
-
-function extractReviewProductExternalIds(review) {
-  const ids = new Set();
-  const add = (value) => {
-    const id = normalizeReviewProductExternalId(value);
-    if (id) ids.add(id);
-  };
-  add(review?.product_external_id);
-  add(review?.shopify_product_id);
-  if (Array.isArray(review?.product_external_ids)) {
-    review.product_external_ids.forEach(add);
-  }
-  if (review?.product && typeof review.product === "object") {
-    add(review.product.external_id);
-    add(review.product.product_external_id);
-    add(parseShopifyResourceNumericId(review.product.id, "Product"));
-  }
-  if (Array.isArray(review?.products)) {
-    review.products.forEach((product) => {
-      add(product?.external_id);
-      add(product?.product_external_id);
-      add(parseShopifyResourceNumericId(product?.id, "Product"));
-    });
-  }
-  return ids;
-}
-
-function extractReviewProductHandles(review) {
-  const handles = new Set();
-  const add = (value) => {
-    const handle = String(value ?? "").trim().toLowerCase();
-    if (handle) handles.add(handle);
-  };
-  add(review?.product_handle);
-  if (Array.isArray(review?.product_handles)) {
-    review.product_handles.forEach(add);
-  }
-  if (Array.isArray(review?.products)) {
-    review.products.forEach((product) => {
-      add(product?.handle);
-      add(product?.product_handle);
-    });
-  }
-  return handles;
-}
-
-function extractReviewOrderExternalId(review) {
-  return String(
-    review?.order_external_id ||
-      review?.shopify_order_id ||
-      review?.order?.external_id ||
-      review?.order_id ||
-      review?.order_number ||
-      ""
-  ).trim();
-}
-
-function reviewBelongsToProduct(review, handle, externalId, productTitle = "") {
-  const targetHandle = String(handle || "").trim().toLowerCase();
-  const targetExternalId = normalizeReviewProductExternalId(externalId);
-  const targetTitle = String(productTitle || "").trim().toLowerCase();
-  const externalIds = extractReviewProductExternalIds(review);
-  const handles = extractReviewProductHandles(review);
-
-  if (targetExternalId && externalIds.has(targetExternalId)) return true;
-  if (targetHandle && handles.has(targetHandle)) return true;
-  if (targetTitle) {
-    const reviewTitle = String(review?.product_title || "").trim().toLowerCase();
-    if (reviewTitle && reviewTitle === targetTitle) return true;
-  }
-  return false;
-}
-
-async function fetchShopifyOrderProductExternalIds(orderExternalId) {
-  const token = String(orderExternalId || "").trim();
-  if (!token) return new Set();
-
-  const queryAttempts = [];
-  if (/^\d+$/.test(token)) {
-    queryAttempts.push(`id:${token}`);
-  }
-  if (token.startsWith("#")) {
-    queryAttempts.push(`name:${token}`);
-  } else if (/^\d+$/.test(token)) {
-    queryAttempts.push(`name:#${token}`);
-  } else {
-    queryAttempts.push(`name:${token}`);
-    queryAttempts.push(token);
-  }
-
-  const productIds = new Set();
-  const gql = `
-    query JudgeMeOrderProducts($query: String!) {
-      orders(first: 1, query: $query) {
-        edges {
-          node {
-            lineItems(first: 50) {
-              edges {
-                node {
-                  product {
-                    id
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  `;
-
-  for (const query of queryAttempts) {
-    try {
-      const data = await adminGraphql(gql, { query });
-      const order = data?.orders?.edges?.[0]?.node;
-      const lines = order?.lineItems?.edges || [];
-      lines.forEach((edge) => {
-        const productGid = edge?.node?.product?.id;
-        const numericId = parseShopifyResourceNumericId(productGid, "Product");
-        if (numericId) productIds.add(numericId);
-      });
-      if (productIds.size) break;
-    } catch (error) {
-      console.warn("Shopify order lookup for review failed:", query, error.message);
-    }
-  }
-  return productIds;
-}
-
-async function reviewMatchesProductViaOrder(review, targetExternalId, orderProductCache) {
-  const externalId = normalizeReviewProductExternalId(targetExternalId);
-  if (!externalId) return false;
-  const orderKey = extractReviewOrderExternalId(review);
-  if (!orderKey) return false;
-
-  if (!orderProductCache.has(orderKey)) {
-    orderProductCache.set(orderKey, await fetchShopifyOrderProductExternalIds(orderKey));
-  }
-  return orderProductCache.get(orderKey)?.has(externalId) || false;
-}
-
-async function resolveJudgeMeInternalProductId(externalId, handle = "") {
-  const productId = normalizeReviewProductExternalId(externalId);
-  const safeHandle = String(handle || "").trim();
-
-  if (productId) {
-    try {
-      const data = await judgeMeRequest("products/-1", { external_id: productId });
-      const internalId = data?.product?.id ?? data?.id;
-      if (internalId) return Number(internalId);
-    } catch (error) {
-      console.warn("Judge.me product lookup by external_id failed:", error.message);
-    }
-  }
-
-  if (safeHandle) {
-    try {
-      const data = await judgeMeRequest("products/-1", { handle: safeHandle });
-      const internalId = data?.product?.id ?? data?.id;
-      if (internalId) return Number(internalId);
-    } catch (error) {
-      console.warn("Judge.me product lookup by handle failed:", error.message);
-    }
-  }
-
-  return null;
-}
-
-async function fetchJudgeMeReviewsRawFromQuery(query = {}, maxPages = 20) {
-  const merged = [];
-  for (let page = 1; page <= maxPages; page += 1) {
-    try {
-      const data = await judgeMeRequest("reviews", { per_page: 100, page, ...query });
-      const raw = Array.isArray(data?.reviews) ? data.reviews : [];
-      if (!raw.length) break;
-      mergeUniqueJudgeMeReviews(merged, raw);
-      if (raw.length < 100) break;
-    } catch (error) {
-      console.warn("Judge.me reviews page fetch failed:", page, error.message);
-      break;
-    }
-  }
-  return merged;
-}
-
-async function fetchPublishedJudgeMeReviewsFromQuery(query = {}, maxPages = 20) {
-  return (await fetchJudgeMeReviewsRawFromQuery(query, maxPages)).filter(isPublishedJudgeMeReview);
-}
-
-async function fetchAllPublishedJudgeMeReviews(maxPages = 20) {
-  return fetchPublishedJudgeMeReviewsFromQuery({}, maxPages);
-}
-
-async function getPublishedJudgeMeReviewsPool() {
-  const now = Date.now();
-  if (
-    judgeMePublishedReviewsCache &&
-    now - judgeMePublishedReviewsCacheAt < JUDGE_ME_PUBLISHED_REVIEWS_CACHE_MS
-  ) {
-    return judgeMePublishedReviewsCache;
-  }
-  const pool = await fetchAllPublishedJudgeMeReviews();
-  judgeMePublishedReviewsCache = pool;
-  judgeMePublishedReviewsCacheAt = now;
-  return pool;
-}
-
-async function resolveJudgeMeReviewsByIds(reviewIds = [], pool = []) {
-  const poolById = new Map(
-    (Array.isArray(pool) ? pool : [])
-      .map((review) => [String(review?.id || "").trim(), review])
-      .filter(([id]) => id)
-  );
-  const resolved = [];
-  const seen = new Set();
-
-  for (const rawId of reviewIds) {
-    const reviewId = String(rawId || "").trim();
-    if (!reviewId || seen.has(reviewId)) continue;
-    seen.add(reviewId);
-
-    const fromPool = poolById.get(reviewId);
-    if (fromPool && isPublishedJudgeMeReview(fromPool)) {
-      resolved.push(fromPool);
-      continue;
-    }
-
-    try {
-      const data = await judgeMeRequest(`reviews/${reviewId}`);
-      const review = data?.review || data;
-      if (isPublishedJudgeMeReview(review)) resolved.push(review);
-    } catch (error) {
-      console.warn("Judge.me review lookup failed:", reviewId, error.message);
-    }
-  }
-
-  return resolved;
-}
-
-/**
- * Pre-filtering behavior: reviews?external_id= or ?handle= often returned the
- * product's reviews (or the shop batch). Trust that response when newer paths are empty.
- */
-async function fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle = "") {
-  const productId = normalizeReviewProductExternalId(externalId);
-  const safeHandle = String(handle || "").trim().toLowerCase();
-  const attempts = [];
-  if (productId) attempts.push({ external_id: productId });
-  if (safeHandle) attempts.push({ handle: safeHandle });
-
-  for (const params of attempts) {
-    try {
-      const data = await judgeMeRequest("reviews", { per_page: 100, page: 1, ...params });
-      const raw = Array.isArray(data?.reviews) ? data.reviews : [];
-      const visible = raw.filter(isVisibleJudgeMeReview);
-      if (!visible.length) continue;
-      const matched = visible.filter((review) =>
-        reviewBelongsToProduct(review, handle, productId, productTitle)
-      );
-      return matched.length ? matched : visible;
-    } catch (error) {
-      console.warn("Judge.me legacy reviews list failed:", params, error.message);
-    }
-  }
-  return [];
-}
-
-async function appendOrderMatchedReviews(selected, handle, externalId, pool, orderProductCache, seen) {
-  for (const review of pool) {
-    const reviewId = String(review?.id || "").trim();
-    if (!reviewId || seen.has(reviewId)) continue;
-    if (await reviewMatchesProductViaOrder(review, externalId, orderProductCache)) {
-      if (!isPublishedJudgeMeReview(review)) continue;
-      seen.add(reviewId);
-      selected.push(review);
-    }
-  }
-}
-
-async function selectJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle = "") {
-  const pool = await getPublishedJudgeMeReviewsPool();
-  const sharedFromPool = pool.filter(isVisibleJudgeMeReview);
-  if (sharedFromPool.length) {
-    return sortJudgeMeReviewsNewestFirst(sharedFromPool);
-  }
-
-  const shopRaw = await fetchJudgeMeReviewsRawFromQuery({}, 20);
-  const sharedFromShop = shopRaw.filter(isVisibleJudgeMeReview);
-  if (sharedFromShop.length) {
-    return sortJudgeMeReviewsNewestFirst(sharedFromShop);
-  }
-
-  // Keep a legacy fallback to maximize compatibility with older Judge.me responses.
-  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
-  const legacy = await fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle);
-  return sortJudgeMeReviewsNewestFirst(legacy.filter(isVisibleJudgeMeReview));
-}
-
-async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle = "") {
-  const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
-  const internalProductId = await resolveJudgeMeInternalProductId(externalId, handle);
-  let shopRawCount = 0;
-  let productRawCount = 0;
-  let legacyListCount = 0;
-  let sample = [];
-
-  try {
-    const shopRaw = await fetchJudgeMeReviewsRawFromQuery({}, 1);
-    shopRawCount = shopRaw.length;
-    sample = shopRaw.slice(0, 5).map((review) => ({
-      id: review?.id,
-      product_handle: review?.product_handle,
-      product_external_id: review?.product_external_id,
-      curated: review?.curated,
-      hidden: review?.hidden,
-      published: review?.published,
-    }));
-  } catch (error) {
-    sample = [{ error: error.message }];
-  }
-
-  if (internalProductId) {
-    try {
-      const productRaw = await fetchJudgeMeReviewsRawFromQuery({ product_id: internalProductId }, 1);
-      productRawCount = productRaw.length;
-    } catch (error) {
-      productRawCount = -1;
-    }
-  }
-
-  const widgetHtml = await fetchJudgeMeProductWidgetHtml(externalId, handle);
-  const widgetReviewIds = parseJudgeMeWidgetReviewIds(widgetHtml);
-  const widgetParsedCount = parseJudgeMeWidgetReviews(widgetHtml).length;
-  try {
-    legacyListCount = (await fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle)).length;
-  } catch (error) {
-    legacyListCount = -1;
-  }
-  const selected = await selectJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle);
-
-  return {
-    judgeMeShop: JUDGE_ME_REVIEWS_SHOP_DOMAIN,
-    judgeMeCatalogShop: JUDGE_ME_SHOP_DOMAIN,
-    shopifyAdminShop: SHOPIFY_ADMIN_SHOP_DOMAIN,
-    judgeMeShopMismatch: JUDGE_ME_SHOP_MISMATCH,
-    judgeMeReviewsShopMismatch: JUDGE_ME_REVIEWS_SHOP_MISMATCH,
-    hasPublicToken: Boolean(JUDGE_ME_PUBLIC_TOKEN),
-    handle,
-    externalId,
-    productTitle,
-    internalProductId,
-    shopRawCount,
-    productRawCount,
-    widgetHtmlLength: widgetHtml.length,
-    widgetReviewIds: widgetReviewIds.length,
-    widgetParsedCount,
-    legacyListCount,
-    selectedCount: selected.length,
-    sample,
-  };
+  if (!review || review.hidden) return false;
+  const curated = String(review.curated || "").toLowerCase();
+  return curated === "ok" || curated === "true";
 }
 
 function upgradeReviewPhotoUrl(url) {
@@ -1455,64 +998,6 @@ function sortJudgeMeReviewsNewestFirst(reviews = []) {
   });
 }
 
-function parseJudgeMeWidgetReviews(widgetHtml) {
-  const html = String(widgetHtml || "");
-  if (!html) return [];
-  const reviews = [];
-  const seen = new Set();
-  const idRegex = /data-review-id=["'](\d+)["']/gi;
-  let idMatch;
-  while ((idMatch = idRegex.exec(html)) !== null) {
-    const reviewId = String(idMatch[1] || "").trim();
-    if (!reviewId || seen.has(reviewId)) continue;
-    seen.add(reviewId);
-    const slice = html.slice(idMatch.index, idMatch.index + 12000);
-    const authorMatch = slice.match(/jdgm-rev__author[^>]*>([^<]+)</i);
-    const titleMatch = slice.match(/jdgm-rev__title[^>]*>([^<]+)</i);
-    const bodyMatch = slice.match(/jdgm-rev__body[^>]*>([\s\S]*?)<\/div>/i);
-    const ratingMatch =
-      slice.match(/jdgm-rev__rating[^>]*data-score=["']([0-9.]+)["']/i) ||
-      slice.match(/data-score=["']([0-9.]+)["']/i);
-    const timeMatch = slice.match(/jdgm-rev__timestamp[^>]*data-content=["']([^"']+)["']/i);
-    const rating = Math.max(1, Math.min(5, Math.round(Number(ratingMatch?.[1] || 0))));
-    if (!rating) continue;
-    const author = stripJudgeMeHtml(authorMatch?.[1]);
-    const title = stripJudgeMeHtml(titleMatch?.[1]);
-    const body = stripJudgeMeHtml(bodyMatch?.[1]).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
-    reviews.push({
-      id: reviewId,
-      rating,
-      title,
-      body,
-      name: author,
-      reviewer: { name: author },
-      created_at: timeMatch?.[1] || null,
-      verified: /jdgm-rev__buyer-badge|verified-buyer|jdgm-verified/i.test(slice) ? "buyer" : "",
-      pictures: [],
-      curated: "ok",
-      hidden: false,
-    });
-  }
-  return reviews;
-}
-
-function parseJudgeMeWidgetReviewIds(widgetHtml) {
-  const reviewIds = [];
-  const seen = new Set();
-  const html = String(widgetHtml || "");
-  if (!html) return reviewIds;
-
-  const idRegex = /data-review-id=["'](\d+)["']/gi;
-  let idMatch;
-  while ((idMatch = idRegex.exec(html)) !== null) {
-    const reviewId = String(idMatch[1] || "").trim();
-    if (!reviewId || seen.has(reviewId)) continue;
-    seen.add(reviewId);
-    reviewIds.push(reviewId);
-  }
-  return reviewIds;
-}
-
 function parseJudgeMeWidgetDisplayNames(widgetHtml, reviewIdsInOrder = []) {
   const namesByReviewId = {};
   const html = String(widgetHtml || "");
@@ -1558,14 +1043,23 @@ function extractJudgeMeWidgetHtml(data) {
   ).trim();
 }
 
-async function fetchJudgeMeProductWidgetHtml(externalId, handle = "") {
+async function fetchJudgeMeWidgetDisplayNames(externalId, handle = "", reviewIdsInOrder = []) {
+  const merged = {};
   const attempts = [];
-  const productId = normalizeReviewProductExternalId(externalId);
+  const productId = String(externalId || "").trim();
   const safeHandle = String(handle || "").trim();
-  const internalProductId = await resolveJudgeMeInternalProductId(externalId, handle);
-  if (internalProductId) attempts.push({ id: internalProductId, product_id: internalProductId });
   if (productId) attempts.push({ external_id: productId });
   if (safeHandle) attempts.push({ handle: safeHandle });
+
+  if (productId) {
+    try {
+      const productData = await judgeMeRequest("products/-1", { external_id: productId });
+      const internalId = productData?.product?.id ?? productData?.id;
+      if (internalId) attempts.push({ id: internalId });
+    } catch (error) {
+      console.warn("Judge.me product lookup for widget failed:", error.message);
+    }
+  }
 
   for (const params of attempts) {
     try {
@@ -1575,27 +1069,16 @@ async function fetchJudgeMeProductWidgetHtml(externalId, handle = "") {
         page: 1,
       });
       const widgetHtml = extractJudgeMeWidgetHtml(data);
-      if (widgetHtml) return widgetHtml;
+      const batch = parseJudgeMeWidgetDisplayNames(widgetHtml, reviewIdsInOrder);
+      Object.assign(merged, batch);
+      if (Object.keys(batch).length) break;
     } catch (error) {
-      console.warn("Judge.me product widget fetch failed:", params, error.message);
+      console.warn("Judge.me widget display names failed:", params, error.message);
     }
   }
-  return "";
-}
 
-async function fetchJudgeMeWidgetReviewIds(externalId, handle = "") {
-  const widgetHtml = await fetchJudgeMeProductWidgetHtml(externalId, handle);
-  return parseJudgeMeWidgetReviewIds(widgetHtml);
-}
-
-async function fetchJudgeMeWidgetDisplayNames(externalId, handle = "", reviewIdsInOrder = []) {
-  const widgetHtml = await fetchJudgeMeProductWidgetHtml(externalId, handle);
-  const merged = parseJudgeMeWidgetDisplayNames(widgetHtml, reviewIdsInOrder);
   if (!Object.keys(merged).length) {
-    console.warn(
-      "Judge.me widget returned no review display names for product",
-      String(externalId || "").trim() || String(handle || "").trim()
-    );
+    console.warn("Judge.me widget returned no review display names for product", productId || safeHandle);
   }
   return merged;
 }
@@ -1718,7 +1201,7 @@ async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
 
   const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
   // Judge.me public forms resolve the shop from a Shopify URL, not the headless domain.
-  const shopifyProductUrl = `https://${SHOPIFY_ADMIN_SHOP_DOMAIN || JUDGE_ME_SHOP_DOMAIN}/products/${encodeURIComponent(handle)}`;
+  const shopifyProductUrl = `https://${JUDGE_ME_SHOP_DOMAIN}/products/${encodeURIComponent(handle)}`;
 
   if (externalId) {
     try {
@@ -1738,7 +1221,7 @@ async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
   }
 
   const params = new URLSearchParams({
-    shop_domain: JUDGE_ME_REVIEWS_SHOP_DOMAIN,
+    shop_domain: JUDGE_ME_SHOP_DOMAIN,
     url: shopifyProductUrl,
     handle,
   });
@@ -1793,8 +1276,6 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "", display
     distribution,
     items,
     writeReviewUrl,
-    shopDomain: JUDGE_ME_REVIEWS_SHOP_DOMAIN,
-    publicToken: JUDGE_ME_PUBLIC_TOKEN,
   };
 }
 
@@ -1853,23 +1334,50 @@ function upsertSubmittedReviewInBundle(bundle, submitted) {
   };
 }
 
-async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle = "") {
+async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
   const writeReviewUrl = await buildJudgeMeWriteReviewUrl(handle, shopifyProductGid);
   const empty = mapJudgeMeReviewBundle([], handle, writeReviewUrl);
   if (!judgeMeConfigured()) return empty;
 
   const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
-  const sortedRawReviews = await selectJudgeMeReviewsForProduct(
-    handle,
-    shopifyProductGid,
-    productTitle
-  );
+  const attempts = [];
+  if (externalId) attempts.push({ external_id: externalId });
+  if (handle) attempts.push({ handle });
+
+  let rawReviews = [];
+  for (const extra of attempts) {
+    try {
+      const data = await judgeMeRequest("reviews", { per_page: 50, page: 1, ...extra });
+      const batch = Array.isArray(data?.reviews) ? data.reviews : [];
+      const filtered = batch.filter(isPublishedJudgeMeReview);
+      if (filtered.length) {
+        rawReviews = filtered;
+        break;
+      }
+    } catch (error) {
+      console.warn("Judge.me reviews query failed:", extra, error.message);
+    }
+  }
+
+  if (!rawReviews.length && handle) {
+    try {
+      const data = await judgeMeRequest("reviews", { per_page: 100, page: 1 });
+      rawReviews = (Array.isArray(data?.reviews) ? data.reviews : []).filter(
+        (review) => String(review.product_handle || "") === handle && isPublishedJudgeMeReview(review)
+      );
+    } catch (error) {
+      console.warn("Judge.me reviews fallback failed:", error.message);
+      return empty;
+    }
+  }
+
+  const sortedRawReviews = sortJudgeMeReviewsNewestFirst(rawReviews);
   const sortedReviewIds = sortedRawReviews.map((review) => String(review?.id || "").trim()).filter(Boolean);
   const widgetNames =
     externalId || handle
       ? await fetchJudgeMeWidgetDisplayNames(externalId, handle, sortedReviewIds)
       : {};
-  const enrichedReviews = await enrichJudgeMeReviewDetails(sortedRawReviews);
+  const enrichedReviews = await enrichJudgeMeReviewDetails(rawReviews);
   let displayNamesByReviewId = buildJudgeMeDisplayNamesByReviewId(enrichedReviews, widgetNames);
   displayNamesByReviewId = await augmentDisplayNamesFromShopifyMetaobjects(
     enrichedReviews,
@@ -2021,8 +1529,7 @@ async function handleProductReviewSubmit(req, res, handle) {
       });
     }
 
-    invalidateJudgeMePublishedReviewsCache();
-    let reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id, node.title);
+    let reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
     const submitted = buildSubmittedReviewItem({
       reviewId,
       name,
@@ -2318,54 +1825,39 @@ function isShopifyHlsVideoSource(s) {
   );
 }
 
-function normalizeShopifyVideoSourceEntry(source) {
-  if (!source?.url || isShopifyHlsVideoSource(source)) return null;
-  const url = String(source.url).trim();
-  if (!url) return null;
-  return {
-    url,
-    width: Number(source.width || 0),
-    height: Number(source.height || 0),
-    fileSize: Number(source.fileSize || 0),
-  };
-}
-
-/** Progressive MP4/WebM renditions, smallest → largest (for adaptive gallery playback). */
-function collectShopifyVideoProgressiveSources(videoNode) {
-  const entries = [];
-  const seen = new Set();
-  const add = (source) => {
-    const normalized = normalizeShopifyVideoSourceEntry(source);
-    if (!normalized || seen.has(normalized.url)) return;
-    seen.add(normalized.url);
-    entries.push(normalized);
-  };
-
-  const list = Array.isArray(videoNode?.sources) ? videoNode.sources : [];
-  list.forEach(add);
-  if (videoNode?.originalSource) add(videoNode.originalSource);
-
-  entries.sort((a, b) => {
-    const pxA = a.width * a.height;
-    const pxB = b.width * b.height;
-    if (pxA !== pxB) return pxA - pxB;
-    return a.fileSize - b.fileSize;
-  });
-  return entries;
-}
-
 /**
- * Largest progressive rendition (legacy default URL). HLS-only falls back to playlist URL.
+ * Prefer Shopify's uploaded original, else the largest progressive rendition
+ * (by pixel area, then file size). Avoids picking the first low-res MP4 transcode.
  */
 function pickShopifyVideoPlayableUrl(videoNode) {
-  const progressive = collectShopifyVideoProgressiveSources(videoNode);
-  if (progressive.length) return progressive[progressive.length - 1].url;
-
-  const orig = videoNode?.originalSource;
-  if (orig?.url) return String(orig.url).trim();
   const list = Array.isArray(videoNode?.sources) ? videoNode.sources : [];
-  const any = list.find((s) => s?.url);
-  return any ? String(any.url).trim() : "";
+  const orig = videoNode?.originalSource;
+
+  if (orig?.url && !isShopifyHlsVideoSource(orig)) {
+    return String(orig.url).trim();
+  }
+
+  const progressive = list.filter((s) => s?.url && !isShopifyHlsVideoSource(s));
+  if (!progressive.length) {
+    if (orig?.url) return String(orig.url).trim();
+    const any = list.find((s) => s?.url);
+    return any ? String(any.url).trim() : "";
+  }
+
+  let best = progressive[0];
+  let bestPx = Number(best?.width || 0) * Number(best?.height || 0);
+  let bestFs = Number(best?.fileSize || 0);
+  for (let i = 1; i < progressive.length; i += 1) {
+    const s = progressive[i];
+    const px = Number(s?.width || 0) * Number(s?.height || 0);
+    const fs = Number(s?.fileSize || 0);
+    if (px > bestPx || (px === bestPx && fs > bestFs)) {
+      best = s;
+      bestPx = px;
+      bestFs = fs;
+    }
+  }
+  return best?.url ? String(best.url).trim() : "";
 }
 
 /**
@@ -2394,18 +1886,13 @@ function mapProductMediaToGallery(node) {
 
     if (mct === "VIDEO") {
       const poster = String(m.preview?.image?.url || "").trim();
-      let videoSources = collectShopifyVideoProgressiveSources(m);
-      let videoUrl = videoSources.length ? videoSources[videoSources.length - 1].url : pickShopifyVideoPlayableUrl(m);
-      if (!videoSources.length && videoUrl) {
-        videoSources = [{ url: videoUrl, width: 0, height: 0, fileSize: 0 }];
-      }
+      const videoUrl = pickShopifyVideoPlayableUrl(m);
       const altText = altBase || String(m.preview?.image?.altText || node?.title || "Product video").trim();
       if (!videoUrl && !poster) continue;
       out.push({
         kind: "video",
         url: poster || videoUrl,
         videoUrl,
-        videoSources,
         poster,
         altText,
         status: String(m.status || ""),
@@ -2484,7 +1971,6 @@ async function handleCatalog(req, res) {
 }
 
 async function handleProduct(req, res, handle) {
-  const reqUrl = new URL(req.url, "http://localhost");
   const query = `
     query ProductByHandle($query: String!) {
       products(first: 1, query: $query) {
@@ -2602,10 +2088,7 @@ async function handleProduct(req, res, handle) {
     }
     const product = mapProduct(node, discountMap);
     product.mediaGallery = mapProductMediaToGallery(node);
-    product.reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id, node.title);
-    if (String(reqUrl.searchParams.get("debug") || "") === "1") {
-      product.reviewsDebug = await buildJudgeMeReviewsDebug(node.handle, node.id, node.title);
-    }
+    product.reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
     json(res, 200, { product });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -4918,16 +4401,8 @@ const server = http.createServer(async (req, res) => {
           CUSTOMER_ACCOUNT_TOKEN_ENDPOINT
       ),
       judgeMeConfigured: judgeMeConfigured(),
-      judgeMePublicTokenConfigured: Boolean(JUDGE_ME_PUBLIC_TOKEN),
-      judgeMeShopDomain: JUDGE_ME_REVIEWS_SHOP_DOMAIN || null,
-      judgeMeCatalogShopDomain: JUDGE_ME_SHOP_DOMAIN || null,
-      shopifyAdminShopDomain: SHOPIFY_ADMIN_SHOP_DOMAIN || null,
-      judgeMeShopMismatch: JUDGE_ME_SHOP_MISMATCH,
-      judgeMeReviewsShopMismatch: JUDGE_ME_REVIEWS_SHOP_MISMATCH,
       judgeMeHint: judgeMeConfigured()
-        ? JUDGE_ME_PUBLIC_TOKEN
-          ? null
-          : "Set JUDGE_ME_PUBLIC_TOKEN (Judge.me → Settings → Technical) for the headless review widget fallback."
+        ? null
         : "Set JUDGE_ME_API_TOKEN and JUDGE_ME_SHOP_DOMAIN for headless Judge.me reviews.",
     });
     return;
@@ -4996,11 +4471,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (reqUrl.pathname.startsWith("/api/product/")) {
-    const handle = reqUrl.pathname
-      .replace("/api/product/", "")
-      .replace(/\/reviews\/?$/, "")
-      .split("/")[0]
-      .trim();
+    const handle = reqUrl.pathname.replace("/api/product/", "").trim();
     await handleProduct(req, res, handle);
     return;
   }

@@ -394,15 +394,6 @@
         gap: 18px;
       }
 
-      .judgeme-widget-fallback {
-        margin-top: 16px;
-        width: 100%;
-      }
-
-      .judgeme-widget-fallback .jdgm-widget {
-        width: 100%;
-      }
-
       .review-summary {
         background: #ffffff;
         border: 1px solid #ececf1;
@@ -448,7 +439,6 @@
         border: 1px solid #ececf1;
         border-radius: 18px;
         padding: 18px;
-        scroll-margin-top: 108px;
       }
 
       .review-compose-panel h3 {
@@ -1560,53 +1550,6 @@
           );
         }
 
-        function ensureJudgeMeWidgetScript(onReady) {
-          const done = typeof onReady === "function" ? onReady : () => {};
-          if (typeof window.jdgm_preloader === "function") {
-            done();
-            return;
-          }
-          const existing = document.getElementById("judgeme-widget-preloader");
-          if (existing) {
-            existing.addEventListener("load", () => done(), { once: true });
-            return;
-          }
-          const script = document.createElement("script");
-          script.id = "judgeme-widget-preloader";
-          script.async = true;
-          script.src = "https://cdn.judge.me/widget_preloader.js";
-          script.setAttribute("data-cfasync", "false");
-          script.addEventListener("load", () => done(), { once: true });
-          document.body.appendChild(script);
-        }
-
-        function appendJudgeMeReviewWidget(bundle, gridEl) {
-          if (!gridEl) return;
-          const shopDomain = String(bundle.shopDomain || "").trim();
-          const publicToken = String(bundle.publicToken || "").trim();
-          const externalId = String(product?.id || "")
-            .replace(/^gid:\/\/shopify\/Product\//i, "")
-            .trim();
-          if (!shopDomain || !publicToken || !externalId) return;
-
-          const host = document.createElement("div");
-          host.className = "judgeme-widget-fallback";
-          host.innerHTML =
-            '<div class="jdgm-widget jdgm-review-widget jdgm-outside-widget" data-id="' +
-            escapeGalleryText(externalId) +
-            '"></div>';
-          gridEl.appendChild(host);
-
-          window.jdgm = window.jdgm || {};
-          window.jdgm.SHOP_DOMAIN = shopDomain;
-          window.jdgm.PLATFORM = "shopify";
-          window.jdgm.PUBLIC_TOKEN = publicToken;
-
-          ensureJudgeMeWidgetScript(() => {
-            if (typeof window.jdgm_preloader === "function") window.jdgm_preloader();
-          });
-        }
-
         function renderProductReviews(reviews) {
           const summaryEl = document.getElementById("review-average");
           const starsEl = document.getElementById("review-stars");
@@ -1672,9 +1615,6 @@
           if (!items.length) {
             gridEl.innerHTML =
               '<div class="review-empty">No published reviews yet. Be the first to share your experience.</div>';
-            if (bundle.publicToken && bundle.shopDomain) {
-              appendJudgeMeReviewWidget(bundle, gridEl);
-            }
             return;
           }
 
@@ -1855,12 +1795,6 @@
         renderProductReviews(product.reviews);
         initReviewPhotoLightbox();
 
-        function scrollReviewComposePanelIntoView() {
-          const panelEl = document.getElementById("review-compose-panel");
-          if (!panelEl || panelEl.hidden) return;
-          panelEl.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-
         function initReviewCompose() {
           if (!product.reviews?.configured) return;
 
@@ -1986,7 +1920,7 @@
 
           function openComposePanel() {
             panelEl.hidden = false;
-            requestAnimationFrame(() => scrollReviewComposePanelIntoView());
+            panelEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
           }
 
           toggleEl.addEventListener("click", () => {
@@ -2141,48 +2075,6 @@
         }
 
         initReviewCompose();
-
-        function scrollToReviewsFromUrl() {
-          const params = new URLSearchParams(window.location.search);
-          const wantsCompose =
-            params.get("review") === "1" || params.get("writeReview") === "1";
-          const hash = String(window.location.hash || "")
-            .toLowerCase()
-            .replace(/^#/, "");
-          const wantsComposePanel =
-            wantsCompose || hash === "review-compose-panel";
-
-          if (!wantsComposePanel && hash !== "reviews") return;
-
-          requestAnimationFrame(() => {
-            if (!wantsComposePanel) {
-              document
-                .getElementById("reviews")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              return;
-            }
-
-            const panelEl = document.getElementById("review-compose-panel");
-            const toggleEl = document.getElementById("write-review-toggle");
-            if (!panelEl) return;
-
-            const revealAndScroll = () => {
-              requestAnimationFrame(() => scrollReviewComposePanelIntoView());
-            };
-
-            if (panelEl.hidden && toggleEl) {
-              toggleEl.click();
-              revealAndScroll();
-            } else if (panelEl.hidden) {
-              panelEl.hidden = false;
-              revealAndScroll();
-            } else {
-              scrollReviewComposePanelIntoView();
-            }
-          });
-        }
-
-        scrollToReviewsFromUrl();
 
         const variants = product.variants?.nodes || [];
         let selectedOptionValues = {};
@@ -2501,7 +2393,6 @@
           loadCurrentSource();
           return dispose;
         }
-
         function getLegacyProductImages() {
           const fromNodes = product.images?.nodes;
           const fromArray = Array.isArray(product.images) ? product.images : null;
@@ -2528,7 +2419,7 @@
             return mg
               .filter((item) => {
                 const u = String(item?.url || "").trim();
-                const v = galleryItemHasPlayableVideo(item);
+                const v = String(item?.videoUrl || "").trim();
                 const e = String(item?.embedUrl || "").trim();
                 return Boolean(u || v || e);
               })
@@ -2561,25 +2452,37 @@
         function setGalleryMain(index) {
           const item = galleryItems[index];
           if (!item) return;
-          if (disposeActiveGalleryVideo) {
-            disposeActiveGalleryVideo();
-            disposeActiveGalleryVideo = null;
-          }
           galleryActiveIndex = index;
           const alt = escapeGalleryText(item.altText || product.title);
-          const videoSources = getGalleryVideoSources(item);
-          const hasPlayableVideo = galleryItemHasPlayableVideo(item);
+          const videoUrl = String(item.videoUrl || "").trim();
           const poster = String(item.poster || item.url || "").trim();
           const embedUrl = String(item.embedUrl || "").trim();
 
-          if (hasPlayableVideo) {
+          if (item.kind === "video" && videoUrl) {
+            const src = escapeGalleryText(videoUrl);
+            const posterEsc = escapeGalleryText(poster);
             const mobileView = isMobileGalleryView();
-            disposeActiveGalleryVideo = mountAdaptiveGalleryVideo(galleryMain, {
-              sources: videoSources,
-              poster,
-              alt: item.altText || product.title,
-              mobileView,
-            });
+            const videoClass =
+              "gallery-video" + (mobileView ? " gallery-video--chromeless" : "");
+            const controlsAttr = mobileView ? "" : " controls";
+            galleryMain.innerHTML =
+              '<video class="' +
+              videoClass +
+              '" src="' +
+              src +
+              '" poster="' +
+              posterEsc +
+              '" playsinline autoplay loop muted' +
+              controlsAttr +
+              ' preload="metadata" disablepictureinpicture disableremoteplayback aria-label="' +
+              alt +
+              '"></video>';
+            const vidEl = galleryMain.querySelector("video");
+            if (vidEl) {
+              vidEl.controls = !mobileView;
+              vidEl.muted = true;
+              void vidEl.play?.().catch(() => {});
+            }
           } else if (item.kind === "video" && poster) {
             const src = escapeGalleryText(poster);
             galleryMain.innerHTML = '<img src="' + src + '" alt="' + alt + '" />';
@@ -2597,7 +2500,7 @@
           }
 
           const fillMedia =
-            hasPlayableVideo || (item.kind === "external_video" && embedUrl);
+            (item.kind === "video" && videoUrl) || (item.kind === "external_video" && embedUrl);
           galleryMain.classList.toggle("gallery-main--fill-media", Boolean(fillMedia));
 
           galleryThumbs.querySelectorAll(".thumb").forEach((el, idx) => {
@@ -2626,7 +2529,7 @@
           galleryThumbs.innerHTML = galleryItems
             .map((item, i) => {
               const alt = escapeGalleryText(item.altText || product.title);
-              const isVideo = galleryItemHasPlayableVideo(item);
+              const isVideo = item.kind === "video" && String(item.videoUrl || "").trim();
               const isExternal = item.kind === "external_video" && String(item.embedUrl || "").trim();
               const posterOnly = item.kind === "video" && !isVideo && String(item.poster || item.url || "").trim();
               const thumbSrc = escapeGalleryText(

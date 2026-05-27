@@ -1201,10 +1201,9 @@
       let discount = 0;
       /** After user edits quantities, ignore a late background server refresh so it cannot revert the UI. */
       let checkoutCartDirty = false;
-      /** Debounced bulk sync for signed-in checkout quantity edits. */
-      const CHECKOUT_BULK_SYNC_MS = 900;
-      let checkoutBulkSyncTimer = null;
-      let checkoutBulkSyncInFlight = null;
+      /** Debounced server sync per variant after optimistic +/- clicks. */
+      const qtyServerSyncTimers = new Map();
+      const QTY_SERVER_SYNC_MS = 180;
 
       const stepContact = document.getElementById("step-contact");
       const stepShipping = document.getElementById("step-shipping");
@@ -1474,73 +1473,60 @@
 
       function refreshOrderSummaryFromCart() {
         const items = readCartItems();
-        renderOrderLines(items);
+        patchRenderedQuantities(items);
         recalcTotals();
         window.flexcaseUpdateCartBadges?.();
         return items;
       }
 
-      function buildNormalizedCheckoutLines(items) {
-        return (items || [])
-          .map((l) => ({
-            variantId:
-              normalizeStorefrontVariantGid(l?.variantId) || String(l?.variantId || "").trim(),
-            quantity: Math.max(1, Math.min(99, Number(l?.quantity) || 1)),
-          }))
-          .filter((l) => l.variantId.startsWith("gid://shopify/ProductVariant/"));
+      function cancelQtyServerSync(variantId) {
+        const vid = String(variantId || "").trim();
+        const pending = qtyServerSyncTimers.get(vid);
+        if (!pending) return;
+        clearTimeout(pending);
+        qtyServerSyncTimers.delete(vid);
       }
 
-      async function syncCheckoutCartToServerNow() {
-        if (!checkoutSessionCustomer) return true;
+      function syncQtyToServerNow(variantId) {
+        const vid = String(variantId || "").trim();
+        if (!vid || typeof window.flexcaseSetLineQuantity !== "function") {
+          return Promise.resolve(true);
+        }
         const items = readCartItems();
-        const lines = buildNormalizedCheckoutLines(items);
-        if (lines.length !== items.length) return false;
-        try {
-          const response = await fetchCheckoutApi("/api/cart/replace", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lines }),
-          });
-          if (!response.ok) return false;
-          const payload = await response.json().catch(() => ({}));
-          if (Array.isArray(payload?.lines)) {
-            writeCartItems(payload.lines);
-            renderOrderLines(readCartItems());
-            recalcTotals();
-            window.flexcaseUpdateCartBadges?.();
-          }
-          checkoutCartDirty = false;
+        const line = items.find((l) => String(l?.variantId || "").trim() === vid);
+        const qty = line ? Math.max(0, Math.min(99, Number(line.quantity || 0))) : 0;
+        return window.flexcaseSetLineQuantity(vid, qty).then((ok) => {
+          if (!ok) return false;
+          if (qty > 0) patchRenderedQuantities(readCartItems());
+          else renderOrderLines(readCartItems());
+          recalcTotals();
+          window.flexcaseUpdateCartBadges?.();
           return true;
-        } catch (_) {
-          return false;
-        }
+        });
       }
 
-      function scheduleCheckoutBulkSync() {
-        if (!checkoutSessionCustomer) return;
-        if (checkoutBulkSyncTimer) {
-          clearTimeout(checkoutBulkSyncTimer);
-          checkoutBulkSyncTimer = null;
-        }
-        checkoutBulkSyncTimer = window.setTimeout(() => {
-          checkoutBulkSyncTimer = null;
-          checkoutBulkSyncInFlight = syncCheckoutCartToServerNow().finally(() => {
-            checkoutBulkSyncInFlight = null;
+      function scheduleQtyServerSync(variantId) {
+        const vid = String(variantId || "").trim();
+        if (!vid || typeof window.flexcaseSetLineQuantity !== "function") return;
+        cancelQtyServerSync(vid);
+        const timer = window.setTimeout(() => {
+          qtyServerSyncTimers.delete(vid);
+          void syncQtyToServerNow(vid).then((ok) => {
+            if (!ok) {
+              renderOrderLines(readCartItems());
+              recalcTotals();
+              window.flexcaseUpdateCartBadges?.();
+            }
           });
-        }, CHECKOUT_BULK_SYNC_MS);
+        }, QTY_SERVER_SYNC_MS);
+        qtyServerSyncTimers.set(vid, timer);
       }
 
       async function flushPendingQtyServerSync() {
-        if (checkoutBulkSyncTimer) {
-          clearTimeout(checkoutBulkSyncTimer);
-          checkoutBulkSyncTimer = null;
-          checkoutBulkSyncInFlight = syncCheckoutCartToServerNow().finally(() => {
-            checkoutBulkSyncInFlight = null;
-          });
-        }
-        if (checkoutBulkSyncInFlight) {
-          await checkoutBulkSyncInFlight.catch(() => false);
-        }
+        if (typeof window.flexcaseSetLineQuantity !== "function") return;
+        const pending = [...qtyServerSyncTimers.keys()];
+        pending.forEach((vid) => cancelQtyServerSync(vid));
+        await Promise.all(pending.map((vid) => syncQtyToServerNow(vid).catch(() => false)));
       }
 
       function confirmRemoveItemModal() {
@@ -1582,18 +1568,30 @@
         if (nextQty < 1) {
           const shouldRemove = await confirmRemoveItemModal();
           if (!shouldRemove) return;
+          cancelQtyServerSync(vid);
           items.splice(idx, 1);
           writeCartItems(items);
           renderOrderLines(readCartItems());
           refreshOrderSummaryFromCart();
-          scheduleCheckoutBulkSync();
+          if (typeof window.flexcaseRemoveLine === "function") {
+            void window.flexcaseRemoveLine(vid).then((ok) => {
+              if (!ok) {
+                renderOrderLines(readCartItems());
+                recalcTotals();
+                window.flexcaseUpdateCartBadges?.();
+              }
+            });
+          }
           return;
         }
 
         items[idx] = { ...items[idx], quantity: nextQty };
         writeCartItems(items);
         refreshOrderSummaryFromCart();
-        scheduleCheckoutBulkSync();
+
+        if (typeof window.flexcaseSetLineQuantity === "function") {
+          scheduleQtyServerSync(vid);
+        }
       }
 
       function setStep(step) {
@@ -2063,15 +2061,13 @@
         const placeBtn = document.getElementById("place-order");
         if (placeBtn?.disabled) return;
         flexcasePlaceOrderInFlight = true;
-        const cartItems = readCartItems();
-        const lines = buildNormalizedCheckoutLines(cartItems);
-        if (lines.length !== cartItems.length) {
-          alert(
-            "Some cart lines have invalid product variant IDs for this store. Please remove those items and add them again from the product page."
-          );
-          flexcasePlaceOrderInFlight = false;
-          return;
-        }
+        const lines = readCartItems()
+          .map((l) => ({
+            variantId:
+              normalizeStorefrontVariantGid(l?.variantId) || String(l?.variantId || "").trim(),
+            quantity: Math.max(1, Math.min(99, Number(l?.quantity) || 1)),
+          }))
+          .filter((l) => l.variantId.startsWith("gid://shopify/ProductVariant/"));
         if (!lines.length) {
           alert(
             "Checkout could not read your cart lines. Clear the cart, add the product again from the product page, then try once more."
