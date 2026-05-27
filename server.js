@@ -94,15 +94,6 @@ let tokenExpiresAt = 0;
 const STOREFRONT_ACCESS_TOKEN = process.env.SHOPIFY_STOREFRONT_ACCESS_TOKEN || "";
 const JUDGE_ME_API_TOKEN = process.env.JUDGE_ME_API_TOKEN || "";
 const JUDGE_ME_PUBLIC_TOKEN = String(process.env.JUDGE_ME_PUBLIC_TOKEN || "").trim();
-const JUDGE_ME_SHOP_DOMAIN =
-  process.env.JUDGE_ME_SHOP_DOMAIN ||
-  (SHOP_FROM_ENV
-    ? String(SHOP_FROM_ENV).includes(".")
-      ? String(SHOP_FROM_ENV)
-      : `${String(SHOP_FROM_ENV)}.myshopify.com`
-    : "");
-/** Optional: paste Judge.me → Collect reviews → Review link if auto URLs fail on headless. */
-const JUDGE_ME_REVIEW_LINK = String(process.env.JUDGE_ME_REVIEW_LINK || "").trim();
 
 function normalizeShopifyShopDomain(value) {
   const raw = String(value || "").trim().toLowerCase();
@@ -111,16 +102,38 @@ function normalizeShopifyShopDomain(value) {
   return `${raw}.myshopify.com`;
 }
 
+const JUDGE_ME_SHOP_DOMAIN = normalizeShopifyShopDomain(
+  process.env.JUDGE_ME_SHOP_DOMAIN ||
+    (SHOP_FROM_ENV
+      ? String(SHOP_FROM_ENV).includes(".")
+        ? String(SHOP_FROM_ENV)
+        : `${String(SHOP_FROM_ENV)}.myshopify.com`
+      : "")
+);
+/** Judge.me shop that actually holds your reviews (if different from live Shopify). */
+const JUDGE_ME_REVIEWS_SHOP_DOMAIN = normalizeShopifyShopDomain(
+  process.env.JUDGE_ME_REVIEWS_SHOP_DOMAIN || JUDGE_ME_SHOP_DOMAIN
+);
+/** Optional: paste Judge.me → Collect reviews → Review link if auto URLs fail on headless. */
+const JUDGE_ME_REVIEW_LINK = String(process.env.JUDGE_ME_REVIEW_LINK || "").trim();
+
 const SHOPIFY_ADMIN_SHOP_DOMAIN = normalizeShopifyShopDomain(SHOP_FROM_ENV);
 const JUDGE_ME_SHOP_MISMATCH =
   Boolean(SHOPIFY_ADMIN_SHOP_DOMAIN && JUDGE_ME_SHOP_DOMAIN) &&
-  SHOPIFY_ADMIN_SHOP_DOMAIN !== String(JUDGE_ME_SHOP_DOMAIN).trim().toLowerCase();
+  SHOPIFY_ADMIN_SHOP_DOMAIN !== JUDGE_ME_SHOP_DOMAIN;
+const JUDGE_ME_REVIEWS_SHOP_MISMATCH =
+  Boolean(SHOPIFY_ADMIN_SHOP_DOMAIN && JUDGE_ME_REVIEWS_SHOP_DOMAIN) &&
+  SHOPIFY_ADMIN_SHOP_DOMAIN !== JUDGE_ME_REVIEWS_SHOP_DOMAIN;
 
 if (JUDGE_ME_SHOP_MISMATCH) {
   console.warn(
-    `Judge.me shop (${JUDGE_ME_SHOP_DOMAIN}) differs from Shopify Admin shop (${SHOPIFY_ADMIN_SHOP_DOMAIN}). ` +
-      "Product IDs and reviews may not line up. Install Judge.me on the same Shopify store you sell from, " +
-      "or point JUDGE_ME_SHOP_DOMAIN at that store's *.myshopify.com domain (not flexcase.my)."
+    `Judge.me catalog shop (${JUDGE_ME_SHOP_DOMAIN}) differs from Shopify Admin (${SHOPIFY_ADMIN_SHOP_DOMAIN}).`
+  );
+}
+if (JUDGE_ME_REVIEWS_SHOP_MISMATCH) {
+  console.warn(
+    `Judge.me reviews shop (${JUDGE_ME_REVIEWS_SHOP_DOMAIN}) differs from Shopify Admin (${SHOPIFY_ADMIN_SHOP_DOMAIN}). ` +
+      "Set JUDGE_ME_REVIEWS_SHOP_DOMAIN to the *.myshopify.com store where Judge.me reviews were collected, with API tokens from that same Judge.me install."
   );
 }
 
@@ -493,13 +506,13 @@ function parseShopifyResourceNumericId(gid, resource) {
 }
 
 function judgeMeConfigured() {
-  return Boolean(JUDGE_ME_API_TOKEN && JUDGE_ME_SHOP_DOMAIN);
+  return Boolean(JUDGE_ME_API_TOKEN && JUDGE_ME_REVIEWS_SHOP_DOMAIN);
 }
 
 async function judgeMeRequest(path, query = {}) {
   if (!judgeMeConfigured()) return null;
   const url = new URL(`https://judge.me/api/v1/${String(path).replace(/^\//, "")}`);
-  url.searchParams.set("shop_domain", JUDGE_ME_SHOP_DOMAIN);
+  url.searchParams.set("shop_domain", JUDGE_ME_REVIEWS_SHOP_DOMAIN);
   url.searchParams.set("api_token", JUDGE_ME_API_TOKEN);
   for (const [key, value] of Object.entries(query)) {
     if (value !== undefined && value !== null && value !== "") {
@@ -535,7 +548,7 @@ async function judgeMePostJson(path, body = {}) {
     throw new Error("Judge.me is not configured.");
   }
   const url = new URL(`https://judge.me/api/v1/${String(path).replace(/^\//, "")}`);
-  const payload = { shop_domain: JUDGE_ME_SHOP_DOMAIN, ...body };
+  const payload = { shop_domain: JUDGE_ME_REVIEWS_SHOP_DOMAIN, ...body };
   const response = await fetch(url, {
     method: "POST",
     headers: {
@@ -1292,12 +1305,19 @@ async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle 
   const widgetHtml = await fetchJudgeMeProductWidgetHtml(externalId, handle);
   const widgetReviewIds = parseJudgeMeWidgetReviewIds(widgetHtml);
   const widgetParsedCount = parseJudgeMeWidgetReviews(widgetHtml).length;
+  try {
+    legacyListCount = (await fetchLegacyJudgeMeReviewsListQuery(externalId, handle, productTitle)).length;
+  } catch (error) {
+    legacyListCount = -1;
+  }
   const selected = await selectJudgeMeReviewsForProduct(handle, shopifyProductGid, productTitle);
 
   return {
-    judgeMeShop: JUDGE_ME_SHOP_DOMAIN,
+    judgeMeShop: JUDGE_ME_REVIEWS_SHOP_DOMAIN,
+    judgeMeCatalogShop: JUDGE_ME_SHOP_DOMAIN,
     shopifyAdminShop: SHOPIFY_ADMIN_SHOP_DOMAIN,
     judgeMeShopMismatch: JUDGE_ME_SHOP_MISMATCH,
+    judgeMeReviewsShopMismatch: JUDGE_ME_REVIEWS_SHOP_MISMATCH,
     hasPublicToken: Boolean(JUDGE_ME_PUBLIC_TOKEN),
     handle,
     externalId,
@@ -1308,6 +1328,7 @@ async function buildJudgeMeReviewsDebug(handle, shopifyProductGid, productTitle 
     widgetHtmlLength: widgetHtml.length,
     widgetReviewIds: widgetReviewIds.length,
     widgetParsedCount,
+    legacyListCount,
     selectedCount: selected.length,
     sample,
   };
@@ -1726,7 +1747,7 @@ async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
 
   const externalId = parseShopifyResourceNumericId(shopifyProductGid, "Product");
   // Judge.me public forms resolve the shop from a Shopify URL, not the headless domain.
-  const shopifyProductUrl = `https://${JUDGE_ME_SHOP_DOMAIN}/products/${encodeURIComponent(handle)}`;
+  const shopifyProductUrl = `https://${SHOPIFY_ADMIN_SHOP_DOMAIN || JUDGE_ME_SHOP_DOMAIN}/products/${encodeURIComponent(handle)}`;
 
   if (externalId) {
     try {
@@ -1746,7 +1767,7 @@ async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
   }
 
   const params = new URLSearchParams({
-    shop_domain: JUDGE_ME_SHOP_DOMAIN,
+    shop_domain: JUDGE_ME_REVIEWS_SHOP_DOMAIN,
     url: shopifyProductUrl,
     handle,
   });
@@ -1801,7 +1822,7 @@ function mapJudgeMeReviewBundle(rawReviews, handle, writeReviewUrl = "", display
     distribution,
     items,
     writeReviewUrl,
-    shopDomain: JUDGE_ME_SHOP_DOMAIN,
+    shopDomain: JUDGE_ME_REVIEWS_SHOP_DOMAIN,
     publicToken: JUDGE_ME_PUBLIC_TOKEN,
   };
 }
@@ -4927,9 +4948,11 @@ const server = http.createServer(async (req, res) => {
       ),
       judgeMeConfigured: judgeMeConfigured(),
       judgeMePublicTokenConfigured: Boolean(JUDGE_ME_PUBLIC_TOKEN),
-      judgeMeShopDomain: JUDGE_ME_SHOP_DOMAIN || null,
+      judgeMeShopDomain: JUDGE_ME_REVIEWS_SHOP_DOMAIN || null,
+      judgeMeCatalogShopDomain: JUDGE_ME_SHOP_DOMAIN || null,
       shopifyAdminShopDomain: SHOPIFY_ADMIN_SHOP_DOMAIN || null,
       judgeMeShopMismatch: JUDGE_ME_SHOP_MISMATCH,
+      judgeMeReviewsShopMismatch: JUDGE_ME_REVIEWS_SHOP_MISMATCH,
       judgeMeHint: judgeMeConfigured()
         ? JUDGE_ME_PUBLIC_TOKEN
           ? null

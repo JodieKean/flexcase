@@ -394,15 +394,12 @@
         gap: 18px;
       }
 
-      .reviews-wrap.reviews-wrap--judgeme-widget {
-        grid-template-columns: 1fr;
+      .judgeme-widget-fallback {
+        margin-top: 16px;
+        width: 100%;
       }
 
-      .reviews-wrap.reviews-wrap--judgeme-widget .review-summary {
-        display: none;
-      }
-
-      .reviews-wrap.reviews-wrap--judgeme-widget .jdgm-widget {
+      .judgeme-widget-fallback .jdgm-widget {
         width: 100%;
       }
 
@@ -1582,28 +1579,22 @@
           document.body.appendChild(script);
         }
 
-        function mountJudgeMeReviewWidget(bundle) {
-          const reviewsSectionEl = document.getElementById("reviews");
-          const summaryAside = reviewsSectionEl?.querySelector(".review-summary");
-          const gridEl = document.getElementById("review-grid");
-          const countEl = document.getElementById("review-count");
-          if (!gridEl) return false;
-
+        function appendJudgeMeReviewWidget(bundle, gridEl) {
+          if (!gridEl) return;
           const shopDomain = String(bundle.shopDomain || "").trim();
           const publicToken = String(bundle.publicToken || "").trim();
           const externalId = String(product?.id || "")
             .replace(/^gid:\/\/shopify\/Product\//i, "")
             .trim();
-          if (!shopDomain || !publicToken || !externalId) return false;
+          if (!shopDomain || !publicToken || !externalId) return;
 
-          reviewsSectionEl?.classList.add("reviews-wrap--judgeme-widget");
-          if (summaryAside) summaryAside.hidden = true;
-          if (countEl) countEl.textContent = "Loading reviews…";
-
-          gridEl.innerHTML =
+          const host = document.createElement("div");
+          host.className = "judgeme-widget-fallback";
+          host.innerHTML =
             '<div class="jdgm-widget jdgm-review-widget jdgm-outside-widget" data-id="' +
             escapeGalleryText(externalId) +
             '"></div>';
+          gridEl.appendChild(host);
 
           window.jdgm = window.jdgm || {};
           window.jdgm.SHOP_DOMAIN = shopDomain;
@@ -1613,7 +1604,6 @@
           ensureJudgeMeWidgetScript(() => {
             if (typeof window.jdgm_preloader === "function") window.jdgm_preloader();
           });
-          return true;
         }
 
         function renderProductReviews(reviews) {
@@ -1623,13 +1613,8 @@
           const barsEl = document.getElementById("review-bars");
           const gridEl = document.getElementById("review-grid");
           const writeToggleEl = document.getElementById("write-review-toggle");
-          const reviewsSectionEl = document.getElementById("reviews");
-          const summaryAside = reviewsSectionEl?.querySelector(".review-summary");
           Object.keys(reviewPhotoGalleries).forEach((key) => delete reviewPhotoGalleries[key]);
           if (!summaryEl || !gridEl) return;
-
-          reviewsSectionEl?.classList.remove("reviews-wrap--judgeme-widget");
-          if (summaryAside) summaryAside.hidden = false;
 
           const bundle = reviews && typeof reviews === "object" ? reviews : {};
           const count = Number(bundle.count) || 0;
@@ -1684,9 +1669,11 @@
           if (writeToggleEl) writeToggleEl.hidden = false;
 
           if (!items.length) {
-            if (mountJudgeMeReviewWidget(bundle)) return;
             gridEl.innerHTML =
               '<div class="review-empty">No published reviews yet. Be the first to share your experience.</div>';
+            if (bundle.publicToken && bundle.shopDomain) {
+              appendJudgeMeReviewWidget(bundle, gridEl);
+            }
             return;
           }
 
