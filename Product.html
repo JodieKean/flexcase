@@ -440,6 +440,7 @@
         border: 1px solid #ececf1;
         border-radius: 18px;
         padding: 18px;
+        scroll-margin-top: 88px;
       }
 
       .review-compose-panel h3 {
@@ -1851,6 +1852,10 @@
             reviewsSection.scrollIntoView({ behavior: "smooth", block: "start" });
           }
 
+          function scrollToReviewComposePanel() {
+            panelEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+
           function setRating(value) {
             selectedRating = value;
             ratingEl.querySelectorAll("[data-rating]").forEach((btn) => {
@@ -1927,7 +1932,7 @@
 
           function openComposePanel() {
             panelEl.hidden = false;
-            panelEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            window.requestAnimationFrame(() => scrollToReviewComposePanel());
           }
 
           toggleEl.addEventListener("click", () => {
