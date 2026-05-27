@@ -217,40 +217,67 @@ async function storefrontGraphql(query, variables = {}) {
     });
   }
 
-  let response = await callWithHeader(primaryHeaderName);
-  if (response.status === 401) {
-    // Some stores use private storefront tokens that require a different auth header.
-    response = await callWithHeader(secondaryHeaderName);
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let response = await callWithHeader(primaryHeaderName);
+    if (response.status === 401) {
+      // Some stores use private storefront tokens that require a different auth header.
+      response = await callWithHeader(secondaryHeaderName);
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      let parsed = null;
+      try {
+        parsed = JSON.parse(body);
+      } catch (_) {
+        parsed = null;
+      }
+      const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
+      if (response.status === 401 || errorCode === "UNAUTHORIZED") {
+        throw new Error(
+          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+        );
+      }
+      const isThrottled =
+        response.status === 429 ||
+        errorCode === "THROTTLED" ||
+        /\bthrottled\b/i.test(body);
+      if (isThrottled && attempt < MAX_ATTEMPTS) {
+        const retryAfterHeader = Number(response.headers.get("retry-after") || "0");
+        const waitMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+          ? Math.max(250, Math.floor(retryAfterHeader * 1000))
+          : 250 * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
+    }
+
+    const payload = await response.json();
+    if (payload.errors?.length) {
+      const firstCode = payload.errors?.[0]?.extensions?.code || "";
+      if (firstCode === "UNAUTHORIZED") {
+        throw new Error(
+          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+        );
+      }
+      const hasThrottledError = payload.errors.some((e) => {
+        const code = String(e?.extensions?.code || "");
+        const message = String(e?.message || "");
+        return code === "THROTTLED" || /\bthrottled\b/i.test(message);
+      });
+      if (hasThrottledError && attempt < MAX_ATTEMPTS) {
+        const waitMs = 250 * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw new Error(payload.errors.map((e) => e.message).join(", "));
+    }
+    return payload.data;
   }
 
-  if (!response.ok) {
-    const body = await response.text();
-    let parsed = null;
-    try {
-      parsed = JSON.parse(body);
-    } catch (_) {
-      parsed = null;
-    }
-    const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
-    if (response.status === 401 || errorCode === "UNAUTHORIZED") {
-      throw new Error(
-        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-      );
-    }
-    throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
-  }
-
-  const payload = await response.json();
-  if (payload.errors?.length) {
-    const firstCode = payload.errors?.[0]?.extensions?.code || "";
-    if (firstCode === "UNAUTHORIZED") {
-      throw new Error(
-        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-      );
-    }
-    throw new Error(payload.errors.map((e) => e.message).join(", "));
-  }
-  return payload.data;
+  throw new Error("Storefront request failed after retries.");
 }
 
 function parseShopifyTags(raw) {

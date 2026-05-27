@@ -1473,7 +1473,7 @@
 
       function refreshOrderSummaryFromCart() {
         const items = readCartItems();
-        patchRenderedQuantities(items);
+        renderOrderLines(items);
         recalcTotals();
         window.flexcaseUpdateCartBadges?.();
         return items;
