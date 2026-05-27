@@ -2672,8 +2672,8 @@
 
         await renderRelatedProducts();
 
-        if (typeof window.flexcaseRefreshCartFromServer === "function") {
-          await window.flexcaseRefreshCartFromServer().catch(() => {});
+        if (typeof window.flexcaseEnsureCartReady === "function") {
+          await window.flexcaseEnsureCartReady().catch(() => {});
         }
 
         const qtyContainer = qtyValueEl?.closest(".qty");
@@ -2748,6 +2748,12 @@
             sessionAuthed = false;
           }
 
+          if (sessionAuthed) {
+            if (typeof window.flexcaseEnsureCartReady === "function") {
+              await window.flexcaseEnsureCartReady();
+            }
+          }
+
           if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
             const lineDetails = {
               productHandle: product.handle,
@@ -2784,9 +2790,7 @@
 
             sessionAuthed = await addProductToCart();
 
-            const itemsAfter = readCart();
-            const totalQty = itemsAfter.reduce((sum, line) => sum + Number(line.quantity || 0), 0);
-            addToCartBtn.textContent = `Added (${totalQty})`;
+            addToCartBtn.textContent = "Added";
             setTimeout(() => {
               addToCartInFlight = false;
               syncPurchaseControls();

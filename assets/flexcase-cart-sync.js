@@ -271,15 +271,18 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ merchandiseId: vid, quantity: q }),
         });
-        if (!r.ok) return false;
         const j = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          throw new Error(String(j?.error || "Could not add to cart. Try again."));
+        }
         if (Array.isArray(j.lines)) {
           writeLocalLines(reconcileServerLines(j.lines, vid));
         }
         updateBadges();
         return true;
-      } catch (_) {
-        return false;
+      } catch (error) {
+        if (error instanceof Error) throw error;
+        throw new Error("Could not add to cart. Try again.");
       }
     }
 
@@ -712,7 +715,11 @@
     }
   };
 
+  window.flexcaseEnsureCartReady = () => cartBootPromise || Promise.resolve();
+
   // --- Boot ---------------------------------------------------------------
+
+  let cartBootPromise = null;
 
   async function boot() {
     await maybeRunSchemaMigration().catch(() => {});
@@ -726,7 +733,7 @@
       }
     }
 
-    flexcaseSyncCartAfterAuth().catch(() => {});
+    await flexcaseSyncCartAfterAuth().catch(() => {});
 
     window.addEventListener("pagehide", () => {
       try {
@@ -748,9 +755,5 @@
     })();
   });
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => void boot().catch(() => {}));
-  } else {
-    void boot().catch(() => {});
-  }
+  cartBootPromise = boot().catch(() => {});
 })();
