@@ -368,6 +368,24 @@
         line-height: 1.35;
       }
 
+      .field-hint {
+        margin: 6px 0 0;
+        font-size: 0.82rem;
+        color: #6e6e73;
+        line-height: 1.35;
+      }
+
+      .ship-method-hint {
+        margin: 0 0 10px;
+        font-size: 0.86rem;
+        color: #6e6e73;
+        line-height: 1.4;
+      }
+
+      .ship-method-hint.error {
+        color: #b42318;
+      }
+
       .ship-card .rowline {
         margin-top: 10px;
         display: flex;
@@ -927,45 +945,17 @@
                   <select id="country" name="country" autocomplete="country" aria-label="Country or region">
                     <option value="" selected disabled>Loading countries…</option>
                   </select>
+                  <p class="field-hint" id="countryShipHint">Only countries we ship to are listed.</p>
                 </div>
               </div>
 
               <h2 class="section-title">Shipping Method</h2>
-              <input type="hidden" id="shippingMethod" name="shippingMethod" value="standard" />
+              <input type="hidden" id="shippingMethod" name="shippingMethod" value="" />
+              <input type="hidden" id="shippingMethodHandle" value="" />
+              <input type="hidden" id="shippingDeliveryGroupId" value="" />
+              <p class="ship-method-hint" id="shipMethodHint">Complete your address to see shipping rates.</p>
 
-              <div class="ship-method-row" role="radiogroup" aria-label="Shipping method">
-                <div
-                  class="ship-card selected"
-                  id="ship-standard-card"
-                  tabindex="0"
-                  role="radio"
-                  aria-checked="true"
-                  data-ship="standard"
-                >
-                  <h3>Standard Shipping</h3>
-                  <p>5–7 business days · Orders over RM200 ship free</p>
-                  <div class="rowline">
-                    <span>Delivery</span>
-                    <span class="price" id="standardShipLabel">RM10.00</span>
-                  </div>
-                </div>
-
-                <div
-                  class="ship-card"
-                  id="ship-express-card"
-                  tabindex="0"
-                  role="radio"
-                  aria-checked="false"
-                  data-ship="express"
-                >
-                  <h3>Express Shipping</h3>
-                  <p>2–3 days</p>
-                  <div class="rowline">
-                    <span>Delivery</span>
-                    <span class="price" id="expressShipLabel">RM30.00</span>
-                  </div>
-                </div>
-              </div>
+              <div class="ship-method-row" id="shipMethodRow" role="radiogroup" aria-label="Shipping method"></div>
 
               <div class="actions">
                 <button type="button" class="btn-secondary" id="back-to-contact">← Back</button>
@@ -1057,8 +1047,10 @@
         Number(n || 0).toLocaleString(SITE_LOCALE, { style: "currency", currency: currency || SITE_CURRENCY });
 
       const cartStorageKey = "flexcase.local.cart";
-      const standardRate = 10;
-      const expressRate = 30;
+      let shopifyShippingOptions = [];
+      let selectedShippingOptionId = "";
+      let shippingRatesRequestId = 0;
+      let shippingRatesDebounceTimer = null;
 
       const CHECKOUT_API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
       async function fetchCheckoutApi(path, options = {}) {
@@ -1084,75 +1076,35 @@
         return out;
       }
 
-      function dialFromIdd(iso2, idd) {
-        const root = String(idd?.root || "");
-        if (!root.startsWith("+")) return null;
-        const suf = Array.isArray(idd?.suffixes) ? idd.suffixes.map((s) => String(s)) : [];
-        if (suf.length === 0 || (suf.length === 1 && suf[0] === "")) return root;
-        const allThreeDigit = suf.length > 1 && suf.every((s) => /^\d{3}$/.test(s));
-        if (root === "+1" && allThreeDigit) return "+1";
-        if (root === "+7" && suf.length > 4) {
-          const numerish = suf.every((s) => /^\d{1,4}$/.test(s));
-          if (numerish) return "+7";
-        }
-        return `${root}${suf[0]}`;
-      }
+      const CHECKOUT_FALLBACK_COUNTRY_ROWS = [
+        { name: "Malaysia", iso2: "MY" },
+        { name: "Singapore", iso2: "SG" },
+        { name: "United Kingdom", iso2: "GB" },
+        { name: "United States", iso2: "US" },
+      ];
 
-      async function fetchDr5hnDialList() {
-        const response = await fetch(
-          "https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/json/countries.json"
-        );
-        if (!response.ok) throw new Error("dr5hn country list failed");
-        const data = await response.json();
-        const mapped = data
-          .map((c) => {
-            const name = c?.name;
-            const iso2 = String(c?.iso2 || "").toUpperCase();
-            const pc = String(c?.phonecode || "").replace(/\D/g, "");
-            if (!name || !iso2 || !pc) return null;
-            return { name, iso2, dial: `+${pc}` };
-          })
-          .filter(Boolean)
-          .sort((a, b) => a.name.localeCompare(b.name));
-        return dedupeCountriesByIso(mapped);
-      }
-
-      async function fetchRestCountriesDialList() {
-        const response = await fetch("https://restcountries.com/v3.1/all?fields=name,idd,cca2");
-        if (!response.ok) throw new Error("restcountries failed");
-        const data = await response.json();
-        const mapped = data
-          .map((country) => {
-            const name = country?.name?.common;
-            const iso2 = String(country?.cca2 || "").toUpperCase();
-            const dial = dialFromIdd(iso2, country?.idd);
-            if (!name || !iso2 || !dial) return null;
-            return { name, iso2, dial };
-          })
-          .filter(Boolean)
-          .sort((a, b) => a.name.localeCompare(b.name));
-        return dedupeCountriesByIso(mapped);
-      }
-
+      /** Countries this store ships to (Shopify Markets / shipping settings). */
       async function loadCheckoutCountryRows() {
+        const res = await fetchCheckoutApi("/api/checkout/countries");
+        let payload = {};
         try {
-          const rows = await fetchDr5hnDialList();
-          if (rows.length >= 100) return rows;
-        } catch (_) {}
-        try {
-          const rows = await fetchRestCountriesDialList();
-          if (rows.length) return rows;
-        } catch (_) {}
-        return [
-          { name: "Australia", iso2: "AU", dial: "+61" },
-          { name: "China", iso2: "CN", dial: "+86" },
-          { name: "Japan", iso2: "JP", dial: "+81" },
-          { name: "Malaysia", iso2: "MY", dial: "+60" },
-          { name: "Singapore", iso2: "SG", dial: "+65" },
-          { name: "South Korea", iso2: "KR", dial: "+82" },
-          { name: "United Kingdom", iso2: "GB", dial: "+44" },
-          { name: "United States", iso2: "US", dial: "+1" },
-        ];
+          payload = await res.json();
+        } catch (_) {
+          payload = {};
+        }
+        if (!res.ok) {
+          throw new Error(payload.error || "Unable to load shipping countries.");
+        }
+        const mapped = (Array.isArray(payload.countries) ? payload.countries : [])
+          .map((row) => ({
+            name: String(row?.name || "").trim(),
+            iso2: String(row?.isoCode || row?.iso2 || "").trim().toUpperCase(),
+          }))
+          .filter((row) => row.name && row.iso2);
+        if (!mapped.length) {
+          throw new Error("No shipping countries are configured in Shopify.");
+        }
+        return dedupeCountriesByIso(mapped);
       }
 
       /** Same option shape as account "Add new address" country select (iso2 value, country name label). */
@@ -1162,7 +1114,7 @@
         sel.textContent = "";
         const placeholder = document.createElement("option");
         placeholder.value = "";
-        placeholder.textContent = "Select your Country";
+        placeholder.textContent = "Select a shipping country";
         placeholder.disabled = true;
         placeholder.selected = true;
         sel.appendChild(placeholder);
@@ -1299,17 +1251,18 @@
           if (defaultAddr) applyDefaultAddressToShippingForm(defaultAddr);
         }
         setShippingStepRequiredFields();
+        scheduleLoadShippingRates();
       }
 
       const shippingMethodInput = document.getElementById("shippingMethod");
-      const shipStandardCard = document.getElementById("ship-standard-card");
-      const shipExpressCard = document.getElementById("ship-express-card");
-      const standardShipLabel = document.getElementById("standardShipLabel");
+      const shippingMethodHandleInput = document.getElementById("shippingMethodHandle");
+      const shippingDeliveryGroupIdInput = document.getElementById("shippingDeliveryGroupId");
+      const shipMethodRow = document.getElementById("shipMethodRow");
+      const shipMethodHint = document.getElementById("shipMethodHint");
 
       const reviewContactBody = document.getElementById("review-contact-body");
       const reviewAddressBody = document.getElementById("review-address-body");
       const reviewShipBody = document.getElementById("review-ship-body");
-      const expressShipLabel = document.getElementById("expressShipLabel");
 
       const subtotalDisplay = document.getElementById("subtotalDisplay");
       const shippingDisplay = document.getElementById("shippingDisplay");
@@ -1328,21 +1281,24 @@
        * We gate local cart clear on a credible checkout session URL from our API.
        */
       function isTrustedShopifyCheckoutHandoffUrl(raw) {
+        const s = String(raw || "").trim();
+        if (!s) return false;
         try {
-          const u = new URL(String(raw || "").trim());
+          const u = new URL(s);
           if (u.protocol !== "https:") return false;
           const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
           const low = path.toLowerCase();
+          if (low === "/" || low === "") return false;
+          if (low.includes("/checkouts/")) return true;
           if (low.includes("/cart/c/")) return true;
-          const segs = path.split("/").filter(Boolean);
-          const ci = segs.findIndex((s) => s.toLowerCase() === "checkouts");
-          if (ci >= 0 && segs.length >= ci + 3) return true;
-          if (
-            /^\/cart\/[\w.:,-]+$/i.test(path) &&
-            u.hostname.toLowerCase().endsWith(".myshopify.com")
-          ) {
-            return true;
-          }
+          if (u.hostname === "checkout.shopify.com") return true;
+          if (/^\/cart\/[\w.:,-]+$/i.test(path)) return true;
+          const host = u.hostname.toLowerCase();
+          const isStoreHost =
+            host.endsWith(".myshopify.com") ||
+            host === "flexcase.my" ||
+            host.endsWith(".flexcase.my");
+          if (isStoreHost && (low === "/cart" || low.startsWith("/cart/"))) return true;
           return false;
         } catch (_) {
           return false;
@@ -1658,6 +1614,9 @@
         if (step === 1) {
           syncContactStep1Panels();
         }
+        if (step === 2) {
+          void loadShippingRates();
+        }
       }
 
       function getCurrentStep() {
@@ -1698,22 +1657,162 @@
         return Math.max(0, baseSubtotal - discount);
       }
 
-      function getStandardShippingCost(subtotal) {
-        return subtotal >= 200 ? 0 : standardRate;
+      function escapeHtml(text) {
+        return String(text || "")
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;");
       }
 
-      function updateShippingMethodLabels() {
-        const subtotal = getSubtotal();
-        const std = getStandardShippingCost(subtotal);
-        standardShipLabel.textContent = std === 0 ? "Free" : money(std);
-        if (expressShipLabel) expressShipLabel.textContent = money(expressRate);
+      function getSelectedShippingOption() {
+        return shopifyShippingOptions.find((opt) => opt.id === selectedShippingOptionId) || null;
+      }
+
+      function formatShippingPriceLabel(opt) {
+        if (!opt) return "—";
+        const price = Number(opt.price || 0);
+        if (price <= 0) return "FREE";
+        return money(price, opt.currencyCode || SITE_CURRENCY);
+      }
+
+      function setShipMethodHint(text, isError) {
+        if (!shipMethodHint) return;
+        shipMethodHint.textContent = text || "";
+        shipMethodHint.classList.toggle("error", !!isError && !!text);
+      }
+
+      function renderShippingOptions(options) {
+        if (!shipMethodRow) return;
+        shipMethodRow.innerHTML = "";
+        for (const opt of options) {
+          const card = document.createElement("div");
+          card.className = "ship-card";
+          card.tabIndex = 0;
+          card.setAttribute("role", "radio");
+          card.dataset.shipId = opt.id;
+          const desc = String(opt.description || "").trim();
+          card.innerHTML = `
+            <h3>${escapeHtml(opt.title)}</h3>
+            ${desc ? `<p>${escapeHtml(desc)}</p>` : ""}
+            <div class="rowline">
+              <span>Delivery</span>
+              <span class="price">${escapeHtml(formatShippingPriceLabel(opt))}</span>
+            </div>`;
+          const pick = () => selectShopifyShippingOption(opt);
+          card.addEventListener("click", pick);
+          card.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              pick();
+            }
+          });
+          shipMethodRow.appendChild(card);
+        }
+      }
+
+      function selectShopifyShippingOption(opt) {
+        if (!opt?.id) return;
+        selectedShippingOptionId = opt.id;
+        shippingMethodInput.value = opt.id;
+        if (shippingMethodHandleInput) shippingMethodHandleInput.value = String(opt.handle || "");
+        if (shippingDeliveryGroupIdInput) {
+          shippingDeliveryGroupIdInput.value = String(opt.deliveryGroupId || "");
+        }
+        shipMethodRow?.querySelectorAll(".ship-card").forEach((card) => {
+          const selected = card.dataset.shipId === opt.id;
+          card.classList.toggle("selected", selected);
+          card.setAttribute("aria-checked", String(selected));
+        });
+        recalcTotals();
+      }
+
+      function scheduleLoadShippingRates() {
+        if (getCurrentStep() !== 2) return;
+        if (shippingRatesDebounceTimer) window.clearTimeout(shippingRatesDebounceTimer);
+        shippingRatesDebounceTimer = window.setTimeout(() => {
+          void loadShippingRates();
+        }, 400);
+      }
+
+      async function loadShippingRates() {
+        if (getCurrentStep() !== 2) return;
+        if (
+          !String(country?.value || "").trim() ||
+          !postal.value.trim() ||
+          !address1.value.trim() ||
+          !city.value.trim() ||
+          !state.value.trim()
+        ) {
+          shopifyShippingOptions = [];
+          selectedShippingOptionId = "";
+          shippingMethodInput.value = "";
+          if (shipMethodRow) shipMethodRow.innerHTML = "";
+          setShipMethodHint("Complete your address to see shipping rates.", false);
+          recalcTotals();
+          return;
+        }
+        const emailVal = getContactEmail();
+        if (!emailVal) {
+          setShipMethodHint("Complete contact details to see shipping rates.", false);
+          return;
+        }
+        const reqId = ++shippingRatesRequestId;
+        setShipMethodHint("Loading shipping rates…", false);
+        try {
+          const lines = buildNormalizedCheckoutLines(readCartItems());
+          if (!lines.length) {
+            setShipMethodHint("Your cart is empty.", true);
+            return;
+          }
+          const res = await fetchCheckoutApi("/api/checkout/shipping-rates", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lines, checkout: buildShopifyCheckoutPayload() }),
+          });
+          let data = {};
+          try {
+            data = await res.json();
+          } catch (_) {
+            data = {};
+          }
+          if (reqId !== shippingRatesRequestId) return;
+          if (!res.ok) {
+            shopifyShippingOptions = [];
+            selectedShippingOptionId = "";
+            if (shipMethodRow) shipMethodRow.innerHTML = "";
+            setShipMethodHint(data.error || "Unable to load shipping rates.", true);
+            recalcTotals();
+            return;
+          }
+          shopifyShippingOptions = Array.isArray(data.options) ? data.options : [];
+          setShipMethodHint("", false);
+          renderShippingOptions(shopifyShippingOptions);
+          const keep = shopifyShippingOptions.find((o) => o.id === selectedShippingOptionId);
+          selectShopifyShippingOption(keep || shopifyShippingOptions[0] || null);
+        } catch (_) {
+          if (reqId !== shippingRatesRequestId) return;
+          shopifyShippingOptions = [];
+          selectedShippingOptionId = "";
+          if (shipMethodRow) shipMethodRow.innerHTML = "";
+          setShipMethodHint("Unable to load shipping rates. Try again.", true);
+          recalcTotals();
+        }
+      }
+
+      function buildSelectedDeliveryForCheckout() {
+        const opt = getSelectedShippingOption();
+        if (!opt?.handle || !opt?.deliveryGroupId) return {};
+        return {
+          deliveryGroupId: opt.deliveryGroupId,
+          deliveryOptionHandle: opt.handle,
+        };
       }
 
       function getSelectedShippingCost() {
-        const subtotal = getSubtotal();
-        const method = shippingMethodInput.value;
-        if (method === "express") return expressRate;
-        return getStandardShippingCost(subtotal);
+        const opt = getSelectedShippingOption();
+        if (!opt) return 0;
+        return Number(opt.price || 0);
       }
 
       function recalcTotals() {
@@ -1722,10 +1821,10 @@
         const total = subtotal + shipping;
 
         subtotalDisplay.textContent = money(subtotal);
-        shippingDisplay.textContent = shipping === 0 ? "Free" : money(shipping);
+        const opt = getSelectedShippingOption();
+        shippingDisplay.textContent = opt ? formatShippingPriceLabel(opt) : "—";
         taxDisplay.textContent = "Tax is estimated on the payment page.";
         totalDisplay.textContent = money(total);
-        updateShippingMethodLabels();
       }
 
       function validateContact() {
@@ -1756,6 +1855,10 @@
           !String(country?.value || "").trim()
         ) {
           alert("Please complete every shipping address field before continuing.");
+          return false;
+        }
+        if (!getSelectedShippingOption()?.handle) {
+          alert("Please wait for shipping rates to load, then select a shipping method.");
           return false;
         }
         return true;
@@ -1797,13 +1900,11 @@
       }
 
       function buildShippingMethodText() {
-        const method = shippingMethodInput.value;
-        if (method === "express") {
-          return `Express Shipping (2–3 days)\n${money(expressRate)}`;
-        }
-        const subtotal = getSubtotal();
-        const std = getStandardShippingCost(subtotal);
-        return `Standard Shipping (5–7 days)\n${std === 0 ? "Free" : money(std)}`;
+        const opt = getSelectedShippingOption();
+        if (!opt) return "—";
+        const desc = String(opt.description || "").trim();
+        const line1 = desc ? `${opt.title} (${desc})` : opt.title;
+        return `${line1}\n${formatShippingPriceLabel(opt)}`;
       }
 
       function populateReview() {
@@ -1832,16 +1933,6 @@
             countryName: getCheckoutCountryDisplayName(),
           },
         };
-      }
-
-      function selectShipping(method) {
-        shippingMethodInput.value = method;
-        const isStandard = method === "standard";
-        shipStandardCard.classList.toggle("selected", isStandard);
-        shipExpressCard.classList.toggle("selected", !isStandard);
-        shipStandardCard.setAttribute("aria-checked", String(isStandard));
-        shipExpressCard.setAttribute("aria-checked", String(!isStandard));
-        recalcTotals();
       }
 
       modeGuestCard.addEventListener("click", () => selectMode("guest"));
@@ -1882,6 +1973,7 @@
         if (!validateContact()) return;
         setShippingStepRequiredFields();
         setStep(2);
+        void loadShippingRates();
       });
 
       document.getElementById("back-to-contact").addEventListener("click", () => setStep(1));
@@ -1912,20 +2004,10 @@
         recalcTotals();
       });
 
-      shipStandardCard.addEventListener("click", () => selectShipping("standard"));
-      shipExpressCard.addEventListener("click", () => selectShipping("express"));
-      shipStandardCard.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          selectShipping("standard");
-        }
-      });
-      shipExpressCard.addEventListener("keydown", (e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          selectShipping("express");
-        }
-      });
+      for (const el of [country, postal, address1, city, state]) {
+        el?.addEventListener("change", scheduleLoadShippingRates);
+        el?.addEventListener("blur", scheduleLoadShippingRates);
+      }
 
       document.querySelectorAll("[data-edit-step]").forEach((btn) => {
         btn.addEventListener("click", () => {
@@ -2131,7 +2213,11 @@
           const res = await fetchCheckoutApi("/api/checkout/shopify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ lines, checkout: buildShopifyCheckoutPayload() }),
+            body: JSON.stringify({
+              lines,
+              checkout: buildShopifyCheckoutPayload(),
+              selectedDelivery: buildSelectedDeliveryForCheckout(),
+            }),
           });
           let data = {};
           try {
@@ -2174,7 +2260,6 @@
         writeCartItems(readCartItems());
         renderOrderLines(readCartItems());
         selectMode("guest");
-        selectShipping("standard");
         recalcTotals();
 
         let bootEarly = "";
@@ -2189,13 +2274,6 @@
           syncContactStep1Panels();
         }
 
-        const fallbackCountryRows = [
-          { name: "Malaysia", iso2: "MY", dial: "+60" },
-          { name: "Singapore", iso2: "SG", dial: "+65" },
-          { name: "United Kingdom", iso2: "GB", dial: "+44" },
-          { name: "United States", iso2: "US", dial: "+1" },
-        ];
-
         const [countryRowsResult, sessionRes] = await Promise.all([
           loadCheckoutCountryRows().catch(() => null),
           fetchCheckoutApi("/api/customer/session"),
@@ -2209,7 +2287,7 @@
             throw new Error("no country rows");
           }
         } catch (_) {
-          fillCheckoutCountrySelect(fallbackCountryRows);
+          fillCheckoutCountrySelect(CHECKOUT_FALLBACK_COUNTRY_ROWS);
         }
 
         let sessionPayload = {};

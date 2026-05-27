@@ -3212,6 +3212,61 @@ const STOREFRONT_CART_DELIVERY_REPLACE = `
   }
 `;
 
+const STOREFRONT_CART_DELIVERY_OPTIONS_QUERY = `
+  query FlexcaseCartDeliveryOptions($id: ID!) {
+    cart(id: $id) {
+      deliveryGroups(first: 5) {
+        edges {
+          node {
+            id
+            deliveryOptions {
+              handle
+              title
+              description
+              estimatedCost {
+                amount
+                currencyCode
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+`;
+
+const STOREFRONT_CART_SELECTED_DELIVERY_UPDATE = `
+  mutation FlexcaseCartSelectedDeliveryOptionsUpdate(
+    $cartId: ID!
+    $selectedDeliveryOptions: [CartSelectedDeliveryOptionInput!]!
+  ) {
+    cartSelectedDeliveryOptionsUpdate(cartId: $cartId, selectedDeliveryOptions: $selectedDeliveryOptions) {
+      cart {
+        id
+      }
+      userErrors {
+        field
+        message
+      }
+    }
+  }
+`;
+
+const STOREFRONT_AVAILABLE_COUNTRIES_QUERY = `
+  query FlexcaseAvailableCountries {
+    localization {
+      availableCountries {
+        isoCode
+        name
+      }
+    }
+  }
+`;
+
+let cachedCheckoutCountries = null;
+let cachedCheckoutCountriesAt = 0;
+const CHECKOUT_COUNTRIES_CACHE_MS = 60 * 60 * 1000;
+
 /** Absolute URL; rejects storefront home (/) which Shopify returns when checkout is not ready. */
 function resolveStorefrontCheckoutUrl(raw) {
   let s = String(raw || "").trim();
@@ -3265,6 +3320,103 @@ function pickShopifyCheckoutRedirectUrl(graphqlCheckoutUrl, fallbackLines) {
     return resolved;
   }
   return buildShopifyCartPermalink(fallbackLines);
+}
+
+function getTrustedCheckoutHostnames() {
+  const hosts = new Set();
+  const shopSub = String(SHOP_FROM_ENV || "")
+    .trim()
+    .replace(/\.myshopify\.com$/i, "");
+  if (shopSub) {
+    hosts.add(`${shopSub}.myshopify.com`.toLowerCase());
+  }
+  try {
+    hosts.add(new URL(FRONTEND_ORIGIN).hostname.toLowerCase());
+  } catch (_) {
+    /* ignore */
+  }
+  return hosts;
+}
+
+function isTrustedStoreCheckoutHost(hostname) {
+  const host = String(hostname || "").toLowerCase();
+  if (!host) return false;
+  if (getTrustedCheckoutHostnames().has(host)) return true;
+  return host.endsWith(".myshopify.com");
+}
+
+/** Matches URLs we return from /api/checkout/shopify and accept on checkout.html before redirect. */
+function isTrustedShopifyCheckoutHandoffUrl(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return false;
+  try {
+    const u = new URL(s);
+    if (u.protocol !== "https:") return false;
+    const path = (u.pathname || "/").replace(/\/+$/, "") || "/";
+    const low = path.toLowerCase();
+    if (low === "/" || low === "") return false;
+    if (low.includes("/checkouts/")) return true;
+    if (low.includes("/cart/c/")) return true;
+    if (u.hostname === "checkout.shopify.com") return true;
+    if (/^\/cart\/[\w.:,-]+$/i.test(path)) return true;
+    if (isTrustedStoreCheckoutHost(u.hostname) && (low === "/cart" || low.startsWith("/cart/"))) {
+      return true;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+function finalizeCheckoutHandoffUrl(graphqlCheckoutUrl, fallbackLines, checkout) {
+  const resolved = resolveStorefrontCheckoutUrl(graphqlCheckoutUrl);
+  const candidates = [
+    mergeFlexcaseCheckoutPrefillQueryParams(pickShopifyCheckoutRedirectUrl(graphqlCheckoutUrl, fallbackLines), checkout),
+    resolved ? mergeFlexcaseCheckoutPrefillQueryParams(resolved, checkout) : "",
+    mergeFlexcaseCheckoutPrefillQueryParams(buildShopifyCartPermalink(fallbackLines), checkout),
+  ];
+  for (const url of candidates) {
+    if (isTrustedShopifyCheckoutHandoffUrl(url)) return url;
+  }
+  return "";
+}
+
+async function fetchShopifyAvailableCountries() {
+  const now = Date.now();
+  if (cachedCheckoutCountries && now - cachedCheckoutCountriesAt < CHECKOUT_COUNTRIES_CACHE_MS) {
+    return cachedCheckoutCountries;
+  }
+  const data = await storefrontGraphql(STOREFRONT_AVAILABLE_COUNTRIES_QUERY);
+  const rows = (data?.localization?.availableCountries || [])
+    .map((row) => ({
+      isoCode: String(row?.isoCode || "").trim().toUpperCase(),
+      name: String(row?.name || "").trim(),
+    }))
+    .filter((row) => row.isoCode && row.name)
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (!rows.length) {
+    throw new Error("Shopify did not return any available countries for this store.");
+  }
+  cachedCheckoutCountries = rows;
+  cachedCheckoutCountriesAt = now;
+  return rows;
+}
+
+async function handleCheckoutCountries(req, res) {
+  try {
+    if (!STOREFRONT_ACCESS_TOKEN || !SHOP_FROM_ENV) {
+      json(res, 503, { error: "Storefront checkout is not configured on the server." });
+      return;
+    }
+    const countries = await fetchShopifyAvailableCountries();
+    res.writeHead(200, {
+      "Content-Type": "application/json; charset=utf-8",
+      "Cache-Control": "public, max-age=3600",
+    });
+    res.end(JSON.stringify({ countries }));
+  } catch (error) {
+    json(res, 400, { error: error.message || "Unable to load shipping countries." });
+  }
 }
 
 /**
@@ -3352,6 +3504,130 @@ function validateFlexcaseCheckoutPayload(checkout) {
   err = missing("Country", ship.countryCode);
   if (err) return err;
   return "";
+}
+
+function parseStorefrontDeliveryOptions(cart) {
+  const options = [];
+  for (const edge of cart?.deliveryGroups?.edges || []) {
+    const groupId = String(edge?.node?.id || "").trim();
+    for (const opt of edge?.node?.deliveryOptions || []) {
+      const handle = String(opt?.handle || "").trim();
+      const title = String(opt?.title || "").trim();
+      if (!handle || !title) continue;
+      const amount = Number(opt?.estimatedCost?.amount || 0);
+      const currencyCode = String(opt?.estimatedCost?.currencyCode || SHOP_CURRENCY_CODE).trim();
+      options.push({
+        deliveryGroupId: groupId,
+        handle,
+        title,
+        description: String(opt?.description || "").trim(),
+        price: Number.isFinite(amount) ? amount : 0,
+        currencyCode: currencyCode || SHOP_CURRENCY_CODE,
+      });
+    }
+  }
+  return options;
+}
+
+function filterDeliveryOptionsForCountry(allOptions, countryCode) {
+  const cc = String(countryCode || "").trim().toUpperCase();
+  const isMalaysia = cc === "MY";
+  const rules = isMalaysia
+    ? [
+        { id: "east-malaysia", match: (title) => /east\s*malaysia/i.test(title) },
+        { id: "west-malaysia", match: (title) => /west\s*malaysia/i.test(title) },
+      ]
+    : [
+        {
+          id: "international",
+          match: (title) =>
+            /^international$/i.test(title) ||
+            (/\binternational\b/i.test(title) && !/express/i.test(title)),
+        },
+        { id: "express", match: (title) => /express/i.test(title) },
+      ];
+
+  const picked = [];
+  for (const rule of rules) {
+    const found = allOptions.find((opt) => rule.match(opt.title));
+    if (found) {
+      picked.push({ ...found, id: rule.id });
+    }
+  }
+  return picked;
+}
+
+async function fetchShopifyDeliveryOptionsForCheckout(lines, checkout) {
+  const checkoutPayload = {
+    email: String(checkout?.email || "").trim(),
+    phone: String(checkout?.phone || "").trim(),
+    shipping: checkout?.shipping || {},
+  };
+  const { cartId } = await createFreshStorefrontCartFromCheckoutLines(lines, checkoutPayload);
+  await applyFlexcaseCheckoutToStorefrontCart(cartId, checkoutPayload);
+  const data = await storefrontGraphql(STOREFRONT_CART_DELIVERY_OPTIONS_QUERY, { id: cartId });
+  const allOptions = parseStorefrontDeliveryOptions(data?.cart);
+  const countryCode = String(checkout?.shipping?.countryCode || "").trim().toUpperCase();
+  return {
+    cartId,
+    countryCode,
+    options: filterDeliveryOptionsForCountry(allOptions, countryCode),
+    allOptions,
+  };
+}
+
+async function applySelectedDeliveryOptionToCart(cartId, deliveryGroupId, deliveryOptionHandle) {
+  const groupId = String(deliveryGroupId || "").trim();
+  const handle = String(deliveryOptionHandle || "").trim();
+  if (!groupId || !handle) return;
+  const data = await storefrontGraphql(STOREFRONT_CART_SELECTED_DELIVERY_UPDATE, {
+    cartId,
+    selectedDeliveryOptions: [{ deliveryGroupId: groupId, deliveryOptionHandle: handle }],
+  });
+  const errs =
+    data?.cartSelectedDeliveryOptionsUpdate?.userErrors?.filter((e) => e?.message) || [];
+  if (errs.length) {
+    throw new Error(errs.map((e) => e.message).join(", "));
+  }
+}
+
+async function handleCheckoutShippingRates(req, res) {
+  try {
+    if (!STOREFRONT_ACCESS_TOKEN || !SHOP_FROM_ENV) {
+      json(res, 503, { error: "Storefront checkout is not configured on the server." });
+      return;
+    }
+    const body = await readJsonBody(req);
+    const checkout = body.checkout || {};
+    const checkoutErr = validateFlexcaseCheckoutPayload(checkout);
+    if (checkoutErr) {
+      json(res, 400, { error: checkoutErr });
+      return;
+    }
+    const lines = extractCheckoutLinesFromBody(body);
+    if (!lines.length) {
+      json(res, 400, { error: "Your cart is empty. Add items before checkout." });
+      return;
+    }
+    const result = await fetchShopifyDeliveryOptionsForCheckout(lines, checkout);
+    if (!result.options.length) {
+      json(res, 400, {
+        error:
+          result.countryCode === "MY"
+            ? "No Malaysia shipping rates found. Check East/West Malaysia zones in Shopify Shipping."
+            : "No international shipping rates found. Check International and Express Shipping in Shopify.",
+        countryCode: result.countryCode,
+        options: [],
+      });
+      return;
+    }
+    json(res, 200, {
+      countryCode: result.countryCode,
+      options: result.options,
+    });
+  } catch (error) {
+    json(res, 400, { error: error.message || "Unable to load shipping rates." });
+  }
 }
 
 async function applyFlexcaseCheckoutToStorefrontCart(cartId, checkout) {
@@ -4091,12 +4367,20 @@ async function handleShopifyCheckout(req, res) {
             errMsg = e.message || "Unable to apply checkout details.";
             return;
           }
+          const selectedDelivery = body.selectedDelivery || {};
+          try {
+            await applySelectedDeliveryOptionToCart(
+              cartId,
+              selectedDelivery.deliveryGroupId,
+              selectedDelivery.deliveryOptionHandle
+            );
+          } catch (e) {
+            errMsg = e.message || "Unable to apply selected shipping method.";
+            return;
+          }
           const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
           const fallbackLines = mapStorefrontCartToClientLines(refreshed?.cart);
-          checkoutUrl = mergeFlexcaseCheckoutPrefillQueryParams(
-            pickShopifyCheckoutRedirectUrl(refreshed?.cart?.checkoutUrl, fallbackLines),
-            checkout
-          );
+          checkoutUrl = finalizeCheckoutHandoffUrl(refreshed?.cart?.checkoutUrl, fallbackLines, checkout);
           const totalQuantity = Number(refreshed?.cart?.totalQuantity || 0);
           if (!totalQuantity || !checkoutUrl) {
             errMsg =
@@ -4129,31 +4413,28 @@ async function handleShopifyCheckout(req, res) {
       return;
     }
 
-    const deliveryAddress = buildCartDeliveryAddressInput(checkout.shipping || {});
-    const replaceRes = await storefrontGraphql(STOREFRONT_CART_DELIVERY_REPLACE, {
-      cartId,
-      addresses: [
-        {
-          selected: true,
-          oneTimeUse: true,
-          validationStrategy: "COUNTRY_CODE_ONLY",
-          address: { deliveryAddress },
-        },
-      ],
-    });
-    const repErrs = replaceRes?.cartDeliveryAddressesReplace?.userErrors?.filter((e) => e?.message) || [];
-    if (repErrs.length) {
-      json(res, 400, { error: repErrs.map((e) => e.message).join(", ") });
+    try {
+      await applyFlexcaseCheckoutToStorefrontCart(cartId, checkout);
+    } catch (e) {
+      json(res, 400, { error: e.message || "Unable to apply checkout details." });
+      return;
+    }
+    const selectedDelivery = body.selectedDelivery || {};
+    try {
+      await applySelectedDeliveryOptionToCart(
+        cartId,
+        selectedDelivery.deliveryGroupId,
+        selectedDelivery.deliveryOptionHandle
+      );
+    } catch (e) {
+      json(res, 400, { error: e.message || "Unable to apply selected shipping method." });
       return;
     }
 
     const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
     const cart = refreshed?.cart;
     const fallbackLines = [...byVariant.entries()].map(([variantId, quantity]) => ({ variantId, quantity }));
-    const checkoutUrl = mergeFlexcaseCheckoutPrefillQueryParams(
-      pickShopifyCheckoutRedirectUrl(cart?.checkoutUrl, fallbackLines),
-      checkout
-    );
+    const checkoutUrl = finalizeCheckoutHandoffUrl(cart?.checkoutUrl, fallbackLines, checkout);
     const totalQuantity = Number(cart?.totalQuantity || 0);
     if (!totalQuantity || !checkoutUrl) {
       json(res, 400, {
@@ -4463,6 +4744,10 @@ const server = http.createServer(async (req, res) => {
     await handleCartClear(req, res);
     return;
   }
+  if (req.method === "POST" && reqUrl.pathname === "/api/checkout/shipping-rates") {
+    await handleCheckoutShippingRates(req, res);
+    return;
+  }
   if (req.method === "POST" && reqUrl.pathname === "/api/checkout/shopify") {
     await handleShopifyCheckout(req, res);
     return;
@@ -4559,6 +4844,10 @@ const server = http.createServer(async (req, res) => {
   }
   if (reqUrl.pathname === "/api/catalog") {
     await handleCatalog(req, res);
+    return;
+  }
+  if (reqUrl.pathname === "/api/checkout/countries") {
+    await handleCheckoutCountries(req, res);
     return;
   }
   if (reqUrl.pathname.startsWith("/review-media/")) {
