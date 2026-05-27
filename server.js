@@ -3267,9 +3267,7 @@ const STOREFRONT_AVAILABLE_COUNTRIES_QUERY = `
 
 let cachedCheckoutCountries = null;
 let cachedCheckoutCountriesAt = 0;
-let cachedProbeStorefrontVariantId = "";
-const CHECKOUT_COUNTRIES_CACHE_MS = 6 * 60 * 60 * 1000;
-const SHIPPING_COUNTRY_PROBE_CONCURRENCY = 4;
+const CHECKOUT_COUNTRIES_CACHE_MS = 10 * 60 * 1000;
 
 /** Absolute URL; rejects storefront home (/) which Shopify returns when checkout is not ready. */
 function resolveStorefrontCheckoutUrl(raw) {
@@ -3684,14 +3682,10 @@ async function fetchShopifyAvailableCountries() {
   if (!rows.length) {
     throw new Error("Shopify did not return any available countries for this store.");
   }
-  const probeVariantId = await getProbeStorefrontVariantId();
-  const shippable = await filterCountriesWithShippableRates(rows, probeVariantId);
-  if (!shippable.length) {
-    throw new Error("No countries with configured shipping rates were found in Shopify.");
-  }
-  cachedCheckoutCountries = shippable;
+  const sorted = rows.sort((a, b) => a.name.localeCompare(b.name));
+  cachedCheckoutCountries = sorted;
   cachedCheckoutCountriesAt = now;
-  return shippable;
+  return sorted;
 }
 
 async function fetchShopifyDeliveryOptionsForCheckout(lines, checkout) {
