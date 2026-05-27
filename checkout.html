@@ -1050,6 +1050,7 @@
       let selectedShippingOptionId = "";
       let shippingRatesRequestId = 0;
       let shippingRatesDebounceTimer = null;
+      let lastLoadedShippingAddressKey = "";
       const MALAYSIA_FREE_SHIPPING_THRESHOLD = 200;
 
       const CHECKOUT_API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -1790,6 +1791,8 @@
 
       function scheduleLoadShippingRates() {
         if (getCurrentStep() !== 2) return;
+        const addressKey = getShippingAddressLoadKey();
+        if (addressKey && addressKey === lastLoadedShippingAddressKey && shopifyShippingOptions.length) return;
         clearShippingMethodOptions();
         setShipMethodHint("Loading shipping rates…", false);
         if (shippingRatesDebounceTimer) window.clearTimeout(shippingRatesDebounceTimer);
@@ -1798,8 +1801,23 @@
         }, 400);
       }
 
+      function getShippingAddressLoadKey() {
+        return [
+          String(country?.value || "").trim().toUpperCase(),
+          postal.value.trim(),
+          address1.value.trim(),
+          city.value.trim(),
+          state.value.trim(),
+          getContactEmail().trim().toLowerCase(),
+        ].join("|");
+      }
+
       async function loadShippingRates() {
         if (getCurrentStep() !== 2) return;
+        const addressKey = getShippingAddressLoadKey();
+        if (addressKey && addressKey === lastLoadedShippingAddressKey && shopifyShippingOptions.length) {
+          return;
+        }
         if (
           !String(country?.value || "").trim() ||
           !postal.value.trim() ||
@@ -1808,12 +1826,14 @@
           !state.value.trim()
         ) {
           clearShippingMethodOptions();
+          lastLoadedShippingAddressKey = "";
           setShipMethodHint("Complete your address to see shipping rates.", false);
           return;
         }
         const emailVal = getContactEmail();
         if (!emailVal) {
           clearShippingMethodOptions();
+          lastLoadedShippingAddressKey = "";
           setShipMethodHint("Complete contact details to see shipping rates.", false);
           return;
         }
@@ -1844,6 +1864,7 @@
             return;
           }
           shopifyShippingOptions = Array.isArray(data.options) ? data.options : [];
+          lastLoadedShippingAddressKey = addressKey;
           setShipMethodHint("", false);
           renderShippingOptions(shopifyShippingOptions);
           const keep = shopifyShippingOptions.find((o) => o.id === selectedShippingOptionId);
@@ -2062,7 +2083,6 @@
 
       for (const el of [country, postal, address1, city, state]) {
         el?.addEventListener("change", scheduleLoadShippingRates);
-        el?.addEventListener("blur", scheduleLoadShippingRates);
       }
 
       document.querySelectorAll("[data-edit-step]").forEach((btn) => {
