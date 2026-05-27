@@ -955,7 +955,7 @@
               <input type="hidden" id="shippingDeliveryGroupId" value="" />
               <p class="ship-method-hint" id="shipMethodHint">Complete your address to see shipping rates.</p>
 
-              <div class="ship-method-row" id="shipMethodRow" role="radiogroup" aria-label="Shipping method"></div>
+              <div class="ship-method-row hidden" id="shipMethodRow" role="radiogroup" aria-label="Shipping method"></div>
 
               <div class="actions">
                 <button type="button" class="btn-secondary" id="back-to-contact">← Back</button>
@@ -1051,6 +1051,8 @@
       let selectedShippingOptionId = "";
       let shippingRatesRequestId = 0;
       let shippingRatesDebounceTimer = null;
+      const MALAYSIA_FREE_SHIPPING_THRESHOLD = 200;
+      const MALAYSIA_FREE_SHIPPING_NOTE = "Orders over RM200 ship free";
 
       const CHECKOUT_API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
       async function fetchCheckoutApi(path, options = {}) {
@@ -1669,11 +1671,57 @@
         return shopifyShippingOptions.find((opt) => opt.id === selectedShippingOptionId) || null;
       }
 
+      function isMalaysiaCheckoutCountry() {
+        return String(country?.value || "").trim().toUpperCase() === "MY";
+      }
+
+      function isMalaysiaDomesticShippingOption(opt) {
+        if (!opt) return false;
+        const id = String(opt.id || "").toLowerCase();
+        if (id === "east-malaysia" || id === "west-malaysia") return true;
+        if (!isMalaysiaCheckoutCountry()) return false;
+        const title = String(opt.title || "");
+        return /east\s*malaysia|west\s*malaysia/i.test(title) && !/express/i.test(title);
+      }
+
+      function qualifiesForMalaysiaFreeShipping(opt) {
+        return (
+          isMalaysiaDomesticShippingOption(opt) &&
+          getSubtotal() >= MALAYSIA_FREE_SHIPPING_THRESHOLD
+        );
+      }
+
+      function getEffectiveShippingPrice(opt) {
+        if (!opt) return 0;
+        if (qualifiesForMalaysiaFreeShipping(opt)) return 0;
+        return Number(opt.price || 0);
+      }
+
+      function buildShippingOptionDescription(opt) {
+        const parts = [];
+        const desc = String(opt?.description || "").trim();
+        if (desc) parts.push(desc);
+        if (isMalaysiaDomesticShippingOption(opt) && !/rm\s*200/i.test(desc)) {
+          parts.push(MALAYSIA_FREE_SHIPPING_NOTE);
+        }
+        return parts.join(" · ");
+      }
+
       function formatShippingPriceLabel(opt) {
         if (!opt) return "—";
-        const price = Number(opt.price || 0);
-        if (price <= 0) return "FREE";
+        const price = getEffectiveShippingPrice(opt);
+        if (price <= 0) return "Free";
         return money(price, opt.currencyCode || SITE_CURRENCY);
+      }
+
+      function refreshShippingOptionPriceLabels() {
+        if (!shipMethodRow) return;
+        const optById = new Map(shopifyShippingOptions.map((o) => [o.id, o]));
+        shipMethodRow.querySelectorAll(".ship-card").forEach((card) => {
+          const opt = optById.get(card.dataset.shipId);
+          const priceEl = card.querySelector(".price");
+          if (opt && priceEl) priceEl.textContent = formatShippingPriceLabel(opt);
+        });
       }
 
       function setShipMethodHint(text, isError) {
@@ -1682,16 +1730,36 @@
         shipMethodHint.classList.toggle("error", !!isError && !!text);
       }
 
+      function setShipMethodRowVisible(visible) {
+        if (!shipMethodRow) return;
+        shipMethodRow.classList.toggle("hidden", !visible);
+      }
+
+      function clearShippingMethodOptions() {
+        shopifyShippingOptions = [];
+        selectedShippingOptionId = "";
+        shippingMethodInput.value = "";
+        if (shippingMethodHandleInput) shippingMethodHandleInput.value = "";
+        if (shippingDeliveryGroupIdInput) shippingDeliveryGroupIdInput.value = "";
+        if (shipMethodRow) shipMethodRow.innerHTML = "";
+        setShipMethodRowVisible(false);
+        recalcTotals();
+      }
+
       function renderShippingOptions(options) {
         if (!shipMethodRow) return;
         shipMethodRow.innerHTML = "";
+        if (!options?.length) {
+          setShipMethodRowVisible(false);
+          return;
+        }
         for (const opt of options) {
           const card = document.createElement("div");
           card.className = "ship-card";
           card.tabIndex = 0;
           card.setAttribute("role", "radio");
           card.dataset.shipId = opt.id;
-          const desc = String(opt.description || "").trim();
+          const desc = buildShippingOptionDescription(opt);
           card.innerHTML = `
             <h3>${escapeHtml(opt.title)}</h3>
             ${desc ? `<p>${escapeHtml(desc)}</p>` : ""}
@@ -1709,6 +1777,7 @@
           });
           shipMethodRow.appendChild(card);
         }
+        setShipMethodRowVisible(true);
       }
 
       function selectShopifyShippingOption(opt) {
@@ -1729,6 +1798,8 @@
 
       function scheduleLoadShippingRates() {
         if (getCurrentStep() !== 2) return;
+        clearShippingMethodOptions();
+        setShipMethodHint("Loading shipping rates…", false);
         if (shippingRatesDebounceTimer) window.clearTimeout(shippingRatesDebounceTimer);
         shippingRatesDebounceTimer = window.setTimeout(() => {
           void loadShippingRates();
@@ -1744,20 +1815,18 @@
           !city.value.trim() ||
           !state.value.trim()
         ) {
-          shopifyShippingOptions = [];
-          selectedShippingOptionId = "";
-          shippingMethodInput.value = "";
-          if (shipMethodRow) shipMethodRow.innerHTML = "";
+          clearShippingMethodOptions();
           setShipMethodHint("Complete your address to see shipping rates.", false);
-          recalcTotals();
           return;
         }
         const emailVal = getContactEmail();
         if (!emailVal) {
+          clearShippingMethodOptions();
           setShipMethodHint("Complete contact details to see shipping rates.", false);
           return;
         }
         const reqId = ++shippingRatesRequestId;
+        clearShippingMethodOptions();
         setShipMethodHint("Loading shipping rates…", false);
         try {
           const lines = buildNormalizedCheckoutLines(readCartItems());
@@ -1778,11 +1847,8 @@
           }
           if (reqId !== shippingRatesRequestId) return;
           if (!res.ok) {
-            shopifyShippingOptions = [];
-            selectedShippingOptionId = "";
-            if (shipMethodRow) shipMethodRow.innerHTML = "";
+            clearShippingMethodOptions();
             setShipMethodHint(data.error || "Unable to load shipping rates.", true);
-            recalcTotals();
             return;
           }
           shopifyShippingOptions = Array.isArray(data.options) ? data.options : [];
@@ -1792,11 +1858,8 @@
           selectShopifyShippingOption(keep || shopifyShippingOptions[0] || null);
         } catch (_) {
           if (reqId !== shippingRatesRequestId) return;
-          shopifyShippingOptions = [];
-          selectedShippingOptionId = "";
-          if (shipMethodRow) shipMethodRow.innerHTML = "";
+          clearShippingMethodOptions();
           setShipMethodHint("Unable to load shipping rates. Try again.", true);
-          recalcTotals();
         }
       }
 
@@ -1812,7 +1875,7 @@
       function getSelectedShippingCost() {
         const opt = getSelectedShippingOption();
         if (!opt) return 0;
-        return Number(opt.price || 0);
+        return getEffectiveShippingPrice(opt);
       }
 
       function recalcTotals() {
@@ -1825,6 +1888,7 @@
         shippingDisplay.textContent = opt ? formatShippingPriceLabel(opt) : "—";
         taxDisplay.textContent = "Tax is estimated on the payment page.";
         totalDisplay.textContent = money(total);
+        refreshShippingOptionPriceLabels();
       }
 
       function validateContact() {
@@ -1902,7 +1966,7 @@
       function buildShippingMethodText() {
         const opt = getSelectedShippingOption();
         if (!opt) return "—";
-        const desc = String(opt.description || "").trim();
+        const desc = buildShippingOptionDescription(opt);
         const line1 = desc ? `${opt.title} (${desc})` : opt.title;
         return `${line1}\n${formatShippingPriceLabel(opt)}`;
       }
