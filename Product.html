@@ -392,6 +392,7 @@
         display: grid;
         grid-template-columns: 240px 1fr;
         gap: 18px;
+        scroll-margin-top: 88px;
       }
 
       .review-summary {
@@ -1844,6 +1845,12 @@
             }
           }
 
+          function scrollToReviewsSection() {
+            const reviewsSection = document.getElementById("reviews");
+            if (!reviewsSection) return;
+            reviewsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+          }
+
           function setRating(value) {
             selectedRating = value;
             ratingEl.querySelectorAll("[data-rating]").forEach((btn) => {
@@ -2008,6 +2015,7 @@
             }
 
             if (submitEl) submitEl.disabled = true;
+            let submitSucceeded = false;
             showReviewSubmitOverlay();
             try {
               const formData = new FormData();
@@ -2058,18 +2066,20 @@
               if (data.reviews && typeof data.reviews === "object") {
                 product.reviews = data.reviews;
                 renderProductReviews(product.reviews);
-                const newestCard = document.querySelector("#review-grid .review-card");
-                newestCard?.scrollIntoView({ behavior: "smooth", block: "nearest" });
               }
               formEl.reset();
               setRating(0);
               clearReviewMedia();
               closeComposePanel();
+              submitSucceeded = true;
             } catch (error) {
               setComposeMessage(error.message || "Could not submit review.", "error");
             } finally {
               hideReviewSubmitOverlay();
               if (submitEl) submitEl.disabled = false;
+              if (submitSucceeded) {
+                window.setTimeout(() => scrollToReviewsSection(), 120);
+              }
             }
           });
         }
