@@ -2135,6 +2135,30 @@
 
         initReviewCompose();
 
+        function scrollToReviewsFromUrl() {
+          const params = new URLSearchParams(window.location.search);
+          const wantsCompose =
+            params.get("review") === "1" || params.get("writeReview") === "1";
+          const hash = String(window.location.hash || "").toLowerCase();
+          const reviewsEl = document.getElementById("reviews");
+          if (!reviewsEl) return;
+          if (hash !== "#reviews" && !wantsCompose) return;
+
+          const scrollToReviews = () => {
+            reviewsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+          };
+
+          requestAnimationFrame(() => {
+            scrollToReviews();
+            if (!wantsCompose) return;
+            const panelEl = document.getElementById("review-compose-panel");
+            const toggleEl = document.getElementById("write-review-toggle");
+            if (panelEl && toggleEl && panelEl.hidden) toggleEl.click();
+          });
+        }
+
+        scrollToReviewsFromUrl();
+
         const variants = product.variants?.nodes || [];
         let selectedOptionValues = {};
         let selectedVariant = variants[0] || null;

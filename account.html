@@ -1776,7 +1776,7 @@
         if (reviewBtn) {
           const url = String(reviewBtn.dataset.reviewUrl || "").trim();
           if (url) {
-            window.open(url, "_blank", "noopener,noreferrer");
+            window.location.assign(url);
           } else {
             window.alert("Reviews are not available for this order yet.");
           }
@@ -2492,14 +2492,17 @@
             : "-";
           const status = mapFulfillmentStatus(order.fulfillmentStatus);
           const orderNumber = String(order.name || "").trim() || "Order";
-          const resolveItemReviewUrl = (item) => {
-            if (!item) return "";
-            if (item.productUrl) return String(item.productUrl);
-            if (item.productHandle && FRONTEND_BASE) {
-              return `${FRONTEND_BASE}/Product.html?handle=${encodeURIComponent(item.productHandle)}`;
-            }
-            return "";
+          const buildProductReviewUrl = (item) => {
+            if (!item || !FRONTEND_BASE) return "";
+            const handle = String(item.productHandle || "").trim();
+            if (!handle) return "";
+            const url = new URL("Product.html", `${FRONTEND_BASE}/`);
+            url.searchParams.set("handle", handle);
+            url.searchParams.set("review", "1");
+            url.hash = "reviews";
+            return url.toString();
           };
+          const resolveItemReviewUrl = (item) => buildProductReviewUrl(item);
           const reviewUrl =
             (order.items || []).map(resolveItemReviewUrl).find((url) => String(url || "").trim()) || "";
           const safeReviewAttr = reviewUrl
