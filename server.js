@@ -3223,6 +3223,10 @@ const STOREFRONT_CART_DELIVERY_OPTIONS_QUERY = `
               handle
               title
               description
+              code
+              deliveryMethodType
+              minEstimatedDeliveryDate
+              maxEstimatedDeliveryDate
               estimatedCost {
                 amount
                 currencyCode
@@ -3234,6 +3238,8 @@ const STOREFRONT_CART_DELIVERY_OPTIONS_QUERY = `
     }
   }
 `;
+
+let storefrontDeliveryOptionsQueryUsesEstimatedDates = true;
 
 const STOREFRONT_CART_SELECTED_DELIVERY_UPDATE = `
   mutation FlexcaseCartSelectedDeliveryOptionsUpdate(
@@ -3265,7 +3271,9 @@ const STOREFRONT_AVAILABLE_COUNTRIES_QUERY = `
 
 let cachedCheckoutCountries = null;
 let cachedCheckoutCountriesAt = 0;
-const CHECKOUT_COUNTRIES_CACHE_MS = 60 * 60 * 1000;
+let cachedProbeStorefrontVariantId = "";
+const CHECKOUT_COUNTRIES_CACHE_MS = 6 * 60 * 60 * 1000;
+const SHIPPING_COUNTRY_PROBE_CONCURRENCY = 4;
 
 /** Absolute URL; rejects storefront home (/) which Shopify returns when checkout is not ready. */
 function resolveStorefrontCheckoutUrl(raw) {
@@ -3381,26 +3389,23 @@ function finalizeCheckoutHandoffUrl(graphqlCheckoutUrl, fallbackLines, checkout)
   return "";
 }
 
-async function fetchShopifyAvailableCountries() {
-  const now = Date.now();
-  if (cachedCheckoutCountries && now - cachedCheckoutCountriesAt < CHECKOUT_COUNTRIES_CACHE_MS) {
-    return cachedCheckoutCountries;
+const STOREFRONT_PROBE_VARIANT_QUERY = `
+  query FlexcaseProbeVariant {
+    products(first: 1, query: "status:active") {
+      edges {
+        node {
+          variants(first: 1) {
+            edges {
+              node {
+                id
+              }
+            }
+          }
+        }
+      }
+    }
   }
-  const data = await storefrontGraphql(STOREFRONT_AVAILABLE_COUNTRIES_QUERY);
-  const rows = (data?.localization?.availableCountries || [])
-    .map((row) => ({
-      isoCode: String(row?.isoCode || "").trim().toUpperCase(),
-      name: String(row?.name || "").trim(),
-    }))
-    .filter((row) => row.isoCode && row.name)
-    .sort((a, b) => a.name.localeCompare(b.name));
-  if (!rows.length) {
-    throw new Error("Shopify did not return any available countries for this store.");
-  }
-  cachedCheckoutCountries = rows;
-  cachedCheckoutCountriesAt = now;
-  return rows;
-}
+`;
 
 async function handleCheckoutCountries(req, res) {
   try {
@@ -3411,7 +3416,7 @@ async function handleCheckoutCountries(req, res) {
     const countries = await fetchShopifyAvailableCountries();
     res.writeHead(200, {
       "Content-Type": "application/json; charset=utf-8",
-      "Cache-Control": "public, max-age=3600",
+      "Cache-Control": `public, max-age=${Math.floor(CHECKOUT_COUNTRIES_CACHE_MS / 1000)}`,
     });
     res.end(JSON.stringify({ countries }));
   } catch (error) {
@@ -3506,6 +3511,118 @@ function validateFlexcaseCheckoutPayload(checkout) {
   return "";
 }
 
+function isTrackingOnlyShippingLine(line) {
+  const text = String(line || "").trim();
+  if (!text) return false;
+  return /^tracking\b/i.test(text) || /\btracking number provided\b/i.test(text);
+}
+
+function isDeliveryTimeShippingLine(line) {
+  const text = String(line || "").trim();
+  if (!text || isTrackingOnlyShippingLine(text)) return false;
+  return (
+    /\b(business\s+days?|working\s+days?)\b/i.test(text) ||
+    /\b\d+\s*(?:to|-|–)\s*\d+\s*(?:business\s+)?days?\b/i.test(text) ||
+    /\b\d+\s*(?:business\s+)?days?\b/i.test(text)
+  );
+}
+
+function splitShippingDescriptionLines(raw) {
+  return String(raw || "")
+    .split(/\r?\n+|\s*·\s*/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+function countBusinessDaysBetween(startDate, endDate) {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) return 0;
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  let count = 0;
+  const cursor = new Date(start);
+  while (cursor < end) {
+    const day = cursor.getDay();
+    if (day !== 0 && day !== 6) count += 1;
+    cursor.setDate(cursor.getDate() + 1);
+  }
+  return count;
+}
+
+function formatBusinessDaysFromEstimatedDates(minIso, maxIso) {
+  const min = minIso ? new Date(minIso) : null;
+  const max = maxIso ? new Date(maxIso) : null;
+  if (!min || !max || Number.isNaN(min.getTime()) || Number.isNaN(max.getTime())) return "";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const minDays = countBusinessDaysBetween(today, min);
+  const maxDays = countBusinessDaysBetween(today, max);
+  if (minDays <= 0 && maxDays <= 0) return "";
+  const low = Math.min(minDays, maxDays);
+  const high = Math.max(minDays, maxDays);
+  if (low === high) return `${low} business day${low === 1 ? "" : "s"}`;
+  return `${low} to ${high} business days`;
+}
+
+function extractShippingDeliveryTime(opt) {
+  const description = String(opt?.description || "").trim();
+  const lines = splitShippingDescriptionLines(description);
+  const fromDescription = lines.find(isDeliveryTimeShippingLine);
+  if (fromDescription) return fromDescription;
+
+  const code = String(opt?.code || "").trim();
+  if (code && isDeliveryTimeShippingLine(code)) return code;
+
+  const titleMatch = String(opt?.title || "").match(/\(([^)]*(?:business\s*)?days?[^)]*)\)/i);
+  if (titleMatch?.[1]) return titleMatch[1].trim();
+
+  return formatBusinessDaysFromEstimatedDates(
+    opt?.minEstimatedDeliveryDate,
+    opt?.maxEstimatedDeliveryDate
+  );
+}
+
+async function fetchCartDeliveryOptions(cartId) {
+  try {
+    return await storefrontGraphql(STOREFRONT_CART_DELIVERY_OPTIONS_QUERY, { id: cartId });
+  } catch (error) {
+    const msg = String(error?.message || "");
+    if (
+      storefrontDeliveryOptionsQueryUsesEstimatedDates &&
+      /minEstimatedDeliveryDate|maxEstimatedDeliveryDate|doesn't exist on type/i.test(msg)
+    ) {
+      storefrontDeliveryOptionsQueryUsesEstimatedDates = false;
+      const fallbackQuery = `
+        query FlexcaseCartDeliveryOptions($id: ID!) {
+          cart(id: $id) {
+            deliveryGroups(first: 5) {
+              edges {
+                node {
+                  id
+                  deliveryOptions {
+                    handle
+                    title
+                    description
+                    code
+                    deliveryMethodType
+                    estimatedCost {
+                      amount
+                      currencyCode
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+      return await storefrontGraphql(fallbackQuery, { id: cartId });
+    }
+    throw error;
+  }
+}
+
 function parseStorefrontDeliveryOptions(cart) {
   const options = [];
   for (const edge of cart?.deliveryGroups?.edges || []) {
@@ -3516,11 +3633,13 @@ function parseStorefrontDeliveryOptions(cart) {
       if (!handle || !title) continue;
       const amount = Number(opt?.estimatedCost?.amount || 0);
       const currencyCode = String(opt?.estimatedCost?.currencyCode || SHOP_CURRENCY_CODE).trim();
+      const description = String(opt?.description || "").trim();
       options.push({
         deliveryGroupId: groupId,
         handle,
         title,
-        description: String(opt?.description || "").trim(),
+        description,
+        deliveryTime: extractShippingDeliveryTime(opt),
         price: Number.isFinite(amount) ? amount : 0,
         currencyCode: currencyCode || SHOP_CURRENCY_CODE,
       });
@@ -3534,8 +3653,8 @@ function filterDeliveryOptionsForCountry(allOptions, countryCode) {
   const isMalaysia = cc === "MY";
   const rules = isMalaysia
     ? [
-        { id: "east-malaysia", match: (title) => /east\s*malaysia/i.test(title) },
         { id: "west-malaysia", match: (title) => /west\s*malaysia/i.test(title) },
+        { id: "east-malaysia", match: (title) => /east\s*malaysia/i.test(title) },
       ]
     : [
         {
@@ -3557,6 +3676,125 @@ function filterDeliveryOptionsForCountry(allOptions, countryCode) {
   return picked;
 }
 
+async function getProbeStorefrontVariantId() {
+  if (cachedProbeStorefrontVariantId) return cachedProbeStorefrontVariantId;
+  const data = await storefrontGraphql(STOREFRONT_PROBE_VARIANT_QUERY);
+  const id = String(data?.products?.edges?.[0]?.node?.variants?.edges?.[0]?.node?.id || "").trim();
+  if (!id) {
+    throw new Error("No product variant available to verify shipping countries.");
+  }
+  cachedProbeStorefrontVariantId = id;
+  return id;
+}
+
+function buildShippingProbeCheckout(countryCode, shippingOverrides = {}) {
+  return {
+    email: "shipping-probe@flexcase.local",
+    phone: "+60000000000",
+    shipping: {
+      firstName: "Shipping",
+      lastName: "Probe",
+      address1: "1 Probe Street",
+      city: "City",
+      provinceCode: "",
+      zip: "00000",
+      countryCode: String(countryCode || "").trim().toUpperCase(),
+      ...shippingOverrides,
+    },
+  };
+}
+
+async function probeDeliveryOptionsForCountry(countryCode, probeVariantId, shippingOverrides = {}) {
+  const cc = String(countryCode || "").trim().toUpperCase();
+  if (!cc || !probeVariantId) return [];
+  const checkoutPayload = buildShippingProbeCheckout(cc, shippingOverrides);
+  const lines = [{ variantId: probeVariantId, quantity: 1 }];
+  try {
+    const { cartId } = await createFreshStorefrontCartFromCheckoutLines(lines, checkoutPayload);
+    await applyFlexcaseCheckoutToStorefrontCart(cartId, checkoutPayload);
+    const data = await fetchCartDeliveryOptions(cartId);
+    const allOptions = parseStorefrontDeliveryOptions(data?.cart);
+    return filterDeliveryOptionsForCountry(allOptions, cc);
+  } catch (_) {
+    return [];
+  }
+}
+
+function countryHasShippableRates(countryCode, filteredOptions) {
+  const cc = String(countryCode || "").trim().toUpperCase();
+  if (!filteredOptions.length) return false;
+  if (cc === "MY") {
+    return filteredOptions.some((o) => o.id === "east-malaysia" || o.id === "west-malaysia");
+  }
+  return filteredOptions.some((o) => o.id === "international");
+}
+
+async function countryIsShippable(countryCode, probeVariantId) {
+  const cc = String(countryCode || "").trim().toUpperCase();
+  if (!cc) return false;
+  if (cc === "MY") {
+    const west = await probeDeliveryOptionsForCountry(cc, probeVariantId, {
+      city: "Petaling Jaya",
+      provinceCode: "Selangor",
+      zip: "47810",
+      address1: "28 Jalan Probe",
+    });
+    if (countryHasShippableRates(cc, west)) return true;
+    const east = await probeDeliveryOptionsForCountry(cc, probeVariantId, {
+      city: "Kota Kinabalu",
+      provinceCode: "Sabah",
+      zip: "88000",
+      address1: "1 Jalan Probe",
+    });
+    return countryHasShippableRates(cc, east);
+  }
+  const options = await probeDeliveryOptionsForCountry(cc, probeVariantId);
+  return countryHasShippableRates(cc, options);
+}
+
+async function filterCountriesWithShippableRates(countries, probeVariantId) {
+  const shippable = [];
+  const list = Array.isArray(countries) ? countries : [];
+  for (let i = 0; i < list.length; i += SHIPPING_COUNTRY_PROBE_CONCURRENCY) {
+    const chunk = list.slice(i, i + SHIPPING_COUNTRY_PROBE_CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (country) => {
+        const ok = await countryIsShippable(country.isoCode, probeVariantId);
+        return ok ? country : null;
+      })
+    );
+    for (const row of results) {
+      if (row) shippable.push(row);
+    }
+  }
+  return shippable.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+async function fetchShopifyAvailableCountries() {
+  const now = Date.now();
+  if (cachedCheckoutCountries && now - cachedCheckoutCountriesAt < CHECKOUT_COUNTRIES_CACHE_MS) {
+    return cachedCheckoutCountries;
+  }
+  const data = await storefrontGraphql(STOREFRONT_AVAILABLE_COUNTRIES_QUERY);
+  const rows = (data?.localization?.availableCountries || [])
+    .map((row) => ({
+      isoCode: String(row?.isoCode || "").trim().toUpperCase(),
+      name: String(row?.name || "").trim(),
+    }))
+    .filter((row) => row.isoCode && row.name);
+  if (!rows.length) {
+    throw new Error("Shopify did not return any available countries for this store.");
+  }
+  const probeVariantId = await getProbeStorefrontVariantId();
+  const shippable = await filterCountriesWithShippableRates(rows, probeVariantId);
+  if (!shippable.length) {
+    throw new Error("No countries with configured shipping rates were found in Shopify.");
+  }
+  cachedCheckoutCountries = shippable;
+  cachedCheckoutCountriesAt = now;
+  return shippable;
+}
+
 async function fetchShopifyDeliveryOptionsForCheckout(lines, checkout) {
   const checkoutPayload = {
     email: String(checkout?.email || "").trim(),
@@ -3565,7 +3803,7 @@ async function fetchShopifyDeliveryOptionsForCheckout(lines, checkout) {
   };
   const { cartId } = await createFreshStorefrontCartFromCheckoutLines(lines, checkoutPayload);
   await applyFlexcaseCheckoutToStorefrontCart(cartId, checkoutPayload);
-  const data = await storefrontGraphql(STOREFRONT_CART_DELIVERY_OPTIONS_QUERY, { id: cartId });
+  const data = await fetchCartDeliveryOptions(cartId);
   const allOptions = parseStorefrontDeliveryOptions(data?.cart);
   const countryCode = String(checkout?.shipping?.countryCode || "").trim().toUpperCase();
   return {

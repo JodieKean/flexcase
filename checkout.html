@@ -945,7 +945,6 @@
                   <select id="country" name="country" autocomplete="country" aria-label="Country or region">
                     <option value="" selected disabled>Loading countries…</option>
                   </select>
-                  <p class="field-hint" id="countryShipHint">Only countries we ship to are listed.</p>
                 </div>
               </div>
 
@@ -1699,9 +1698,19 @@
 
       function buildShippingOptionDescription(opt) {
         const parts = [];
-        const desc = String(opt?.description || "").trim();
-        if (desc) parts.push(desc);
-        if (isMalaysiaDomesticShippingOption(opt) && !/rm\s*200/i.test(desc)) {
+        const deliveryTime = String(opt?.deliveryTime || "").trim();
+        if (deliveryTime) {
+          parts.push(deliveryTime);
+        } else {
+          const descLines = String(opt?.description || "")
+            .split(/\r?\n+|\s*·\s*/)
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .filter((line) => !/^tracking\b/i.test(line) && !/\btracking number provided\b/i.test(line));
+          if (descLines.length) parts.push(descLines.join(" · "));
+        }
+        const combined = parts.join(" · ");
+        if (isMalaysiaDomesticShippingOption(opt) && !/rm\s*200/i.test(combined)) {
           parts.push(MALAYSIA_FREE_SHIPPING_NOTE);
         }
         return parts.join(" · ");
@@ -1966,8 +1975,13 @@
       function buildShippingMethodText() {
         const opt = getSelectedShippingOption();
         if (!opt) return "—";
+        const deliveryTime = String(opt?.deliveryTime || "").trim();
         const desc = buildShippingOptionDescription(opt);
-        const line1 = desc ? `${opt.title} (${desc})` : opt.title;
+        const line1 = deliveryTime
+          ? `${opt.title} (${deliveryTime})`
+          : desc
+            ? `${opt.title} (${desc})`
+            : opt.title;
         return `${line1}\n${formatShippingPriceLabel(opt)}`;
       }
 
