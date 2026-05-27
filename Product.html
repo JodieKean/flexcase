@@ -448,6 +448,7 @@
         border: 1px solid #ececf1;
         border-radius: 18px;
         padding: 18px;
+        scroll-margin-top: 108px;
       }
 
       .review-compose-panel h3 {
@@ -1854,6 +1855,12 @@
         renderProductReviews(product.reviews);
         initReviewPhotoLightbox();
 
+        function scrollReviewComposePanelIntoView() {
+          const panelEl = document.getElementById("review-compose-panel");
+          if (!panelEl || panelEl.hidden) return;
+          panelEl.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+
         function initReviewCompose() {
           if (!product.reviews?.configured) return;
 
@@ -1979,7 +1986,7 @@
 
           function openComposePanel() {
             panelEl.hidden = false;
-            panelEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            requestAnimationFrame(() => scrollReviewComposePanelIntoView());
           }
 
           toggleEl.addEventListener("click", () => {
@@ -2139,21 +2146,39 @@
           const params = new URLSearchParams(window.location.search);
           const wantsCompose =
             params.get("review") === "1" || params.get("writeReview") === "1";
-          const hash = String(window.location.hash || "").toLowerCase();
-          const reviewsEl = document.getElementById("reviews");
-          if (!reviewsEl) return;
-          if (hash !== "#reviews" && !wantsCompose) return;
+          const hash = String(window.location.hash || "")
+            .toLowerCase()
+            .replace(/^#/, "");
+          const wantsComposePanel =
+            wantsCompose || hash === "review-compose-panel";
 
-          const scrollToReviews = () => {
-            reviewsEl.scrollIntoView({ behavior: "smooth", block: "start" });
-          };
+          if (!wantsComposePanel && hash !== "reviews") return;
 
           requestAnimationFrame(() => {
-            scrollToReviews();
-            if (!wantsCompose) return;
+            if (!wantsComposePanel) {
+              document
+                .getElementById("reviews")
+                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              return;
+            }
+
             const panelEl = document.getElementById("review-compose-panel");
             const toggleEl = document.getElementById("write-review-toggle");
-            if (panelEl && toggleEl && panelEl.hidden) toggleEl.click();
+            if (!panelEl) return;
+
+            const revealAndScroll = () => {
+              requestAnimationFrame(() => scrollReviewComposePanelIntoView());
+            };
+
+            if (panelEl.hidden && toggleEl) {
+              toggleEl.click();
+              revealAndScroll();
+            } else if (panelEl.hidden) {
+              panelEl.hidden = false;
+              revealAndScroll();
+            } else {
+              scrollReviewComposePanelIntoView();
+            }
           });
         }
 

@@ -2499,7 +2499,7 @@
             const url = new URL("Product.html", `${FRONTEND_BASE}/`);
             url.searchParams.set("handle", handle);
             url.searchParams.set("review", "1");
-            url.hash = "reviews";
+            url.hash = "review-compose-panel";
             return url.toString();
           };
           const resolveItemReviewUrl = (item) => buildProductReviewUrl(item);
