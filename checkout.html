@@ -1479,6 +1479,54 @@
         return items;
       }
 
+      function buildNormalizedCheckoutLines(items) {
+        return (items || [])
+          .map((l) => ({
+            variantId:
+              normalizeStorefrontVariantGid(l?.variantId) || String(l?.variantId || "").trim(),
+            quantity: Math.max(1, Math.min(99, Number(l?.quantity) || 1)),
+            productHandle: String(l?.productHandle || "").trim(),
+            productTitle: String(l?.productTitle || "").trim(),
+            variantTitle: String(l?.variantTitle || "").trim(),
+          }))
+          .filter((l) => l.variantId.startsWith("gid://shopify/ProductVariant/"));
+      }
+
+      async function reconcileCheckoutLinesWithCatalog(items) {
+        const current = Array.isArray(items) ? items : [];
+        if (!current.length) return current;
+        try {
+          const res = await fetchCheckoutApi("/api/catalog");
+          if (!res.ok) return current;
+          const payload = await res.json().catch(() => ({}));
+          const products = Array.isArray(payload?.products) ? payload.products : [];
+          const byHandle = new Map(products.map((p) => [String(p?.handle || "").trim(), p]));
+          let changed = false;
+          const next = current.map((line) => {
+            const handle = String(line?.productHandle || "").trim();
+            const product = byHandle.get(handle);
+            if (!product) return line;
+            const variants = product?.variants?.nodes || [];
+            if (!variants.length) return line;
+            const wanted = String(line?.variantTitle || "").trim().toLowerCase();
+            const match =
+              variants.find((v) => String(v?.title || "").trim().toLowerCase() === wanted) ||
+              variants[0];
+            const freshId = normalizeStorefrontVariantGid(match?.id);
+            if (!freshId.startsWith("gid://shopify/ProductVariant/")) return line;
+            if (freshId !== normalizeStorefrontVariantGid(line?.variantId)) {
+              changed = true;
+              return { ...line, variantId: freshId };
+            }
+            return line;
+          });
+          if (changed) writeCartItems(next);
+          return changed ? next : current;
+        } catch (_) {
+          return current;
+        }
+      }
+
       function cancelQtyServerSync(variantId) {
         const vid = String(variantId || "").trim();
         const pending = qtyServerSyncTimers.get(vid);
@@ -2061,13 +2109,12 @@
         const placeBtn = document.getElementById("place-order");
         if (placeBtn?.disabled) return;
         flexcasePlaceOrderInFlight = true;
-        const lines = readCartItems()
-          .map((l) => ({
-            variantId:
-              normalizeStorefrontVariantGid(l?.variantId) || String(l?.variantId || "").trim(),
-            quantity: Math.max(1, Math.min(99, Number(l?.quantity) || 1)),
-          }))
-          .filter((l) => l.variantId.startsWith("gid://shopify/ProductVariant/"));
+        const reconciledItems = await reconcileCheckoutLinesWithCatalog(readCartItems());
+        if (reconciledItems !== readCartItems()) {
+          renderOrderLines(reconciledItems);
+          recalcTotals();
+        }
+        const lines = buildNormalizedCheckoutLines(reconciledItems);
         if (!lines.length) {
           alert(
             "Checkout could not read your cart lines. Clear the cart, add the product again from the product page, then try once more."

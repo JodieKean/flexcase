@@ -183,40 +183,67 @@ async function storefrontGraphql(query, variables = {}) {
     });
   }
 
-  let response = await callWithHeader(primaryHeaderName);
-  if (response.status === 401) {
-    // Some stores use private storefront tokens that require a different auth header.
-    response = await callWithHeader(secondaryHeaderName);
+  const MAX_ATTEMPTS = 3;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    let response = await callWithHeader(primaryHeaderName);
+    if (response.status === 401) {
+      response = await callWithHeader(secondaryHeaderName);
+    }
+
+    if (!response.ok) {
+      const body = await response.text();
+      let parsed = null;
+      try {
+        parsed = JSON.parse(body);
+      } catch (_) {
+        parsed = null;
+      }
+      const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
+      if (response.status === 401 || errorCode === "UNAUTHORIZED") {
+        throw new Error(
+          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+        );
+      }
+      const isThrottled =
+        response.status === 429 ||
+        errorCode === "THROTTLED" ||
+        /\bthrottled\b/i.test(body);
+      if (isThrottled && attempt < MAX_ATTEMPTS) {
+        const retryAfterHeader = Number(response.headers.get("retry-after") || "0");
+        const waitMs =
+          Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+            ? Math.max(250, Math.floor(retryAfterHeader * 1000))
+            : 250 * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
+    }
+
+    const payload = await response.json();
+    if (payload.errors?.length) {
+      const firstCode = payload.errors?.[0]?.extensions?.code || "";
+      if (firstCode === "UNAUTHORIZED") {
+        throw new Error(
+          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+        );
+      }
+      const hasThrottledError = payload.errors.some((e) => {
+        const code = String(e?.extensions?.code || "");
+        const message = String(e?.message || "");
+        return code === "THROTTLED" || /\bthrottled\b/i.test(message);
+      });
+      if (hasThrottledError && attempt < MAX_ATTEMPTS) {
+        const waitMs = 250 * Math.pow(2, attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, waitMs));
+        continue;
+      }
+      throw new Error(payload.errors.map((e) => e.message).join(", "));
+    }
+    return payload.data;
   }
 
-  if (!response.ok) {
-    const body = await response.text();
-    let parsed = null;
-    try {
-      parsed = JSON.parse(body);
-    } catch (_) {
-      parsed = null;
-    }
-    const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
-    if (response.status === 401 || errorCode === "UNAUTHORIZED") {
-      throw new Error(
-        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-      );
-    }
-    throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
-  }
-
-  const payload = await response.json();
-  if (payload.errors?.length) {
-    const firstCode = payload.errors?.[0]?.extensions?.code || "";
-    if (firstCode === "UNAUTHORIZED") {
-      throw new Error(
-        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-      );
-    }
-    throw new Error(payload.errors.map((e) => e.message).join(", "));
-  }
-  return payload.data;
+  throw new Error("Storefront request failed after retries.");
 }
 
 function parseShopifyTags(raw) {
@@ -3820,14 +3847,36 @@ function extractCheckoutLinesFromBody(body) {
  * - Empty `requestedLines` + /api/cart/replace: clears the cart only.
  * - Non-empty rows but zero valid variants: throws (does not wipe the cart).
  */
+function cartHasBuyableLines(cart) {
+  if (!cart) return false;
+  if (Number(cart.totalQuantity ?? 0) > 0) return true;
+  for (const edge of cart.lines?.edges || []) {
+    if (Number(edge?.node?.quantity ?? 0) > 0) return true;
+  }
+  return false;
+}
+
+function cartContainsVariantWithQty(cart, merchandiseId, minQty = 1) {
+  for (const edge of cart?.lines?.edges || []) {
+    const n = edge?.node;
+    if (n?.merchandise?.id === merchandiseId && Number(n.quantity || 0) >= minQty) {
+      return true;
+    }
+  }
+  return false;
+}
+
 async function replaceCustomerCartLinesFromPayload(cartId, requestedLines) {
   const rows = Array.isArray(requestedLines) ? requestedLines : [];
   const byVariant = new Map();
+  const labels = new Map();
   for (const line of rows) {
     const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
     if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
     const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
     byVariant.set(variantId, Math.min(99, (byVariant.get(variantId) || 0) + qty));
+    const label = [line.productTitle, line.variantTitle].filter(Boolean).join(" — ") || variantId;
+    labels.set(variantId, label);
   }
 
   const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
@@ -3848,23 +3897,37 @@ async function replaceCustomerCartLinesFromPayload(cartId, requestedLines) {
 
   await removeAllStorefrontCartLines(cartId);
 
-  const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
-  const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
-  if (addErrs.length) {
-    throw new Error(addErrs.map((e) => e.message).join(", "));
-  }
-
-  function cartHasBuyableLines(cart) {
-    if (!cart) return false;
-    if (Number(cart.totalQuantity ?? 0) > 0) return true;
-    for (const edge of cart.lines?.edges || []) {
-      if (Number(edge?.node?.quantity ?? 0) > 0) return true;
+  const rejected = [];
+  let lastCart = null;
+  for (const { merchandiseId, quantity } of linesToAdd) {
+    const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, {
+      cartId,
+      lines: [{ merchandiseId, quantity }],
+    });
+    const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+    lastCart = addData?.cartLinesAdd?.cart || lastCart;
+    if (addErrs.length) {
+      rejected.push({
+        label: labels.get(merchandiseId) || merchandiseId,
+        reason: addErrs.map((e) => e.message).join(", "),
+      });
+      continue;
     }
-    return false;
+    if (!cartContainsVariantWithQty(lastCart, merchandiseId, quantity)) {
+      rejected.push({
+        label: labels.get(merchandiseId) || merchandiseId,
+        reason: "Shopify did not keep this line (check Online Store publish and variant availability).",
+      });
+    }
   }
 
-  const cartAfter = addData?.cartLinesAdd?.cart;
-  if (cartHasBuyableLines(cartAfter)) {
+  if (cartHasBuyableLines(lastCart)) {
+    if (rejected.length) {
+      const names = rejected.map((r) => r.label).join(", ");
+      throw new Error(
+        `Some items could not be added to checkout: ${names}. Remove them and try again, or re-add from the product page.`
+      );
+    }
     return;
   }
 
@@ -3872,6 +3935,11 @@ async function replaceCustomerCartLinesFromPayload(cartId, requestedLines) {
   const cartLive = refreshed?.cart;
   if (cartHasBuyableLines(cartLive)) {
     return;
+  }
+
+  if (rejected.length) {
+    const details = rejected.map((r) => `${r.label}: ${r.reason}`).join(" ");
+    throw new Error(`Checkout cart sync failed. ${details}`);
   }
 
   throw new Error(
@@ -3916,6 +3984,54 @@ async function handleCartReplace(req, res) {
  * Expects `body.checkout`: { email, phone?, shipping: { firstName, lastName, phone?, address1, address2?, city, provinceCode?, zip, countryCode, countryName? } }.
  * Card data is never accepted (PCI); payment is completed on Shopify Checkout only.
  */
+function buildCheckoutLinesMap(requestedLines) {
+  const byVariant = new Map();
+  for (const line of Array.isArray(requestedLines) ? requestedLines : []) {
+    const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
+    if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
+    const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
+    byVariant.set(variantId, Math.min(99, (byVariant.get(variantId) || 0) + qty));
+  }
+  return byVariant;
+}
+
+/** Guest-style cart create (works when replace-on-existing-cart fails for signed-in users). */
+async function createFreshStorefrontCartFromCheckoutLines(requestedLines, checkout) {
+  const byVariant = buildCheckoutLinesMap(requestedLines);
+  const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
+    merchandiseId,
+    quantity: Math.floor(Number(quantity)),
+  }));
+  if (!linesToAdd.length) {
+    throw new Error("Your cart is empty. Add items before checkout.");
+  }
+
+  const countryCode = String(checkout.shipping?.countryCode || "")
+    .trim()
+    .toUpperCase();
+  const phone = String(checkout.phone || "").trim();
+  const created = await storefrontGraphql(STOREFRONT_CART_CREATE_WITH_INPUT, {
+    input: {
+      lines: linesToAdd,
+      buyerIdentity: {
+        email: String(checkout.email || "").trim(),
+        ...(phone ? { phone } : {}),
+        ...(countryCode ? { countryCode } : {}),
+      },
+    },
+  });
+  const payload = created?.cartCreate;
+  const createErrs = payload?.userErrors?.filter((e) => e?.message) || [];
+  if (createErrs.length) {
+    throw new Error(createErrs.map((e) => e.message).join(", "));
+  }
+  const cartId = String(payload?.cart?.id || "").trim();
+  if (!cartId) {
+    throw new Error("Unable to create checkout cart.");
+  }
+  return { cartId, byVariant };
+}
+
 async function handleShopifyCheckout(req, res) {
   try {
     if (!STOREFRONT_ACCESS_TOKEN || !SHOP_FROM_ENV) {
@@ -3938,15 +4054,26 @@ async function handleShopifyCheckout(req, res) {
       let errMsg = "";
       try {
         await runSerializedCustomerCartMutation(customer.id, async () => {
-          const { cartId } = await ensureCustomerStorefrontCart(customer.id);
+          let { cartId } = await ensureCustomerStorefrontCart(customer.id);
           customerCartIdForResponse = cartId;
           const syncLines = extractCheckoutLinesFromBody(body);
           if (syncLines.length) {
             try {
               await replaceCustomerCartLinesFromPayload(cartId, syncLines);
-            } catch (e) {
-              errMsg = e.message || "Unable to sync your cart before checkout.";
-              return;
+            } catch (replaceError) {
+              console.warn(
+                "Signed-in cart replace failed; creating fresh Storefront cart:",
+                replaceError.message
+              );
+              try {
+                const fresh = await createFreshStorefrontCartFromCheckoutLines(syncLines, checkout);
+                cartId = fresh.cartId;
+                customerCartIdForResponse = cartId;
+                await setCustomerHeadlessCartId(customer.id, cartId);
+              } catch (freshError) {
+                errMsg = freshError.message || "Unable to sync your cart before checkout.";
+                return;
+              }
             }
           }
           const refreshed0 = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
@@ -3991,46 +4118,14 @@ async function handleShopifyCheckout(req, res) {
     }
 
     const requestedLines = extractCheckoutLinesFromBody(body);
-    const byVariant = new Map();
-    for (const line of requestedLines) {
-      const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
-      if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
-      const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
-      const prev = byVariant.get(variantId) || 0;
-      byVariant.set(variantId, Math.min(99, prev + qty));
-    }
-    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
-      merchandiseId,
-      quantity: Math.floor(Number(quantity)),
-    }));
-    if (!linesToAdd.length) {
-      json(res, 400, { error: "Your cart is empty. Add items before checkout." });
-      return;
-    }
-
-    const countryCode = String(checkout.shipping?.countryCode || "")
-      .trim()
-      .toUpperCase();
-    const phone = String(checkout.phone || "").trim();
-    const inputLinesOnly = {
-      lines: linesToAdd,
-      buyerIdentity: {
-        email: String(checkout.email || "").trim(),
-        ...(phone ? { phone } : {}),
-        ...(countryCode ? { countryCode } : {}),
-      },
-    };
-
-    const created = await storefrontGraphql(STOREFRONT_CART_CREATE_WITH_INPUT, { input: inputLinesOnly });
-    const payload = created?.cartCreate;
-    const createErrs = payload?.userErrors?.filter((e) => e?.message) || [];
-    if (createErrs.length) {
-      json(res, 400, { error: createErrs.map((e) => e.message).join(", ") });
-      return;
-    }
-    const cartId = payload?.cart?.id;
-    if (!cartId) {
-      json(res, 500, { error: "Unable to create checkout cart." });
+    let cartId = "";
+    let byVariant = new Map();
+    try {
+      const fresh = await createFreshStorefrontCartFromCheckoutLines(requestedLines, checkout);
+      cartId = fresh.cartId;
+      byVariant = fresh.byVariant;
+    } catch (e) {
+      json(res, 400, { error: e.message || "Your cart is empty. Add items before checkout." });
       return;
     }
 
