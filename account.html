@@ -1069,10 +1069,6 @@
                 <input id="auth-signin-email" type="email" autocomplete="email" placeholder="Enter email" />
               </div>
             </div>
-            <label class="keep-row">
-              <input id="auth-signin-keep" type="checkbox" />
-              <span>Keep me logged in</span>
-            </label>
             <button type="submit" class="auth-submit">Continue with email</button>
           </form>
 
@@ -1102,11 +1098,7 @@
             </div>
             <label class="keep-row">
               <input id="auth-signup-email-consent" type="checkbox" />
-              <span>Customer agreed to receive marketing emails</span>
-            </label>
-            <label class="keep-row">
-              <input id="auth-signup-keep" type="checkbox" />
-              <span>Keep me logged in</span>
+              <span>Receive news if we release something new</span>
             </label>
             <button type="submit" class="auth-submit">Create Account</button>
           </form>
@@ -1814,14 +1806,12 @@
       const authSignInForm = document.getElementById("auth-signin-form");
       const authSignUpForm = document.getElementById("auth-signup-form");
       const authSignInEmail = document.getElementById("auth-signin-email");
-      const authSignInKeep = document.getElementById("auth-signin-keep");
       const authSignUpFirstName = document.getElementById("auth-signup-first-name");
       const authSignUpLastName = document.getElementById("auth-signup-last-name");
       const authSignUpEmail = document.getElementById("auth-signup-email");
       const authSignUpPhoneCountry = document.getElementById("auth-signup-phone-country");
       const authSignUpPhone = document.getElementById("auth-signup-phone");
       const authSignUpEmailConsent = document.getElementById("auth-signup-email-consent");
-      const authSignUpKeep = document.getElementById("auth-signup-keep");
       const headerOrderCountEl = document.getElementById("header-order-count");
       const headerOrdersPill = document.getElementById("header-orders-pill");
       const settingsProfileForm = document.getElementById("settings-profile-form");
@@ -2172,15 +2162,9 @@
         authSignUpForm.classList.toggle("auth-hidden", signIn);
       }
 
-      function persistAuthSession(user, keepLoggedIn) {
-        const payload = JSON.stringify(user);
-        if (keepLoggedIn) {
-          localStorage.setItem(authStorageKey, payload);
-          sessionStorage.removeItem(authStorageKey);
-        } else {
-          sessionStorage.setItem(authStorageKey, payload);
-          localStorage.removeItem(authStorageKey);
-        }
+      function persistAuthSession(user) {
+        localStorage.setItem(authStorageKey, JSON.stringify(user));
+        sessionStorage.removeItem(authStorageKey);
       }
 
       function getPersistedAuthSession() {
@@ -2346,7 +2330,6 @@
 
       function beginCustomerOauth(
         mode,
-        keepLoggedIn,
         email = "",
         forceAccountSelect = false,
         useProviderLogoutFirst = false
@@ -2362,7 +2345,6 @@
           clearClientSessionState({ clearCart: false });
           const params = new URLSearchParams();
           params.set("mode", mode);
-          params.set("keep", keepLoggedIn ? "1" : "0");
           if (forceAccountSelect) params.set("force_select", "1");
           const normalizedEmail = String(email || "").trim().toLowerCase();
           if (normalizedEmail) params.set("email", normalizedEmail);
@@ -2639,7 +2621,6 @@
             name: `${customer.firstName || ""} ${customer.lastName || ""}`.trim(),
             email: customer.email || "",
             phone: customer.phone || "",
-            keepLoggedIn: true,
           };
           latestShopifyCustomerProfile = {
             firstName: customer.firstName || "",
@@ -2651,7 +2632,7 @@
           hasLoadedAccountDetails = true;
           const settingsLoadingNote = document.getElementById("settings-loading-note");
           if (settingsLoadingNote) settingsLoadingNote.remove();
-          persistAuthSession(user, true);
+          persistAuthSession(user);
           renderOrders(payload.orders || []);
           renderAddresses(payload.addresses || []);
           syncDefaultAddressLabels();
@@ -2676,7 +2657,6 @@
       authSignInForm?.addEventListener("submit", async (event) => {
         event.preventDefault();
         const email = authSignInEmail.value.trim().toLowerCase();
-        const keepLoggedIn = !!authSignInKeep.checked;
         if (!email) {
           setGateMessage("Enter email to continue.", true);
           return;
@@ -2712,18 +2692,17 @@
           return;
         }
 
-        beginCustomerOauth("signin", keepLoggedIn, email);
+        beginCustomerOauth("signin", email);
       });
 
       authMismatchContinueBtn?.addEventListener("click", () => {
-        const keepLoggedIn = !!authSignInKeep?.checked;
         const email = String(mismatchSuggestedEmail || "")
           .trim()
           .toLowerCase();
         if (!email) return;
         if (authSignInEmail) authSignInEmail.value = email;
         // Logout hint + OAuth with the previous Shopify account email (not the newly typed address).
-        beginCustomerOauth("signin", keepLoggedIn, email, true, true);
+        beginCustomerOauth("signin", email, true, true);
       });
 
       authSignUpForm?.addEventListener("submit", async (event) => {
@@ -2735,7 +2714,6 @@
         const dial = optionDial(authSignUpPhoneCountry?.selectedOptions?.[0]);
         const phone = `${dial}${nationalDigits}`;
         const acceptsMarketingEmail = !!authSignUpEmailConsent.checked;
-        const keepLoggedIn = !!authSignUpKeep.checked;
         if (!firstName || !lastName || !email) {
           setGateMessage("Enter first name, last name, and email to continue.", true);
           return;
@@ -2773,7 +2751,7 @@
           return;
         }
 
-        beginCustomerOauth("signup", keepLoggedIn, email);
+        beginCustomerOauth("signup", email);
       });
 
       headerSignout?.addEventListener("click", (event) => {
@@ -2841,8 +2819,7 @@
             phone: customer.phone || phone,
           };
           setAuthenticatedUI(updatedUser);
-          const existing = getPersistedAuthSession();
-          persistAuthSession(updatedUser, existing?.keepLoggedIn !== false);
+          persistAuthSession(updatedUser);
           setGateMessage("Profile updated.");
           await loadCustomerAccountData();
         } catch (error) {

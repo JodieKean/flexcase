@@ -24,6 +24,7 @@
   const CHECKOUT_HANDOFF_KEY = "flexcase.checkout_handoff_pending";
   const LAST_CHECKOUT_CART_KEY = "flexcase.last_checkout_cart";
   const LAST_CHECKOUT_CART_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+  const BADGE_QTY_CACHE_KEY = "flexcase.cart.badge_qty";
 
   function apiBase() {
     return (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -95,12 +96,65 @@
     }, 0);
   }
 
-  function updateBadges() {
-    const qty = cartTotalQty(readLocalLines());
+  function readBadgeQtyFromStorage() {
+    try {
+      const cached = sessionStorage.getItem(BADGE_QTY_CACHE_KEY);
+      if (cached !== null && cached !== "") {
+        const n = parseInt(cached, 10);
+        if (Number.isFinite(n) && n >= 0) return n;
+      }
+    } catch (_) {
+      /* ignore */
+    }
+    return cartTotalQty(readLocalLines());
+  }
+
+  function persistBadgeQtyCache(qty) {
+    try {
+      if (qty > 0) {
+        sessionStorage.setItem(BADGE_QTY_CACHE_KEY, String(qty));
+      } else {
+        sessionStorage.removeItem(BADGE_QTY_CACHE_KEY);
+      }
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  function paintCartBadges(qty) {
     document.querySelectorAll(".cart-badge").forEach((el) => {
       el.textContent = String(qty);
       el.style.display = qty > 0 ? "" : "none";
     });
+  }
+
+  function updateBadges() {
+    const qty = cartTotalQty(readLocalLines());
+    persistBadgeQtyCache(qty);
+    paintCartBadges(qty);
+  }
+
+  /** Paint cached cart qty as soon as navbar badges exist so page transitions do not flash empty. */
+  function installEarlyCartBadgeHydration() {
+    const qty = readBadgeQtyFromStorage();
+    if (qty <= 0) return;
+
+    const hydrate = () => paintCartBadges(qty);
+
+    if (!document.documentElement) return;
+
+    const observer = new MutationObserver(() => {
+      if (document.querySelector(".cart-badge")) hydrate();
+    });
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    document.addEventListener(
+      "DOMContentLoaded",
+      () => {
+        hydrate();
+        observer.disconnect();
+      },
+      { once: true }
+    );
   }
 
   window.addEventListener("flexcase-cart-updated", updateBadges);
@@ -722,6 +776,7 @@
   let cartBootPromise = null;
 
   async function boot() {
+    updateBadges();
     await maybeRunSchemaMigration().catch(() => {});
     updateBadges();
 
@@ -755,5 +810,6 @@
     })();
   });
 
+  installEarlyCartBadgeHydration();
   cartBootPromise = boot().catch(() => {});
 })();

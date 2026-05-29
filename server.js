@@ -62,9 +62,7 @@ const SESSION_SIGNING_SECRET =
   CUSTOMER_ACCOUNT_CLIENT_SECRET ||
   CLIENT_SECRET_FROM_ENV ||
   "flexcase-dev-session-secret";
-/** Session cookie + signed payload ceiling when "Keep me logged in" is unchecked. */
-const SESSION_MAX_AGE_SHORT_SEC = 60 * 60 * 12;
-/** When "Keep me logged in" is checked (cookie Max-Age + signed `expiresAt`). Capped at ~400d (browser norms). */
+/** Session cookie + signed payload lifetime (Max-Age + signed `expiresAt`). Capped at ~400d (browser norms). */
 const _KEEP_ENV = Number(process.env.FLEXCASE_SESSION_KEEP_MAX_AGE_SEC);
 const SESSION_MAX_AGE_KEEP_SEC =
   Number.isFinite(_KEEP_ENV) && _KEEP_ENV > 0
@@ -1750,10 +1748,10 @@ function getCustomerSession(req) {
   return { session };
 }
 
-function createOAuthState(mode, keep, expectedEmail = "", returnTo = "") {
+function createOAuthState(mode, expectedEmail = "", returnTo = "") {
   return encodeSignedPayload({
     mode,
-    keep,
+    keep: true,
     expectedEmail: String(expectedEmail || "")
       .trim()
       .toLowerCase(),
@@ -2137,7 +2135,6 @@ function handleCustomerOauthStart(req, res) {
 
   const reqUrl = new URL(req.url, "http://localhost");
   const mode = reqUrl.searchParams.get("mode") === "signup" ? "signup" : "signin";
-  const keep = reqUrl.searchParams.get("keep") === "1";
   const forceSelect = reqUrl.searchParams.get("force_select") === "1";
   const shopifyCleared = reqUrl.searchParams.get("shopify_cleared") === "1";
   const emailHint = String(reqUrl.searchParams.get("email") || "")
@@ -2152,7 +2149,6 @@ function handleCustomerOauthStart(req, res) {
   if (CUSTOMER_ACCOUNT_LOGOUT_ENDPOINT && !shopifyCleared && idTokenHint) {
     const resumeUrl = new URL(`${API_ORIGIN}/api/customer/oauth/start`);
     resumeUrl.searchParams.set("mode", mode);
-    resumeUrl.searchParams.set("keep", keep ? "1" : "0");
     if (forceSelect) resumeUrl.searchParams.set("force_select", "1");
     if (emailHint) resumeUrl.searchParams.set("email", emailHint);
     if (returnTo) resumeUrl.searchParams.set("return_to", returnTo);
@@ -2170,7 +2166,7 @@ function handleCustomerOauthStart(req, res) {
     return;
   }
 
-  const state = createOAuthState(mode, keep, emailHint, returnTo);
+  const state = createOAuthState(mode, emailHint, returnTo);
 
   const authorizeUrl = new URL(CUSTOMER_ACCOUNT_AUTHORIZATION_ENDPOINT);
   authorizeUrl.searchParams.set("client_id", CUSTOMER_ACCOUNT_CLIENT_ID);
@@ -2300,28 +2296,19 @@ async function handleCustomerOauthCallback(req, res) {
       res.end();
       return;
     }
-    const oauthAccessExpiryMs = payload.expires_in
-      ? Date.now() + Number(payload.expires_in) * 1000
-      : Date.now() + SESSION_MAX_AGE_SHORT_SEC * 1000;
-    const shortSessionExpiryMs = Math.min(
-      oauthAccessExpiryMs,
-      Date.now() + SESSION_MAX_AGE_SHORT_SEC * 1000
-    );
-    const keepSessionExpiryMs = Date.now() + SESSION_MAX_AGE_KEEP_SEC * 1000;
-    const sessionExpiresAtMs = stateValue.keep ? keepSessionExpiryMs : shortSessionExpiryMs;
-    const cookieMaxAgeSec = stateValue.keep ? SESSION_MAX_AGE_KEEP_SEC : SESSION_MAX_AGE_SHORT_SEC;
+    const sessionExpiresAtMs = Date.now() + SESSION_MAX_AGE_KEEP_SEC * 1000;
     const sessionPayload = {
       customer,
       idToken: String(payload.id_token || ""),
       mode: stateValue.mode,
-      keep: stateValue.keep === true,
+      keep: true,
       createdAt: Date.now(),
       expiresAt: sessionExpiresAtMs,
     };
 
     res.writeHead(302, {
       Location: appendOAuthCallbackParams(returnToBase, { auth: "success" }),
-      "Set-Cookie": createSessionCookie(sessionPayload, cookieMaxAgeSec),
+      "Set-Cookie": createSessionCookie(sessionPayload, SESSION_MAX_AGE_KEEP_SEC),
     });
     res.end();
   } catch (error) {
@@ -4736,18 +4723,15 @@ function handleCustomerLogoutApi(req, res) {
 async function handleCustomerLogin(req, res) {
   const reqUrl = new URL(req.url, "http://localhost");
   const mode = reqUrl.searchParams.get("mode") === "signup" ? "signup" : "signin";
-  const keep = reqUrl.searchParams.get("keep") === "1";
   res.writeHead(302, {
-    Location: `${API_ORIGIN}/api/customer/oauth/start?mode=${mode}&keep=${keep ? "1" : "0"}`,
+    Location: `${API_ORIGIN}/api/customer/oauth/start?mode=${mode}`,
   });
   res.end();
 }
 
 async function handleCustomerRegister(req, res) {
-  const reqUrl = new URL(req.url, "http://localhost");
-  const keep = reqUrl.searchParams.get("keep") === "1";
   res.writeHead(302, {
-    Location: `${API_ORIGIN}/api/customer/oauth/start?mode=signup&keep=${keep ? "1" : "0"}`,
+    Location: `${API_ORIGIN}/api/customer/oauth/start?mode=signup`,
   });
   res.end();
 }

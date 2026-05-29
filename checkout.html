@@ -2145,14 +2145,13 @@
       }
 
       let checkoutOauthInFlight = false;
-      async function beginCheckoutCustomerOauth(mode = "signin", keepLoggedIn = true, email = "") {
+      async function beginCheckoutCustomerOauth(mode = "signin", email = "") {
         if (checkoutOauthInFlight) return;
         checkoutOauthInFlight = true;
         setCheckoutSignInBusy(true);
         try {
           const params = new URLSearchParams();
           params.set("mode", mode);
-          params.set("keep", keepLoggedIn ? "1" : "0");
           const normalizedEmail = String(email || "").trim().toLowerCase();
           if (normalizedEmail) params.set("email", normalizedEmail);
           // Bring the customer back to the checkout page (preserving step) after OAuth.
@@ -2215,7 +2214,7 @@
           return;
         }
         setCheckoutSignInMessage("Redirecting you to sign in…", false);
-        void beginCheckoutCustomerOauth("signin", false, rawEmail);
+        void beginCheckoutCustomerOauth("signin", rawEmail);
       }
 
       if (checkoutSignInSubmitBtn) {
