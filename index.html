@@ -113,6 +113,7 @@
         position: relative;
         width: 100%;
         margin: 0;
+        aspect-ratio: 2070 / 3090;
         border-radius: 0;
         box-shadow: none;
         overflow: hidden;
@@ -131,10 +132,12 @@
       }
 
       .card-visual .card-art {
-        display: block;
+        position: absolute;
+        inset: 8.2% 7.4% 10.2% 7.4%;
         width: 100%;
-        height: auto;
-        vertical-align: top;
+        height: 100%;
+        object-fit: contain;
+        object-position: center;
       }
 
       .card-visual .card-case-overlay {
