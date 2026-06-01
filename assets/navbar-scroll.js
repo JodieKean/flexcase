@@ -122,6 +122,7 @@
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", remeasure);
   window.addEventListener("load", remeasure);
+  window.addEventListener("flexcase:navigate", remeasure);
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", remeasure);
   }

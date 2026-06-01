@@ -8,16 +8,17 @@
 
 .site-promo-banner {
   background: #b08d57;
-  color: #ffffff;
   text-align: center;
   padding: 9px 16px;
-  font-size: clamp(0.78rem, 1.8vw, 0.88rem);
   line-height: 1.35;
   font-weight: 500;
 }
 
 .site-promo-banner-text {
   margin: 0;
+  color: #ffffff;
+  font-size: 0.9rem;
+  font-weight: 400;
 }
 
 .site-navbar {
@@ -46,6 +47,15 @@
   font-weight: 700;
   letter-spacing: -0.01em;
   min-width: 0;
+}
+
+.site-brand-logo {
+  width: 35px;
+  height: 35px;
+  object-fit: contain;
+  flex-shrink: 0;
+  display: block;
+  pointer-events: none;
 }
 
 .site-brand-text {
