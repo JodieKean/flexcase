@@ -20,7 +20,7 @@
         background: #f5f5f7;
         color: #1d1d1f;
         padding: 40px 24px 56px;
-        padding-top: calc(62px + 40px);
+        padding-top: calc(var(--flexcase-site-header-offset, 98px) + 40px);
       }
 
       .auth-gate {
@@ -1030,7 +1030,11 @@
     </style>
   </head>
   <body>
-    <nav class="site-navbar" aria-label="Site">
+    <header class="site-header">
+      <div class="site-promo-banner" role="region" aria-label="Promotion">
+        <p class="site-promo-banner-text">Early Bird Discount for the First Batch of Flex Bundle — Until Sold Out</p>
+      </div>
+      <nav class="site-navbar" aria-label="Site">
       <div class="site-navbar-inner">
         <a class="site-brand" href="index.html" aria-label="Flex Case home">
           <span class="site-brand-text">Flex Case</span>
@@ -1049,7 +1053,8 @@
           </a>
         </div>
       </div>
-    </nav>
+      </nav>
+    </header>
 
     <main>
       <section id="auth-gate" class="auth-gate auth-hidden" aria-label="Sign in or sign up">

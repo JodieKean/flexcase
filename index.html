@@ -6,6 +6,25 @@
     <title>Flex Case</title>
     <link rel="stylesheet" href="assets/navbar.css" />
     <link rel="stylesheet" href="assets/layout.css" />
+    <link rel="preload" as="image" href="assets/flexcase_front_homepage.png" />
+    <link
+      rel="preload"
+      as="image"
+      href="https://images.scrydex.com/pokemon/me4-88/large"
+      fetchpriority="high"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="https://images.scrydex.com/pokemon/me4-89/large"
+      fetchpriority="high"
+    />
+    <link
+      rel="preload"
+      as="image"
+      href="https://images.scrydex.com/pokemon/me4-116/large"
+      fetchpriority="high"
+    />
     <script src="assets/flexcase-cart-sync.js"></script>
     <script src="assets/navbar-scroll.js" defer></script>
     <style>
@@ -22,7 +41,7 @@
         background: #f5f5f7;
         color: #1d1d1f;
         padding: 40px 0;
-        padding-top: calc(62px + 40px);
+        padding-top: calc(var(--flexcase-site-header-offset, 98px) + 40px);
         max-width: 100vw;
         overscroll-behavior-x: none;
       }
@@ -108,7 +127,7 @@
 
       .card-visual .card-slot {
         position: absolute;
-        inset: 6%;
+        inset: 5%;
         z-index: 1;
         display: flex;
         align-items: center;
@@ -211,7 +230,7 @@
       .catalog-toolbar {
         position: -webkit-sticky;
         position: sticky;
-        top: var(--catalog-sticky-top, 62px);
+        top: var(--catalog-sticky-top, var(--flexcase-site-header-offset, 98px));
         z-index: 40;
         width: 100%;
         max-width: 100vw;
@@ -516,7 +535,7 @@
           right: 0;
           width: 100%;
           max-width: 100vw;
-          top: var(--catalog-sticky-top, 62px);
+          top: var(--catalog-sticky-top, var(--flexcase-site-header-offset, 98px));
           z-index: 40;
           transition: top 0.22s ease;
           background: rgba(245, 245, 247, 0.72);
@@ -598,7 +617,11 @@
     </style>
   </head>
   <body>
-    <nav class="site-navbar" aria-label="Site">
+    <header class="site-header">
+      <div class="site-promo-banner" role="region" aria-label="Promotion">
+        <p class="site-promo-banner-text">Early Bird Discount for the First Batch of Flex Bundle — Until Sold Out</p>
+      </div>
+      <nav class="site-navbar" aria-label="Site">
       <div class="site-navbar-inner">
         <a class="site-brand" href="index.html" aria-label="Flex Case home">
           <span class="site-brand-text">Flex Case</span>
@@ -617,7 +640,8 @@
           </a>
         </div>
       </div>
-    </nav>
+      </nav>
+    </header>
 
     <div class="page-top">
       <main>
@@ -736,6 +760,13 @@
         2: "Frogadier 89 Chaos Rising",
         3: "Mega Greninja 116 Chaos Rising",
       };
+      const defaultHeroNumbers = {
+        1: "88",
+        2: "89",
+        3: "116",
+      };
+      const DEFAULT_HERO_BATCH_QUERY =
+        'set.name:"Chaos Rising" (number:88 OR number:89 OR number:116)';
 
       function escapeValue(value) {
         return value.replace(/(["\\\\])/g, "\\$1");
@@ -906,7 +937,14 @@
         setCardMeta(windowId, null);
       }
 
-      function renderCard(windowId, card) {
+      function normalizeCardNumber(value) {
+        const raw = String(value || "").trim();
+        if (!raw) return "";
+        const stripped = raw.replace(/^0+/, "");
+        return stripped || "0";
+      }
+
+      function renderCard(windowId, card, options = {}) {
         const imageUrl = card.images?.large || card.images?.small;
 
         if (!imageUrl) {
@@ -914,11 +952,73 @@
           return;
         }
 
+        const priorityAttrs = options.priority
+          ? ' loading="eager" fetchpriority="high" decoding="async"'
+          : ' loading="lazy" decoding="async"';
         setCardSlot(
           windowId,
-          `<img class="card-art" src="${imageUrl}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+          `<img class="card-art" src="${imageUrl}" alt="${escapeHtml(card.name)}"${priorityAttrs} />`
         );
         setCardMeta(windowId, card);
+      }
+
+      const preloadedImageUrls = new Set();
+
+      function preloadImageUrl(url) {
+        if (!url || preloadedImageUrls.has(url)) return;
+        preloadedImageUrls.add(url);
+        const link = document.createElement("link");
+        link.rel = "preload";
+        link.as = "image";
+        link.href = url;
+        if ("fetchPriority" in link) link.fetchPriority = "high";
+        document.head.appendChild(link);
+      }
+
+      async function loadDefaultHeroCards() {
+        [1, 2, 3].forEach((windowId) => {
+          ensureCardFrame(windowId);
+          setCardSlot(windowId, `<div class="card-loading">Searching card...</div>`);
+          setCardMeta(windowId, null);
+        });
+
+        try {
+          const response = await fetch(
+            `${API_URL}?q=${encodeURIComponent(DEFAULT_HERO_BATCH_QUERY)}&pageSize=10`,
+            { priority: "high" }
+          );
+          if (!response.ok) {
+            throw new Error(`API request failed (${response.status})`);
+          }
+          const payload = await response.json();
+          const cards = payload?.data || [];
+          const byNumber = new Map();
+          for (const card of cards) {
+            const key = normalizeCardNumber(card.number);
+            if (key && !byNumber.has(key)) byNumber.set(key, card);
+          }
+
+          for (const windowId of [1, 2, 3]) {
+            const targetNumber = defaultHeroNumbers[windowId];
+            const card = byNumber.get(targetNumber);
+            if (!card) {
+              showCardMessage(windowId, "No card found. Try another name or number.", true);
+              continue;
+            }
+            const imageUrl = card.images?.large || card.images?.small;
+            preloadImageUrl(imageUrl);
+            renderCard(windowId, card, { priority: true });
+          }
+        } catch (error) {
+          for (const windowId of [1, 2, 3]) {
+            const fallback = defaultSearches[windowId];
+            if (fallback) {
+              searchCards(windowId, fallback);
+            } else {
+              showCardMessage(windowId, error.message || "Unable to load card.", true);
+            }
+          }
+        }
       }
 
       async function searchCards(windowId, rawInput) {
@@ -985,10 +1085,11 @@
         }
       }
 
-      function setupWindow(windowId) {
+      function setupWindow(windowId, options = {}) {
         ensureCardFrame(windowId);
         const input = document.getElementById(`searchInput${windowId}`);
         const defaultValue = defaultSearches[windowId] || "";
+        const runInitialSearch = options.runInitialSearch !== false;
         input.dataset.fullPlaceholder = defaultValue
           ? `Search... ${defaultValue}`
           : "Search...";
@@ -1020,16 +1121,17 @@
           }, 280);
         });
 
-        if (defaultValue) {
-          searchCards(windowId, defaultValue);
-        } else {
-          showCardMessage(windowId, "Type to search cards.");
+        if (runInitialSearch) {
+          if (defaultValue) {
+            searchCards(windowId, defaultValue);
+          } else {
+            showCardMessage(windowId, "Type to search cards.");
+          }
         }
       }
 
-      setupWindow(1);
-      setupWindow(2);
-      setupWindow(3);
+      [1, 2, 3].forEach((windowId) => setupWindow(windowId, { runInitialSearch: false }));
+      void loadDefaultHeroCards();
 
       window.addEventListener("resize", () => {
         managedInputs.forEach((input) => {

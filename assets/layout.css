@@ -2,6 +2,7 @@
   --flexcase-content-width: 60vw;
   --flexcase-focus: #b08d57;
   --flexcase-focus-ring: rgba(176, 141, 87, 0.18);
+  --flexcase-site-header-offset: 98px;
 }
 
 input,

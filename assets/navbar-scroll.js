@@ -1,6 +1,6 @@
 (function () {
-  const nav = document.querySelector(".site-navbar");
-  if (!nav) return;
+  const header = document.querySelector(".site-header");
+  if (!header) return;
 
   const mobileQuery = window.matchMedia("(max-width: 980px)");
   let lastScrollY = window.scrollY;
@@ -24,17 +24,18 @@
       top += el.offsetTop;
       el = el.offsetParent;
     }
-    catalogReachY = Math.max(0, top - nav.offsetHeight);
+    catalogReachY = Math.max(0, top - header.offsetHeight);
   }
 
   function updateStickyOffsets() {
-    const hidden = nav.classList.contains("is-hidden");
-    const top = hidden ? 0 : nav.offsetHeight;
-    document.documentElement.style.setProperty("--catalog-sticky-top", `${top}px`);
+    const hidden = header.classList.contains("is-hidden");
+    const offset = hidden ? 0 : header.offsetHeight;
+    document.documentElement.style.setProperty("--catalog-sticky-top", `${offset}px`);
+    document.documentElement.style.setProperty("--flexcase-site-header-offset", `${offset || header.offsetHeight}px`);
   }
 
-  function setNavbarHidden(hidden) {
-    nav.classList.toggle("is-hidden", hidden);
+  function setHeaderHidden(hidden) {
+    header.classList.toggle("is-hidden", hidden);
     document.body.classList.toggle("navbar-hidden", hidden);
     updateStickyOffsets();
   }
@@ -77,7 +78,7 @@
   function updateNavbarVisibility() {
     ticking = false;
     if (!mobileQuery.matches) {
-      setNavbarHidden(false);
+      setHeaderHidden(false);
       unstuckToolbar();
       lastScrollY = window.scrollY;
       return;
@@ -86,15 +87,15 @@
     const currentY = window.scrollY;
 
     if (currentY < catalogReachY) {
-      setNavbarHidden(false);
+      setHeaderHidden(false);
       lastScrollY = currentY;
       return;
     }
 
     if (currentY > lastScrollY + 6) {
-      setNavbarHidden(true);
+      setHeaderHidden(true);
     } else if (currentY < lastScrollY - 6) {
-      setNavbarHidden(false);
+      setHeaderHidden(false);
     }
     lastScrollY = currentY;
   }
@@ -126,7 +127,7 @@
   }
   mobileQuery.addEventListener("change", () => {
     lastScrollY = window.scrollY;
-    setNavbarHidden(false);
+    setHeaderHidden(false);
     remeasure();
   });
 
