@@ -183,25 +183,25 @@ async function storefrontGraphql(query, variables = {}) {
 
   const MAX_ATTEMPTS = 3;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    let response = await callWithHeader(primaryHeaderName);
-    if (response.status === 401) {
-      response = await callWithHeader(secondaryHeaderName);
-    }
+  let response = await callWithHeader(primaryHeaderName);
+  if (response.status === 401) {
+    response = await callWithHeader(secondaryHeaderName);
+  }
 
-    if (!response.ok) {
-      const body = await response.text();
-      let parsed = null;
-      try {
-        parsed = JSON.parse(body);
-      } catch (_) {
-        parsed = null;
-      }
-      const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
-      if (response.status === 401 || errorCode === "UNAUTHORIZED") {
-        throw new Error(
-          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-        );
-      }
+  if (!response.ok) {
+    const body = await response.text();
+    let parsed = null;
+    try {
+      parsed = JSON.parse(body);
+    } catch (_) {
+      parsed = null;
+    }
+    const errorCode = parsed?.errors?.[0]?.extensions?.code || "";
+    if (response.status === 401 || errorCode === "UNAUTHORIZED") {
+      throw new Error(
+        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+      );
+    }
       const isThrottled =
         response.status === 429 ||
         errorCode === "THROTTLED" ||
@@ -215,17 +215,17 @@ async function storefrontGraphql(query, variables = {}) {
         await new Promise((resolve) => setTimeout(resolve, waitMs));
         continue;
       }
-      throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
-    }
+    throw new Error(`Storefront GraphQL request failed (${response.status}): ${body}`);
+  }
 
-    const payload = await response.json();
-    if (payload.errors?.length) {
-      const firstCode = payload.errors?.[0]?.extensions?.code || "";
-      if (firstCode === "UNAUTHORIZED") {
-        throw new Error(
-          "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
-        );
-      }
+  const payload = await response.json();
+  if (payload.errors?.length) {
+    const firstCode = payload.errors?.[0]?.extensions?.code || "";
+    if (firstCode === "UNAUTHORIZED") {
+      throw new Error(
+        "Storefront access token is unauthorized. Verify SHOPIFY_STOREFRONT_ACCESS_TOKEN belongs to this shop, then redeploy. If using a private storefront token, make sure it is the Storefront API token from your custom app."
+      );
+    }
       const hasThrottledError = payload.errors.some((e) => {
         const code = String(e?.extensions?.code || "");
         const message = String(e?.message || "");
@@ -236,10 +236,10 @@ async function storefrontGraphql(query, variables = {}) {
         await new Promise((resolve) => setTimeout(resolve, waitMs));
         continue;
       }
-      throw new Error(payload.errors.map((e) => e.message).join(", "));
-    }
-    return payload.data;
+    throw new Error(payload.errors.map((e) => e.message).join(", "));
   }
+  return payload.data;
+}
 
   throw new Error("Storefront request failed after retries.");
 }
@@ -1635,16 +1635,16 @@ function mapProduct(node, discountMap = new Map()) {
         }
 
         return {
-          id: variant.id,
-          title: variant.title,
+        id: variant.id,
+        title: variant.title,
           selectedOptions: (Array.isArray(variant.selectedOptions) ? variant.selectedOptions : [])
             .map((opt) => ({
               name: String(opt?.name || "").trim(),
               value: String(opt?.value || "").trim(),
             }))
             .filter((opt) => opt.name && opt.value),
-          availableForSale: !!variant.inventoryQuantity && variant.inventoryQuantity > 0,
-          quantityAvailable: Number(variant.inventoryQuantity || 0),
+        availableForSale: !!variant.inventoryQuantity && variant.inventoryQuantity > 0,
+        quantityAvailable: Number(variant.inventoryQuantity || 0),
           price,
           compareAtPrice,
         };
@@ -4003,35 +4003,35 @@ async function handleCartAddLine(req, res) {
       return;
     }
     await runSerializedCustomerCartMutation(customer.id, async () => {
-      let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
-      const existing = findCartLineForVariant(cart, merchandiseId);
-      let data;
-      if (existing) {
-        data = await storefrontGraphql(STOREFRONT_CART_LINES_UPDATE, {
-          cartId,
-          lines: [{ id: existing.lineId, quantity: existing.quantity + quantity }],
-        });
-        const errs = data?.cartLinesUpdate?.userErrors?.filter((e) => e?.message) || [];
-        if (errs.length) {
-          json(res, 400, { error: errs.map((e) => e.message).join(", ") });
-          return;
-        }
-        cart = data?.cartLinesUpdate?.cart;
-      } else {
-        data = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, {
-          cartId,
-          lines: [{ merchandiseId, quantity }],
-        });
-        const errs = data?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
-        if (errs.length) {
-          json(res, 400, { error: errs.map((e) => e.message).join(", ") });
-          return;
-        }
-        cart = data?.cartLinesAdd?.cart;
+    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+    const existing = findCartLineForVariant(cart, merchandiseId);
+    let data;
+    if (existing) {
+      data = await storefrontGraphql(STOREFRONT_CART_LINES_UPDATE, {
+        cartId,
+        lines: [{ id: existing.lineId, quantity: existing.quantity + quantity }],
+      });
+      const errs = data?.cartLinesUpdate?.userErrors?.filter((e) => e?.message) || [];
+      if (errs.length) {
+        json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+        return;
       }
-      json(res, 200, {
-        lines: mapStorefrontCartToClientLines(cart),
-        totalQuantity: Number(cart?.totalQuantity || 0),
+      cart = data?.cartLinesUpdate?.cart;
+    } else {
+      data = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, {
+        cartId,
+        lines: [{ merchandiseId, quantity }],
+      });
+      const errs = data?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+      if (errs.length) {
+        json(res, 400, { error: errs.map((e) => e.message).join(", ") });
+        return;
+      }
+      cart = data?.cartLinesAdd?.cart;
+    }
+    json(res, 200, {
+      lines: mapStorefrontCartToClientLines(cart),
+      totalQuantity: Number(cart?.totalQuantity || 0),
       });
     });
   } catch (error) {
@@ -4163,7 +4163,7 @@ async function handleCartMerge(req, res) {
     const body = await readJsonBody(req);
     const guestLines = Array.isArray(body.lines) ? body.lines : [];
     await runSerializedCustomerCartMutation(customer.id, async () => {
-      let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
+    let { cartId, cart } = await ensureCustomerStorefrontCart(customer.id);
 
       /**
        * Sign-in merge: browser `lines` are the guest snapshot (often a preserved copy of the
@@ -4171,16 +4171,16 @@ async function handleCartMerge(req, res) {
        * double every sign-in. Guest wins on overlapping variants; server-only lines stay.
        */
       const merged = new Map();
-      for (const edge of cart?.lines?.edges || []) {
-        const n = edge?.node;
-        const m = n?.merchandise;
+    for (const edge of cart?.lines?.edges || []) {
+      const n = edge?.node;
+      const m = n?.merchandise;
         if (m?.id) merged.set(m.id, Number(n.quantity || 0));
-      }
+    }
 
       const guestByVariant = new Map();
-      for (const gl of guestLines) {
+    for (const gl of guestLines) {
         const vid = normalizeStorefrontVariantGid(String(gl.variantId || "").trim());
-        if (!vid.startsWith("gid://shopify/ProductVariant/")) continue;
+      if (!vid.startsWith("gid://shopify/ProductVariant/")) continue;
         const raw = Number(gl.quantity);
         const q = Number.isFinite(raw)
           ? Math.max(1, Math.min(99, Math.floor(raw)))
@@ -4196,24 +4196,24 @@ async function handleCartMerge(req, res) {
 
       await removeAllStorefrontCartLines(cartId);
 
-      const linesToAdd = [...byVariant.entries()].map(([merchandiseId, q]) => ({
-        merchandiseId,
-        quantity: q,
-      }));
-      if (linesToAdd.length) {
-        const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
-        const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
-        if (addErrs.length) {
-          json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
-          return;
-        }
+    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, q]) => ({
+      merchandiseId,
+      quantity: q,
+    }));
+    if (linesToAdd.length) {
+      const addData = await storefrontGraphql(STOREFRONT_CART_LINES_ADD, { cartId, lines: linesToAdd });
+      const addErrs = addData?.cartLinesAdd?.userErrors?.filter((e) => e?.message) || [];
+      if (addErrs.length) {
+        json(res, 400, { error: addErrs.map((e) => e.message).join(", ") });
+        return;
       }
+    }
 
-      const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
-      const nextCart = refreshed?.cart;
-      json(res, 200, {
-        lines: mapStorefrontCartToClientLines(nextCart),
-        totalQuantity: Number(nextCart?.totalQuantity || 0),
+    const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+    const nextCart = refreshed?.cart;
+    json(res, 200, {
+      lines: mapStorefrontCartToClientLines(nextCart),
+      totalQuantity: Number(nextCart?.totalQuantity || 0),
       });
     });
   } catch (error) {
@@ -4379,11 +4379,11 @@ async function handleCartReplace(req, res) {
  * Card data is never accepted (PCI); payment is completed on Shopify Checkout only.
  */
 function buildCheckoutLinesMap(requestedLines) {
-  const byVariant = new Map();
+    const byVariant = new Map();
   for (const line of Array.isArray(requestedLines) ? requestedLines : []) {
     const variantId = normalizeStorefrontVariantGid(String(line.variantId || "").trim());
-    if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
-    const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
+      if (!variantId.startsWith("gid://shopify/ProductVariant/")) continue;
+      const qty = Math.max(1, Math.min(99, Number(line.quantity || 1)));
     byVariant.set(variantId, Math.min(99, (byVariant.get(variantId) || 0) + qty));
   }
   return byVariant;
@@ -4392,8 +4392,8 @@ function buildCheckoutLinesMap(requestedLines) {
 /** Guest-style cart create (works when replace-on-existing-cart fails for signed-in users). */
 async function createFreshStorefrontCartFromCheckoutLines(requestedLines, checkout) {
   const byVariant = buildCheckoutLinesMap(requestedLines);
-  const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
-    merchandiseId,
+    const linesToAdd = [...byVariant.entries()].map(([merchandiseId, quantity]) => ({
+      merchandiseId,
     quantity: Math.floor(Number(quantity)),
   }));
   if (!linesToAdd.length) {
@@ -4430,8 +4430,8 @@ async function handleShopifyCheckout(req, res) {
   try {
     if (!STOREFRONT_ACCESS_TOKEN || !SHOP_FROM_ENV) {
       json(res, 503, { error: "Storefront checkout is not configured on the server." });
-      return;
-    }
+        return;
+      }
     const body = await readJsonBody(req);
     const checkout = body.checkout || {};
     const checkoutErr = validateFlexcaseCheckoutPayload(checkout);
@@ -4496,7 +4496,7 @@ async function handleShopifyCheckout(req, res) {
             errMsg = e.message || "Unable to apply selected shipping method.";
             return;
           }
-          const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
+    const refreshed = await storefrontGraphql(STOREFRONT_CART_QUERY, { id: cartId });
           const fallbackLines = mapStorefrontCartToClientLines(refreshed?.cart);
           checkoutUrl = finalizeCheckoutHandoffUrl(refreshed?.cart?.checkoutUrl, fallbackLines, checkout);
           const totalQuantity = Number(refreshed?.cart?.totalQuantity || 0);
@@ -4506,9 +4506,9 @@ async function handleShopifyCheckout(req, res) {
               "Shopify did not return a valid checkout link. Check your shipping address and that checkout is enabled for this store.";
             checkoutUrl = "";
           }
-        });
-      } catch (error) {
-        json(res, 500, { error: error.message });
+    });
+  } catch (error) {
+    json(res, 500, { error: error.message });
         return;
       }
       if (errMsg) {
@@ -4611,17 +4611,17 @@ async function handleCartClear(req, res) {
       return;
     }
     await runSerializedCustomerCartMutation(customer.id, async () => {
-      const cartId = await getCustomerHeadlessCartId(customer.id);
-      if (!cartId) {
-        json(res, 200, { ok: true });
-        return;
-      }
-      try {
-        await removeAllStorefrontCartLines(cartId);
-      } catch (_) {
-        /* ignore */
-      }
+    const cartId = await getCustomerHeadlessCartId(customer.id);
+    if (!cartId) {
       json(res, 200, { ok: true });
+      return;
+    }
+    try {
+        await removeAllStorefrontCartLines(cartId);
+    } catch (_) {
+      /* ignore */
+    }
+    json(res, 200, { ok: true });
     });
   } catch (error) {
     json(res, 500, { error: error.message });
@@ -4790,7 +4790,12 @@ function serveStatic(req, res) {
     ".gif": "image/gif",
     ".svg": "image/svg+xml",
   };
-  res.writeHead(200, { "Content-Type": contentTypes[ext] || "application/octet-stream" });
+  const headers = { "Content-Type": contentTypes[ext] || "application/octet-stream" };
+  const longCachedExts = [".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".css", ".js", ".woff", ".woff2", ".ico"];
+  if (longCachedExts.includes(ext)) {
+    headers["Cache-Control"] = "public, max-age=31536000, immutable";
+  }
+  res.writeHead(200, headers);
   fs.createReadStream(safePath).pipe(res);
 }
 
