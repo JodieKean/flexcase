@@ -11,7 +11,8 @@
     <style>
       :root {
         color-scheme: light;
-        --flexcase-homepage-card-aspect: 0.74594594594;
+        /* Pokémon TCG API hires images are 600×825px */
+        --flexcase-homepage-card-aspect: 600 / 825;
       }
 
       body {
@@ -81,33 +82,6 @@
       .card {
         margin-top: 10px;
         text-align: center;
-        min-height: 260px;
-      }
-
-      .card-loading {
-        min-height: 260px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 12px;
-        color: #8e8e93;
-        font-size: 0.98rem;
-        text-align: center;
-      }
-
-      .card-message {
-        min-height: 260px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 12px;
-        color: #8e8e93;
-        font-size: 0.98rem;
-        text-align: center;
-      }
-
-      .card-message.error {
-        color: #d14c4c;
       }
 
       .card-visual {
@@ -135,9 +109,24 @@
       .card-visual .card-slot {
         position: absolute;
         inset: 5%;
+        z-index: 1;
         display: flex;
         align-items: center;
         justify-content: center;
+      }
+
+      .card-slot .card-loading,
+      .card-slot .card-message {
+        width: 100%;
+        padding: 8px;
+        color: #8e8e93;
+        font-size: 0.82rem;
+        line-height: 1.35;
+        text-align: center;
+      }
+
+      .card-slot .card-message.error {
+        color: #d14c4c;
       }
 
       .card-visual .card-art {
@@ -148,11 +137,13 @@
         max-height: 100%;
         object-fit: contain;
         object-position: center;
+        border-radius: 3.8%;
       }
 
       .card-visual .card-case-overlay {
         position: absolute;
         inset: 0;
+        z-index: 2;
         width: 100%;
         height: 100%;
         object-fit: contain;
@@ -858,13 +849,64 @@
       }
 
 
-      function showCardMessage(windowId, message, isError = false) {
+      function getCardFrameElements(windowId) {
         const resultEl = document.getElementById(`cardResult${windowId}`);
-        resultEl.innerHTML = `<div class="card-message${isError ? " error" : ""}">${message}</div>`;
+        return {
+          resultEl,
+          slotEl: resultEl?.querySelector(".card-slot") || null,
+          metaEl: resultEl?.querySelector(".card-meta") || null,
+        };
+      }
+
+      function ensureCardFrame(windowId) {
+        const { resultEl, slotEl } = getCardFrameElements(windowId);
+        if (!resultEl) return getCardFrameElements(windowId);
+        if (slotEl) return getCardFrameElements(windowId);
+
+        resultEl.innerHTML = `
+          <div class="card-visual">
+            <div class="card-slot"></div>
+            <img
+              class="card-case-overlay"
+              src="${FLEXCASE_CARD_OVERLAY_SRC}"
+              alt=""
+              aria-hidden="true"
+            />
+          </div>
+          <div class="meta card-meta" hidden></div>
+        `;
+        return getCardFrameElements(windowId);
+      }
+
+      function setCardSlot(windowId, html) {
+        const { slotEl } = ensureCardFrame(windowId);
+        if (slotEl) slotEl.innerHTML = html;
+      }
+
+      function setCardMeta(windowId, card) {
+        const { metaEl } = ensureCardFrame(windowId);
+        if (!metaEl) return;
+        if (!card) {
+          metaEl.hidden = true;
+          metaEl.innerHTML = "";
+          return;
+        }
+        metaEl.hidden = false;
+        metaEl.innerHTML = `
+          <strong>${escapeHtml(card.name || "")}</strong><br />
+          ${escapeHtml(card.set?.name || "Unknown Set")} | #${escapeHtml(card.number || "?")}
+        `;
+      }
+
+      function showCardMessage(windowId, message, isError = false) {
+        setCardSlot(
+          windowId,
+          `<div class="card-message${isError ? " error" : ""}">${escapeHtml(message)}</div>`
+        );
+        setCardMeta(windowId, null);
       }
 
       function renderCard(windowId, card) {
-        const resultEl = document.getElementById(`cardResult${windowId}`);
         const imageUrl = card.images?.large || card.images?.small;
 
         if (!imageUrl) {
@@ -872,28 +914,14 @@
           return;
         }
 
-        resultEl.innerHTML = `
-          <div class="card-visual">
-            <div class="card-slot">
-              <img class="card-art" src="${imageUrl}" alt="${escapeHtml(card.name)}" loading="lazy" />
-            </div>
-            <img
-              class="card-case-overlay"
-              src="${FLEXCASE_CARD_OVERLAY_SRC}"
-              alt=""
-              aria-hidden="true"
-              loading="lazy"
-            />
-          </div>
-          <div class="meta">
-            <strong>${escapeHtml(card.name)}</strong><br />
-            ${escapeHtml(card.set?.name || "Unknown Set")} | #${escapeHtml(card.number || "?")}
-          </div>
-        `;
+        setCardSlot(
+          windowId,
+          `<img class="card-art" src="${imageUrl}" alt="${escapeHtml(card.name)}" loading="lazy" />`
+        );
+        setCardMeta(windowId, card);
       }
 
       async function searchCards(windowId, rawInput) {
-        const resultEl = document.getElementById(`cardResult${windowId}`);
         const inputValue = rawInput.trim();
         if (!inputValue) {
           showCardMessage(windowId, "Type to search cards.");
@@ -908,12 +936,17 @@
         }
 
         const currentRequest = ++windowState[windowId].requestSequence;
-        resultEl.innerHTML = `<div class="card-loading">Searching card...</div>`;
+        setCardSlot(windowId, `<div class="card-loading">Searching card...</div>`);
+        setCardMeta(windowId, null);
         const url = `${API_URL}?q=${encodeURIComponent(query)}&pageSize=30`;
         const controller = new AbortController();
         windowState[windowId].controller?.abort();
         windowState[windowId].controller = controller;
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        let abortedByTimeout = false;
+        const timeoutId = setTimeout(() => {
+          abortedByTimeout = true;
+          controller.abort();
+        }, 30000);
 
         try {
           const response = await fetch(url, { signal: controller.signal });
@@ -939,8 +972,13 @@
           renderCard(windowId, rankedCards[0]);
         } catch (error) {
           clearTimeout(timeoutId);
+          if (currentRequest !== windowState[windowId].requestSequence) {
+            return;
+          }
           if (error.name === "AbortError") {
-            showCardMessage(windowId, "Search timed out. Please refine the query.", true);
+            if (abortedByTimeout) {
+              showCardMessage(windowId, "Search timed out. Please refine the query.", true);
+            }
             return;
           }
           showCardMessage(windowId, `Error: ${error.message}`, true);
@@ -948,6 +986,7 @@
       }
 
       function setupWindow(windowId) {
+        ensureCardFrame(windowId);
         const input = document.getElementById(`searchInput${windowId}`);
         const defaultValue = defaultSearches[windowId] || "";
         input.dataset.fullPlaceholder = defaultValue
