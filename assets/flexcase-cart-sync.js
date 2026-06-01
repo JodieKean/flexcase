@@ -139,22 +139,24 @@
     const qty = readBadgeQtyFromStorage();
     if (qty <= 0) return;
 
-    const hydrate = () => paintCartBadges(qty);
+    let hydrated = false;
+    let observer = null;
+
+    const hydrateOnce = () => {
+      if (hydrated) return;
+      if (!document.querySelector(".cart-badge")) return;
+      hydrated = true;
+      observer?.disconnect();
+      observer = null;
+      paintCartBadges(qty);
+    };
 
     if (!document.documentElement) return;
 
-    const observer = new MutationObserver(() => {
-      if (document.querySelector(".cart-badge")) hydrate();
-    });
+    observer = new MutationObserver(hydrateOnce);
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    document.addEventListener(
-      "DOMContentLoaded",
-      () => {
-        hydrate();
-        observer.disconnect();
-      },
-      { once: true }
-    );
+    document.addEventListener("DOMContentLoaded", hydrateOnce, { once: true });
+    if (document.readyState !== "loading") hydrateOnce();
   }
 
   window.addEventListener("flexcase-cart-updated", updateBadges);
