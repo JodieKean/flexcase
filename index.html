@@ -659,30 +659,90 @@
           <input
             id="searchInput1"
             type="text"
-            placeholder="Search card.. Rayquaza 107"
+            placeholder="Search... Froakie 88 Chaos Rising"
             autocomplete="off"
           />
-          <div id="cardResult1" class="card"></div>
+          <div id="cardResult1" class="card">
+            <div class="card-visual">
+              <div class="card-slot">
+                <img
+                  class="card-art"
+                  src="https://images.scrydex.com/pokemon/me4-88/large"
+                  alt="Froakie"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </div>
+              <img
+                class="card-case-overlay"
+                src="assets/flexcase_front_homepage.png"
+                alt=""
+                aria-hidden="true"
+              />
+            </div>
+            <div class="meta card-meta" hidden></div>
+          </div>
         </article>
 
         <article data-window-id="2">
           <input
             id="searchInput2"
             type="text"
-            placeholder="Search card.. Rayquaza 107"
+            placeholder="Search... Frogadier 89 Chaos Rising"
             autocomplete="off"
           />
-          <div id="cardResult2" class="card"></div>
+          <div id="cardResult2" class="card">
+            <div class="card-visual">
+              <div class="card-slot">
+                <img
+                  class="card-art"
+                  src="https://images.scrydex.com/pokemon/me4-89/large"
+                  alt="Frogadier"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </div>
+              <img
+                class="card-case-overlay"
+                src="assets/flexcase_front_homepage.png"
+                alt=""
+                aria-hidden="true"
+              />
+            </div>
+            <div class="meta card-meta" hidden></div>
+          </div>
         </article>
 
         <article data-window-id="3">
           <input
             id="searchInput3"
             type="text"
-            placeholder="Search card.. Rayquaza 107"
+            placeholder="Search... Mega Greninja 116 Chaos Rising"
             autocomplete="off"
           />
-          <div id="cardResult3" class="card"></div>
+          <div id="cardResult3" class="card">
+            <div class="card-visual">
+              <div class="card-slot">
+                <img
+                  class="card-art"
+                  src="https://images.scrydex.com/pokemon/me4-116/large"
+                  alt="Mega Greninja ex"
+                  loading="eager"
+                  fetchpriority="high"
+                  decoding="async"
+                />
+              </div>
+              <img
+                class="card-case-overlay"
+                src="assets/flexcase_front_homepage.png"
+                alt=""
+                aria-hidden="true"
+              />
+            </div>
+            <div class="meta card-meta" hidden></div>
+          </div>
         </article>
       </section>
 
@@ -768,6 +828,11 @@
         1: "88",
         2: "89",
         3: "116",
+      };
+      const defaultHeroImages = {
+        1: "https://images.scrydex.com/pokemon/me4-88/large",
+        2: "https://images.scrydex.com/pokemon/me4-89/large",
+        3: "https://images.scrydex.com/pokemon/me4-116/large",
       };
       const DEFAULT_HERO_BATCH_QUERY =
         'set.name:"Chaos Rising" (number:88 OR number:89 OR number:116)';
@@ -893,6 +958,20 @@
         };
       }
 
+      function hasHeroCardArt(windowId) {
+        return Boolean(getCardFrameElements(windowId).slotEl?.querySelector(".card-art"));
+      }
+
+      function ensureDefaultHeroImage(windowId) {
+        const imageUrl = defaultHeroImages[windowId];
+        if (!imageUrl || hasHeroCardArt(windowId)) return;
+        ensureCardFrame(windowId);
+        setCardSlot(
+          windowId,
+          `<img class="card-art" src="${imageUrl}" alt="" loading="eager" fetchpriority="high" decoding="async" />`
+        );
+      }
+
       function ensureCardFrame(windowId) {
         const { resultEl, slotEl } = getCardFrameElements(windowId);
         if (!resultEl) return getCardFrameElements(windowId);
@@ -982,8 +1061,11 @@
       async function loadDefaultHeroCards() {
         [1, 2, 3].forEach((windowId) => {
           ensureCardFrame(windowId);
-          setCardSlot(windowId, `<div class="card-loading">Searching card...</div>`);
-          setCardMeta(windowId, null);
+          ensureDefaultHeroImage(windowId);
+          if (!hasHeroCardArt(windowId)) {
+            setCardSlot(windowId, `<div class="card-loading">Searching card...</div>`);
+            setCardMeta(windowId, null);
+          }
         });
 
         try {
@@ -1015,6 +1097,8 @@
           }
         } catch (error) {
           for (const windowId of [1, 2, 3]) {
+            ensureDefaultHeroImage(windowId);
+            if (hasHeroCardArt(windowId)) continue;
             const fallback = defaultSearches[windowId];
             if (fallback) {
               searchCards(windowId, fallback);
@@ -1134,8 +1218,18 @@
         }
       }
 
-      [1, 2, 3].forEach((windowId) => setupWindow(windowId, { runInitialSearch: false }));
-      void loadDefaultHeroCards();
+      function initHomepageHero() {
+        if (!document.querySelector(".windows")) return;
+        [1, 2, 3].forEach((windowId) => {
+          ensureCardFrame(windowId);
+          ensureDefaultHeroImage(windowId);
+          setupWindow(windowId, { runInitialSearch: false });
+        });
+        void loadDefaultHeroCards();
+      }
+
+      initHomepageHero();
+      window.addEventListener("flexcase:navigate", initHomepageHero);
 
       window.addEventListener("resize", () => {
         managedInputs.forEach((input) => {
