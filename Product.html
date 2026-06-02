@@ -1961,6 +1961,14 @@
             });
           }
 
+          function maybeOpenReviewFromQuery() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get("writeReview") !== "1") return;
+            window.requestAnimationFrame(() => {
+              openComposePanel();
+            });
+          }
+
           toggleEl.addEventListener("click", () => {
             if (panelEl.hidden) openComposePanel();
             else closeComposePanel();
@@ -2113,6 +2121,7 @@
               }
             }
           });
+          maybeOpenReviewFromQuery();
         }
 
         initReviewCompose();

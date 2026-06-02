@@ -302,6 +302,10 @@
         margin-bottom: 10px;
       }
 
+      .order-top[data-order-header] {
+        cursor: pointer;
+      }
+
       .order-id {
         display: inline-flex;
         align-items: center;
@@ -1775,6 +1779,8 @@
       document.getElementById("section-orders")?.addEventListener("click", (event) => {
         const reviewBtn = event.target.closest("[data-write-review]");
         if (reviewBtn) {
+          event.preventDefault();
+          event.stopPropagation();
           const url = String(reviewBtn.dataset.reviewUrl || "").trim();
           if (url) {
             window.open(url, "_blank", "noopener,noreferrer");
@@ -1784,12 +1790,32 @@
           return;
         }
         const toggleBtn = event.target.closest("[data-toggle-details]");
-        if (!toggleBtn) return;
-        const card = toggleBtn.closest("[data-order-card]");
+        if (toggleBtn) {
+          event.stopPropagation();
+          toggleOrderCard(toggleBtn.closest("[data-order-card]"));
+          return;
+        }
+        const header = event.target.closest("[data-order-header]");
+        if (header) {
+          toggleOrderCard(header.closest("[data-order-card]"));
+        }
+      });
+
+      function toggleOrderCard(card) {
         const details = card?.querySelector("[data-order-details]");
+        const toggleBtn = card?.querySelector("[data-toggle-details]");
+        const header = card?.querySelector("[data-order-header]");
         if (!details) return;
         const isHidden = details.classList.toggle("hidden");
-        toggleBtn.textContent = isHidden ? "Details" : "Hide";
+        if (toggleBtn) toggleBtn.textContent = isHidden ? "Details" : "Hide";
+        if (header) header.setAttribute("aria-expanded", String(!isHidden));
+      }
+
+      document.getElementById("section-orders")?.addEventListener("keydown", (event) => {
+        const header = event.target.closest("[data-order-header]");
+        if (!header || (event.key !== "Enter" && event.key !== " ")) return;
+        event.preventDefault();
+        toggleOrderCard(header.closest("[data-order-card]"));
       });
 
       syncDefaultAddressLabels();
@@ -2483,16 +2509,32 @@
             : "-";
           const status = mapFulfillmentStatus(order.fulfillmentStatus);
           const orderNumber = String(order.name || "").trim() || "Order";
-          const resolveItemReviewUrl = (item) => {
+          const resolveItemProductPageUrl = (item, { writeReview = false } = {}) => {
             if (!item) return "";
-            if (item.productUrl) return String(item.productUrl);
-            if (item.productHandle && FRONTEND_BASE) {
-              return `${FRONTEND_BASE}/Product.html?handle=${encodeURIComponent(item.productHandle)}`;
+            const handle = String(item.productHandle || "").trim();
+            if (handle && FRONTEND_BASE) {
+              const url = new URL(`${FRONTEND_BASE}/Product.html`);
+              url.searchParams.set("handle", handle);
+              if (writeReview) url.searchParams.set("writeReview", "1");
+              url.hash = "reviews";
+              return url.toString();
             }
+            if (item.productUrl) return String(item.productUrl);
             return "";
           };
-          const reviewUrl =
-            (order.items || []).map(resolveItemReviewUrl).find((url) => String(url || "").trim()) || "";
+          const reviewUrl = (() => {
+            const ranked = (order.items || [])
+              .map((item) => ({
+                item,
+                value: Number(item.lineTotal?.amount || 0),
+              }))
+              .sort((a, b) => b.value - a.value);
+            for (const row of ranked) {
+              const url = resolveItemProductPageUrl(row.item, { writeReview: true });
+              if (url) return url;
+            }
+            return "";
+          })();
           const safeReviewAttr = reviewUrl
             ? ` data-review-url="${String(reviewUrl).replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"`
             : "";
@@ -2525,7 +2567,7 @@
           card.className = "order-card";
           card.setAttribute("data-order-card", "");
           card.innerHTML = `
-            <div class="order-top">
+            <div class="order-top" data-order-header role="button" tabindex="0" aria-expanded="${idx === 0 ? "true" : "false"}">
               <div class="order-id">
                 <span>${orderNumber}</span>
                 <span class="status">${status}</span>
