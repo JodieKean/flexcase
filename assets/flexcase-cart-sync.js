@@ -190,20 +190,35 @@
     const hydrated = (serverLines || []).map((line, srvIdx) => {
       const key = variantKey(line);
       const cached = localByKey.get(key) || {};
+      const compareAtPrice =
+        String(line.compareAtPrice ?? "").trim() || String(cached.compareAtPrice || "").trim();
+      const discountLabel =
+        String(line.discountLabel ?? "").trim() || String(cached.discountLabel || "").trim();
+      const compareNum = Number(compareAtPrice || 0);
+      const serverPrice = Number(line.price || 0);
+      const cachedPrice = Number(cached.price || 0);
+      let price = String(line.price ?? cached.price ?? "");
+      if (compareNum > 0.001) {
+        const unit = Number(price || 0);
+        if (unit >= compareNum - 0.001 && cachedPrice > 0 && cachedPrice < compareNum - 0.001) {
+          price = String(cachedPrice);
+        } else if (cachedPrice > 0 && cachedPrice < compareNum - 0.001 && unit < compareNum - 0.001) {
+          price = String(unit);
+        }
+      }
       return {
         line: {
           ...cached,
           ...line,
           variantId: key,
+          price,
           productHandle: line.productHandle || cached.productHandle || "",
           productTitle: line.productTitle || cached.productTitle || "",
           variantTitle: line.variantTitle || cached.variantTitle || "",
           image: line.image || cached.image || "",
           currencyCode: line.currencyCode || cached.currencyCode || "MYR",
-          compareAtPrice:
-            String(line.compareAtPrice ?? "").trim() || String(cached.compareAtPrice || "").trim(),
-          discountLabel:
-            String(line.discountLabel ?? "").trim() || String(cached.discountLabel || "").trim(),
+          compareAtPrice,
+          discountLabel,
         },
         key,
         srvIdx,

@@ -622,7 +622,7 @@
         margin-top: 4px;
         display: inline-block;
         border-radius: 999px;
-        background: #d9be83;
+        background: #b08d57;
         color: #ffffff;
         font-size: 0.62rem;
         font-weight: 700;
@@ -1554,9 +1554,18 @@
               nextLine.price = nextPrice;
               nextLine.currencyCode = String(match?.price?.currencyCode || line?.currencyCode || SITE_CURRENCY);
             }
+            const existingCompare = Number(line?.compareAtPrice || 0);
+            const existingPrice = Number(line?.price || 0);
             if (nextCompareAt > nextPrice + 0.001) {
               nextLine.compareAtPrice = String(nextCompareAt);
               nextLine.discountLabel = String(line?.discountLabel || "").trim() || "Early Bird Discount";
+            } else if (existingCompare > existingPrice + 0.001) {
+              nextLine.compareAtPrice = String(existingCompare);
+              nextLine.discountLabel =
+                String(line?.discountLabel || "").trim() || "Early Bird Discount";
+              if (Number.isFinite(nextPrice) && nextPrice > 0 && nextPrice < existingCompare - 0.001) {
+                nextLine.price = nextPrice;
+              }
             } else {
               nextLine.compareAtPrice = "";
               nextLine.discountLabel = "";
@@ -2335,6 +2344,38 @@
       }
 
       let flexcasePlaceOrderInFlight = false;
+      let checkoutCartReconcileInFlight = false;
+
+      async function refreshCheckoutOrderSummaryFromCart() {
+        if (checkoutCartReconcileInFlight) return;
+        checkoutCartReconcileInFlight = true;
+        try {
+          const reconciled = await reconcileCheckoutLinesWithCatalog(readCartItems());
+          const current = readCartItems();
+          const changed =
+            reconciled.length !== current.length ||
+            reconciled.some((line, idx) => {
+              const prev = current[idx];
+              if (!prev) return true;
+              return (
+                String(line?.variantId || "") !== String(prev?.variantId || "") ||
+                String(line?.price ?? "") !== String(prev?.price ?? "") ||
+                String(line?.compareAtPrice ?? "") !== String(prev?.compareAtPrice ?? "") ||
+                String(line?.discountLabel ?? "") !== String(prev?.discountLabel ?? "") ||
+                Number(line?.quantity || 0) !== Number(prev?.quantity || 0)
+              );
+            });
+          if (changed) writeCartItems(reconciled);
+          renderOrderLines(readCartItems());
+          recalcTotals();
+        } finally {
+          checkoutCartReconcileInFlight = false;
+        }
+      }
+
+      window.addEventListener("flexcase-cart-updated", () => {
+        void refreshCheckoutOrderSummaryFromCart();
+      });
 
       // Back/forward cache: leaving for Shopify then pressing Back restores the tab in a frozen
       // state (overlay still visible, submit locked). Recover Review step and dismiss the spinner.
@@ -2540,18 +2581,12 @@
           }
         }
 
-        if (isAuthed && !checkoutCartDirty) {
-          try {
-            await window.flexcaseHydrateLocalCartFromServer?.();
-          } catch (_) {
-            /* ignore */
-          }
-          writeCartItems(readCartItems());
-          renderOrderLines(readCartItems());
-        }
+        await window.flexcaseEnsureCartReady?.().catch(() => {});
 
         if (!checkoutCartDirty) {
-          patchRenderedQuantities(readCartItems());
+          const reconciledAfterSync = await reconcileCheckoutLinesWithCatalog(readCartItems());
+          writeCartItems(reconciledAfterSync);
+          renderOrderLines(reconciledAfterSync);
           recalcTotals();
         }
 
