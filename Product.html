@@ -1855,14 +1855,29 @@
             }
           }
 
+          function getSiteHeaderScrollOffset(extraGap = 20) {
+            const raw = getComputedStyle(document.documentElement)
+              .getPropertyValue("--flexcase-site-header-offset")
+              .trim();
+            const parsed = Number.parseFloat(raw);
+            const headerOffset = Number.isFinite(parsed) && parsed > 0 ? parsed : 98;
+            return headerOffset + extraGap;
+          }
+
+          function scrollToElementWithHeaderOffset(element, extraGap = 20) {
+            if (!element) return;
+            const top =
+              element.getBoundingClientRect().top + window.scrollY - getSiteHeaderScrollOffset(extraGap);
+            window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+          }
+
           function scrollToReviewsSection() {
             const reviewsSection = document.getElementById("reviews");
-            if (!reviewsSection) return;
-            reviewsSection.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToElementWithHeaderOffset(reviewsSection, 24);
           }
 
           function scrollToReviewComposePanel() {
-            panelEl.scrollIntoView({ behavior: "smooth", block: "start" });
+            scrollToElementWithHeaderOffset(panelEl, 24);
           }
 
           function setRating(value) {
@@ -1941,7 +1956,9 @@
 
           function openComposePanel() {
             panelEl.hidden = false;
-            window.requestAnimationFrame(() => scrollToReviewComposePanel());
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(() => scrollToReviewComposePanel());
+            });
           }
 
           toggleEl.addEventListener("click", () => {

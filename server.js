@@ -998,14 +998,13 @@ function reviewBodyForDisplay(title, body, hideBody = false) {
 
 function extractJudgeMeReviewerDisplayName(review) {
   const candidates = [
+    review?.public_reviewer_name,
     review?.name,
     review?.reviewer_name,
-    review?.public_reviewer_name,
     review?.display_name,
     review?.public_name,
     review?.customer_name,
     review?.reviewer_display_name,
-    review?.reviewer?.display_name,
   ];
   for (const candidate of candidates) {
     const name = stripJudgeMeHtml(candidate);
@@ -1214,10 +1213,10 @@ function buildJudgeMeDisplayNamesByReviewId(rawReviews = [], widgetNames = {}) {
 
 function resolveJudgeMeReviewAuthor(review, displayNamesByReviewId = {}, authorOverrides = {}) {
   const reviewId = String(review?.id || "").trim();
-  const widgetName = reviewId ? stripJudgeMeHtml(displayNamesByReviewId[reviewId]) : "";
   const overrideName = reviewId ? stripJudgeMeHtml(authorOverrides[reviewId]) : "";
+  const widgetName = reviewId ? stripJudgeMeHtml(displayNamesByReviewId[reviewId]) : "";
   const reviewLevelName = extractJudgeMeReviewerDisplayName(review);
-  return widgetName || overrideName || reviewLevelName || "Customer";
+  return overrideName || widgetName || reviewLevelName || "Customer";
 }
 
 async function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
