@@ -200,6 +200,10 @@
           variantTitle: line.variantTitle || cached.variantTitle || "",
           image: line.image || cached.image || "",
           currencyCode: line.currencyCode || cached.currencyCode || "MYR",
+          compareAtPrice:
+            String(line.compareAtPrice ?? "").trim() || String(cached.compareAtPrice || "").trim(),
+          discountLabel:
+            String(line.discountLabel ?? "").trim() || String(cached.discountLabel || "").trim(),
         },
         key,
         srvIdx,
@@ -332,7 +336,21 @@
           throw new Error(String(j?.error || "Could not add to cart. Try again."));
         }
         if (Array.isArray(j.lines)) {
-          writeLocalLines(reconcileServerLines(j.lines, vid));
+          const seeded = j.lines.map((line) => {
+            const key = variantKey(line);
+            if (key !== vid) return line;
+            return {
+              ...line,
+              compareAtPrice: String(lineDetails?.compareAtPrice || "").trim(),
+              discountLabel: String(lineDetails?.discountLabel || "").trim(),
+              price:
+                lineDetails?.price != null && lineDetails?.price !== ""
+                  ? String(lineDetails.price)
+                  : line.price,
+              currencyCode: String(lineDetails?.currencyCode || line.currencyCode || "MYR"),
+            };
+          });
+          writeLocalLines(reconcileServerLines(seeded, vid));
         }
         updateBadges();
         return true;
@@ -356,6 +374,8 @@
         variantTitle: String(lineDetails?.variantTitle || "Default"),
         quantity: q,
         price: Number.isFinite(price) ? price : 0,
+        compareAtPrice: String(lineDetails?.compareAtPrice || "").trim(),
+        discountLabel: String(lineDetails?.discountLabel || "").trim(),
         currencyCode: String(lineDetails?.currencyCode || "MYR"),
         image: String(lineDetails?.image || ""),
       });

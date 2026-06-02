@@ -3078,6 +3078,10 @@ const STOREFRONT_CART_FRAGMENT = `
                 amount
                 currencyCode
               }
+              compareAtPrice {
+                amount
+                currencyCode
+              }
               product {
                 title
                 handle
@@ -3806,6 +3810,7 @@ function mapStorefrontCartToClientLines(cart) {
     const m = n.merchandise;
     if (!m?.id) continue;
     const price = m.price || {};
+    const compareAt = m.compareAtPrice || null;
     out.push({
       lineId: n.id,
       variantId: m.id,
@@ -3814,6 +3819,7 @@ function mapStorefrontCartToClientLines(cart) {
       variantTitle: m.title || "",
       quantity: Number(n.quantity || 0),
       price: String(price.amount ?? "0"),
+      compareAtPrice: compareAt?.amount ? String(compareAt.amount) : "",
       currencyCode: price.currencyCode || "MYR",
       image: m.product?.featuredImage?.url || "",
     });

@@ -364,7 +364,7 @@
       .catalog-badge {
         border-radius: 999px;
         background: #d9be83;
-        color: #4d3b19;
+        color: #ffffff;
         font-size: 0.68rem;
         font-weight: 700;
         padding: 3px 8px;
@@ -681,7 +681,10 @@
                 aria-hidden="true"
               />
             </div>
-            <div class="meta card-meta" hidden></div>
+            <div class="meta card-meta">
+              <strong>Froakie</strong><br />
+              Chaos Rising | #88
+            </div>
           </div>
         </article>
 
@@ -711,7 +714,10 @@
                 aria-hidden="true"
               />
             </div>
-            <div class="meta card-meta" hidden></div>
+            <div class="meta card-meta">
+              <strong>Frogadier</strong><br />
+              Chaos Rising | #89
+            </div>
           </div>
         </article>
 
@@ -741,7 +747,10 @@
                 aria-hidden="true"
               />
             </div>
-            <div class="meta card-meta" hidden></div>
+            <div class="meta card-meta">
+              <strong>Mega Greninja ex</strong><br />
+              Chaos Rising | #116
+            </div>
           </div>
         </article>
       </section>
@@ -833,6 +842,11 @@
         1: "https://images.scrydex.com/pokemon/me4-88/large",
         2: "https://images.scrydex.com/pokemon/me4-89/large",
         3: "https://images.scrydex.com/pokemon/me4-116/large",
+      };
+      const defaultHeroMeta = {
+        1: { name: "Froakie", set: { name: "Chaos Rising" }, number: "88" },
+        2: { name: "Frogadier", set: { name: "Chaos Rising" }, number: "89" },
+        3: { name: "Mega Greninja ex", set: { name: "Chaos Rising" }, number: "116" },
       };
       const DEFAULT_HERO_BATCH_QUERY =
         'set.name:"Chaos Rising" (number:88 OR number:89 OR number:116)';
@@ -970,6 +984,14 @@
           windowId,
           `<img class="card-art" src="${imageUrl}" alt="" loading="eager" fetchpriority="high" decoding="async" />`
         );
+      }
+
+      function ensureDefaultHeroMeta(windowId) {
+        const card = defaultHeroMeta[windowId];
+        if (!card) return;
+        const { metaEl } = ensureCardFrame(windowId);
+        if (!metaEl || !metaEl.hidden) return;
+        setCardMeta(windowId, card);
       }
 
       function ensureCardFrame(windowId) {
@@ -1223,6 +1245,7 @@
         [1, 2, 3].forEach((windowId) => {
           ensureCardFrame(windowId);
           ensureDefaultHeroImage(windowId);
+          ensureDefaultHeroMeta(windowId);
           setupWindow(windowId, { runInitialSearch: false });
         });
         void loadDefaultHeroCards();

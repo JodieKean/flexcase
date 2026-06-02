@@ -207,7 +207,7 @@
       .catalog-badge {
         border-radius: 999px;
         background: #d9be83;
-        color: #4d3b19;
+        color: #ffffff;
         font-size: 0.68rem;
         font-weight: 700;
         padding: 3px 8px;
@@ -2724,8 +2724,17 @@
         function addLineToLocalCart() {
           const items = readCart();
           const existing = items.find((line) => line.variantId === selectedVariant.id);
+          const unitPrice = Number(
+            selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount || 0
+          );
+          const compareAmount = Number(selectedVariant.compareAtPrice?.amount || 0);
+          const hasDiscount = compareAmount > unitPrice;
           if (existing) {
             existing.quantity += quantity;
+            if (hasDiscount) {
+              existing.compareAtPrice = String(compareAmount);
+              existing.discountLabel = "Early Bird Discount";
+            }
           } else {
             // Newest item goes to the top of the cart.
             items.unshift({
@@ -2735,6 +2744,8 @@
               variantTitle: selectedVariant.title,
               quantity,
               price: selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount,
+              compareAtPrice: hasDiscount ? String(compareAmount) : "",
+              discountLabel: hasDiscount ? "Early Bird Discount" : "",
               currencyCode:
                 selectedVariant.price?.currencyCode ||
                 product.priceRange?.minVariantPrice?.currencyCode ||
@@ -2779,12 +2790,19 @@
           }
 
           if (sessionAuthed && typeof window.flexcaseAddToCartLoggedIn === "function") {
+            const unitPrice = Number(
+              selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount || 0
+            );
+            const compareAmount = Number(selectedVariant.compareAtPrice?.amount || 0);
+            const hasDiscount = compareAmount > unitPrice;
             const lineDetails = {
               productHandle: product.handle,
               productTitle: product.title,
               variantTitle: selectedVariant.title || "Default",
               price:
                 selectedVariant.price?.amount || product.priceRange?.minVariantPrice?.amount || 0,
+              compareAtPrice: hasDiscount ? String(compareAmount) : "",
+              discountLabel: hasDiscount ? "Early Bird Discount" : "",
               currencyCode:
                 selectedVariant.price?.currencyCode ||
                 product.priceRange?.minVariantPrice?.currencyCode ||

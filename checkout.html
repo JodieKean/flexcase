@@ -602,6 +602,33 @@
       .line-item .price {
         font-size: 0.92rem;
         color: #1d1d1f;
+        text-align: right;
+      }
+
+      .line-item .price-main {
+        font-size: 0.92rem;
+        color: #1d1d1f;
+        font-weight: 600;
+      }
+
+      .line-item .price-old {
+        margin-top: 2px;
+        font-size: 0.78rem;
+        color: #8e8e93;
+        text-decoration: line-through;
+      }
+
+      .line-item .discount-badge {
+        margin-top: 4px;
+        display: inline-block;
+        border-radius: 999px;
+        background: #d9be83;
+        color: #ffffff;
+        font-size: 0.62rem;
+        font-weight: 700;
+        line-height: 1.15;
+        padding: 2px 7px;
+        white-space: nowrap;
       }
 
       .promo {
@@ -1374,10 +1401,28 @@
         }
       }
 
+      function getLineUnitPrices(line) {
+        const unit = Math.max(0, Number(line?.price || 0));
+        const compareAt = Math.max(0, Number(line?.compareAtPrice || 0));
+        const hasDiscount = compareAt > unit + 0.001;
+        return {
+          unit,
+          originalUnit: hasDiscount ? compareAt : unit,
+          hasDiscount,
+          label: String(line?.discountLabel || "").trim() || "Early Bird Discount",
+        };
+      }
+
       function lineSubtotal(line) {
-        const unit = Number(line?.price || 0);
+        const { unit } = getLineUnitPrices(line);
         const qty = Number(line?.quantity || 1);
         return unit * qty;
+      }
+
+      function lineOriginalSubtotal(line) {
+        const { originalUnit } = getLineUnitPrices(line);
+        const qty = Number(line?.quantity || 1);
+        return originalUnit * qty;
       }
 
       function renderOrderLines(items) {
@@ -1398,6 +1443,8 @@
         orderLineItems.innerHTML = items
           .map((line) => {
             const lineTotal = lineSubtotal(line);
+            const originalLineTotal = lineOriginalSubtotal(line);
+            const priceInfo = getLineUnitPrices(line);
             const currency = line.currencyCode || SITE_CURRENCY;
             const imageStyle = line.image
               ? `style="background-image:url('${line.image}');background-size:cover;background-position:center;"`
@@ -1414,7 +1461,14 @@
                     <button type="button" class="qty-btn" data-qty-plus aria-label="Increase quantity">+</button>
                   </div>
                 </div>
-                <div class="price">${money(lineTotal, currency)}</div>
+                <div class="price">
+                  <div class="price-main">${money(lineTotal, currency)}</div>
+                  ${
+                    priceInfo.hasDiscount
+                      ? `<div class="price-old">${money(originalLineTotal, currency)}</div><span class="discount-badge">${escapeHtml(priceInfo.label)}</span>`
+                      : ""
+                  }
+                </div>
               </div>
             `;
           })
@@ -1433,7 +1487,20 @@
           const qtyEl = row.querySelector(".qty-value");
           if (qtyEl) qtyEl.textContent = String(Math.max(1, Number(line?.quantity || 1)));
           const priceEl = row.querySelector(".price");
-          if (priceEl) priceEl.textContent = money(lineSubtotal(line), line.currencyCode || SITE_CURRENCY);
+          if (priceEl) {
+            const current = lineSubtotal(line);
+            const original = lineOriginalSubtotal(line);
+            const priceInfo = getLineUnitPrices(line);
+            const currency = line.currencyCode || SITE_CURRENCY;
+            priceEl.innerHTML = `
+              <div class="price-main">${money(current, currency)}</div>
+              ${
+                priceInfo.hasDiscount
+                  ? `<div class="price-old">${money(original, currency)}</div><span class="discount-badge">${escapeHtml(priceInfo.label)}</span>`
+                  : ""
+              }
+            `;
+          }
         });
       }
 
@@ -1480,11 +1547,32 @@
               variants[0];
             const freshId = normalizeStorefrontVariantGid(match?.id);
             if (!freshId.startsWith("gid://shopify/ProductVariant/")) return line;
+            const nextLine = { ...line };
+            const nextPrice = Number(match?.price?.amount || 0);
+            const nextCompareAt = Number(match?.compareAtPrice?.amount || 0);
+            if (Number.isFinite(nextPrice) && nextPrice > 0) {
+              nextLine.price = nextPrice;
+              nextLine.currencyCode = String(match?.price?.currencyCode || line?.currencyCode || SITE_CURRENCY);
+            }
+            if (nextCompareAt > nextPrice + 0.001) {
+              nextLine.compareAtPrice = String(nextCompareAt);
+              nextLine.discountLabel = String(line?.discountLabel || "").trim() || "Early Bird Discount";
+            } else {
+              nextLine.compareAtPrice = "";
+              nextLine.discountLabel = "";
+            }
             if (freshId !== normalizeStorefrontVariantGid(line?.variantId)) {
               changed = true;
-              return { ...line, variantId: freshId };
+              nextLine.variantId = freshId;
             }
-            return line;
+            if (
+              String(nextLine.price ?? "") !== String(line?.price ?? "") ||
+              String(nextLine.compareAtPrice ?? "") !== String(line?.compareAtPrice ?? "") ||
+              String(nextLine.discountLabel ?? "") !== String(line?.discountLabel ?? "")
+            ) {
+              changed = true;
+            }
+            return nextLine;
           });
           if (changed) writeCartItems(next);
           return changed ? next : current;
@@ -2345,6 +2433,11 @@
         renderOrderLines(readCartItems());
         selectMode("guest");
         recalcTotals();
+        const reconciledAtLoad = await reconcileCheckoutLinesWithCatalog(readCartItems());
+        if (reconciledAtLoad !== readCartItems()) {
+          renderOrderLines(reconciledAtLoad);
+          recalcTotals();
+        }
 
         let bootEarly = "";
         try {
