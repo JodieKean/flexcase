@@ -1087,6 +1087,7 @@
       let shippingRatesRequestId = 0;
       let shippingRatesDebounceTimer = null;
       let lastLoadedShippingAddressKey = "";
+      let lastMalaysiaFreeShippingQualified = null;
       const MALAYSIA_FREE_SHIPPING_THRESHOLD = 200;
 
       const CHECKOUT_API_BASE = (window.FLEXCASE_API_BASE || "https://api.flexcase.my").replace(/\/$/, "");
@@ -1796,10 +1797,25 @@
         );
       }
 
+      function mergeShippingOptionsWithBasePrices(incoming) {
+        const prevById = new Map(shopifyShippingOptions.map((o) => [o.id, o]));
+        return (incoming || []).map((opt) => {
+          const prev = prevById.get(opt.id);
+          const price = Number(opt.price || 0);
+          const prevBase = Number(prev?.basePrice || 0);
+          const basePrice = price > 0 ? price : prevBase;
+          return { ...opt, basePrice };
+        });
+      }
+
       function getEffectiveShippingPrice(opt) {
         if (!opt) return 0;
         if (qualifiesForMalaysiaFreeShipping(opt)) return 0;
-        return Number(opt.price || 0);
+        const base = Number(opt.basePrice || 0);
+        const live = Number(opt.price || 0);
+        if (base > 0) return base;
+        if (live > 0) return live;
+        return 0;
       }
 
       function buildShippingOptionDescription(opt) {
@@ -1837,6 +1853,7 @@
       function clearShippingMethodOptions() {
         shopifyShippingOptions = [];
         selectedShippingOptionId = "";
+        lastMalaysiaFreeShippingQualified = null;
         shippingMethodInput.value = "";
         if (shippingMethodHandleInput) shippingMethodHandleInput.value = "";
         if (shippingDeliveryGroupIdInput) shippingDeliveryGroupIdInput.value = "";
@@ -1918,10 +1935,30 @@
         ].join("|");
       }
 
-      async function loadShippingRates() {
-        if (getCurrentStep() !== 2) return;
+      function maybeRefreshShippingRatesForSubtotal(subtotal) {
+        if (!isMalaysiaCheckoutCountry()) return;
+        const qualifies = subtotal >= MALAYSIA_FREE_SHIPPING_THRESHOLD;
+        if (lastMalaysiaFreeShippingQualified === null) {
+          lastMalaysiaFreeShippingQualified = qualifies;
+          return;
+        }
+        if (lastMalaysiaFreeShippingQualified === qualifies) return;
+        lastMalaysiaFreeShippingQualified = qualifies;
+        if (!shopifyShippingOptions.length || !lastLoadedShippingAddressKey) return;
+        lastLoadedShippingAddressKey = "";
+        void loadShippingRates({ force: true });
+      }
+
+      async function loadShippingRates(opts = {}) {
+        const force = Boolean(opts.force);
+        if (!force && getCurrentStep() !== 2) return;
         const addressKey = getShippingAddressLoadKey();
-        if (addressKey && addressKey === lastLoadedShippingAddressKey && shopifyShippingOptions.length) {
+        if (
+          !force &&
+          addressKey &&
+          addressKey === lastLoadedShippingAddressKey &&
+          shopifyShippingOptions.length
+        ) {
           return;
         }
         if (
@@ -1944,8 +1981,12 @@
           return;
         }
         const reqId = ++shippingRatesRequestId;
-        clearShippingMethodOptions();
-        setShipMethodHint("Loading shipping rates…", false);
+        if (!force) {
+          clearShippingMethodOptions();
+          setShipMethodHint("Loading shipping rates…", false);
+        } else {
+          setShipMethodHint("Updating shipping…", false);
+        }
         try {
           const lines = buildNormalizedCheckoutLines(readCartItems());
           if (!lines.length) {
@@ -1969,8 +2010,12 @@
             setShipMethodHint(data.error || "Unable to load shipping rates.", true);
             return;
           }
-          shopifyShippingOptions = Array.isArray(data.options) ? data.options : [];
+          shopifyShippingOptions = mergeShippingOptionsWithBasePrices(
+            Array.isArray(data.options) ? data.options : []
+          );
           lastLoadedShippingAddressKey = addressKey;
+          lastMalaysiaFreeShippingQualified =
+            isMalaysiaCheckoutCountry() && getSubtotal() >= MALAYSIA_FREE_SHIPPING_THRESHOLD;
           setShipMethodHint("", false);
           renderShippingOptions(shopifyShippingOptions);
           const keep = shopifyShippingOptions.find((o) => o.id === selectedShippingOptionId);
@@ -1999,6 +2044,7 @@
 
       function recalcTotals() {
         const subtotal = getSubtotal();
+        maybeRefreshShippingRatesForSubtotal(subtotal);
         const shipping = getSelectedShippingCost();
         const total = subtotal + shipping;
 
