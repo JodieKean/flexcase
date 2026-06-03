@@ -683,38 +683,30 @@
 
         .windows-zoom-toggle {
           display: flex;
-          align-items: center;
-          justify-content: center;
-          position: relative;
-          z-index: 3;
-          touch-action: manipulation;
-          pointer-events: auto;
-          width: 44px;
-          height: 44px;
           margin-top: 12px;
           margin-right: max(24px, calc((100vw - var(--flexcase-content-width, 88vw)) / 2));
           margin-left: auto;
-          padding: 0;
-          border: 1px solid #d2d2d7;
-          border-radius: 10px;
-          background: #ffffff;
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-          cursor: pointer;
-          -webkit-tap-highlight-color: transparent;
         }
 
         .windows-zoom-toggle:focus-visible {
           outline: none;
-          border-color: var(--flexcase-focus, #b08d57);
           box-shadow: 0 0 0 3px var(--flexcase-focus-ring, rgba(176, 141, 87, 0.18));
         }
 
-        .windows-zoom-icon {
-          width: 22px;
-          height: 22px;
+        .windows-zoom-toggle .windows-zoom-icon {
+          display: none;
+        }
+
+        .windows-zoom-toggle .windows-zoom-icon--collapse {
           display: block;
-          pointer-events: none;
-          filter: invert(1);
+        }
+
+        .windows-zoom-toggle.is-fit-active .windows-zoom-icon--collapse {
+          display: none;
+        }
+
+        .windows-zoom-toggle.is-fit-active .windows-zoom-icon--expand {
+          display: block;
         }
 
         .feature-block {
@@ -989,19 +981,45 @@
       </div>
       <button
         type="button"
-        class="windows-zoom-toggle"
+        class="windows-zoom-toggle icon-btn"
         id="windowsZoomToggle"
         aria-label="Fit all cards on screen"
         aria-pressed="false"
       >
-        <img
-          class="windows-zoom-icon"
-          id="windowsZoomIcon"
-          src="assets/hero-zoom-collapse.png"
-          alt=""
+        <svg
+          class="windows-zoom-icon windows-zoom-icon--expand"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          aria-hidden="true"
           width="22"
           height="22"
-        />
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15"
+          />
+        </svg>
+        <svg
+          class="windows-zoom-icon windows-zoom-icon--collapse"
+          xmlns="http://www.w3.org/2000/svg"
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke-width="1.5"
+          stroke="currentColor"
+          aria-hidden="true"
+          width="22"
+          height="22"
+        >
+          <path
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25"
+          />
+        </svg>
       </button>
       </div>
 
@@ -1115,8 +1133,6 @@
 
       const FLEXCASE_CARD_OVERLAY_SRC = "assets/flexcase_front_homepage.png";
       const FLEXGRID_LAYER_SRC = "assets/flexgrid-front-home.png";
-      const HERO_ZOOM_EXPAND_SRC = "assets/hero-zoom-expand.png";
-      const HERO_ZOOM_COLLAPSE_SRC = "assets/hero-zoom-collapse.png";
       const presentationReloadToken = { shared: 0, 1: 0, 2: 0, 3: 0 };
 
       function tokenizeInput(rawInput) {
@@ -1548,18 +1564,15 @@
           return;
         }
 
-        const zoomIcon = document.getElementById("windowsZoomIcon");
         const heroScrollMq = window.matchMedia("(max-width: 980px)");
 
         function updateToggleUi(fit) {
+          toggleBtn.classList.toggle("is-fit-active", fit);
           toggleBtn.setAttribute("aria-pressed", String(fit));
           toggleBtn.setAttribute(
             "aria-label",
             fit ? "Zoom in to scroll cards" : "Fit all cards on screen"
           );
-          if (zoomIcon) {
-            zoomIcon.src = fit ? HERO_ZOOM_EXPAND_SRC : HERO_ZOOM_COLLAPSE_SRC;
-          }
         }
 
         function setHeroFit(fit) {
