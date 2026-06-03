@@ -692,7 +692,13 @@
 
       @media (max-width: 900px) {
         .layout {
-          grid-template-columns: 1fr;
+          display: flex;
+          flex-direction: column;
+          gap: 22px;
+        }
+
+        .layout > .summary {
+          order: -1;
         }
 
         .summary {
@@ -1706,7 +1712,12 @@
         }
       }
 
+      function scrollCheckoutToTop() {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
       function setStep(step) {
+        const previousStep = getCurrentStep();
         stepContact.classList.toggle("hidden", step !== 1);
         stepShipping.classList.toggle("hidden", step !== 2);
         stepReview.classList.toggle("hidden", step !== 3);
@@ -1724,6 +1735,9 @@
         }
         if (step === 2) {
           void loadShippingRates();
+        }
+        if (step !== previousStep && step > previousStep) {
+          scrollCheckoutToTop();
         }
       }
 
