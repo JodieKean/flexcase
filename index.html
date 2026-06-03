@@ -35,6 +35,8 @@
         color-scheme: light;
         /* Pokémon TCG API hires images are 600×825px */
         --flexcase-homepage-card-aspect: 600 / 825;
+        --flexcase-hero-column-width: 240px;
+        --flexcase-hero-case-height: calc(var(--flexcase-hero-column-width) * 825 / 600);
       }
 
       body {
@@ -71,6 +73,18 @@
         font-size: 1.05rem;
       }
 
+      .windows-scroll {
+        max-width: 100%;
+      }
+
+      .windows-hero {
+        position: relative;
+      }
+
+      .windows-zoom-toggle {
+        display: none;
+      }
+
       .windows {
         margin-top: 20px;
         display: grid;
@@ -86,9 +100,11 @@
         grid-column: 1 / -1;
         grid-row: 2;
         align-self: start;
+        justify-self: stretch;
         z-index: 0;
         width: 100%;
         margin-top: 10px;
+        height: auto;
         aspect-ratio: 1800 / 825;
         pointer-events: none;
         border-radius: 2%;
@@ -530,33 +546,171 @@
         .page-top {
           padding-left: 0;
           padding-right: 0;
+          overflow-x: visible;
+        }
+
+        .hero-text {
+          padding-left: 24px;
+          padding-right: 24px;
         }
 
         .windows input {
           font-size: 16px;
         }
 
-        .windows {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-          grid-template-rows: unset;
+        .windows-scroll {
+          overflow-x: auto;
+          overflow-y: hidden;
+          -webkit-overflow-scrolling: touch;
+          overscroll-behavior-x: contain;
+          touch-action: pan-x;
+          scrollbar-width: none;
+          width: 100vw;
+          max-width: 100vw;
+          margin-left: calc(50% - 50vw);
+          padding-left: max(24px, calc((100vw - var(--flexcase-content-width, 88vw)) / 2));
+          padding-right: max(24px, calc((100vw - var(--flexcase-content-width, 88vw)) / 2));
+          box-sizing: border-box;
+          scroll-padding-left: max(24px, calc((100vw - var(--flexcase-content-width, 88vw)) / 2));
+          scroll-padding-right: max(24px, calc((100vw - var(--flexcase-content-width, 88vw)) / 2));
         }
 
-        .windows > article {
-          display: block;
-        }
-
-        .windows-flexgrid-backdrop {
+        .windows-scroll::-webkit-scrollbar {
           display: none;
         }
 
-        .windows > article > input,
-        .windows > article > .card {
-          grid-row: auto;
-          grid-column: auto;
+        .windows-hero {
+          width: 100vw;
+          max-width: 100vw;
+          margin-left: calc(50% - 50vw);
+          box-sizing: border-box;
         }
 
-        .windows > article .card-visual {
-          border-radius: 14px;
+        .windows-scroll:not(.is-fit) {
+          overflow-x: auto;
+        }
+
+        .windows-scroll.is-fit {
+          overflow-x: hidden;
+        }
+
+        .windows-scroll.is-fit .windows {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          width: 100%;
+          min-width: 0;
+          --hero-fit-name-size: 0.72rem;
+          --hero-fit-detail-size: 0.68rem;
+        }
+
+        .windows-scroll:not(.is-fit) .windows {
+          grid-template-columns: repeat(3, var(--flexcase-hero-column-width));
+          width: max-content;
+          min-width: calc(3 * var(--flexcase-hero-column-width));
+        }
+
+        .windows-scroll:not(.is-fit) .windows-flexgrid-backdrop {
+          width: calc(3 * var(--flexcase-hero-column-width));
+          height: var(--flexcase-hero-case-height);
+          aspect-ratio: auto;
+          justify-self: start;
+        }
+
+        .windows-scroll.is-fit .windows-flexgrid-backdrop {
+          margin-top: 6px;
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1800 / 825;
+          justify-self: stretch;
+        }
+
+        .windows-scroll.is-fit .windows input {
+          font-size: var(--hero-fit-name-size) !important;
+          line-height: 1.25;
+          padding: 6px 8px;
+          border-radius: 8px;
+        }
+
+        .windows-scroll.is-fit .windows input::placeholder {
+          font-size: var(--hero-fit-name-size) !important;
+          line-height: 1.25;
+        }
+
+        .windows-scroll.is-fit .windows .card {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          margin-top: 6px;
+        }
+
+        .windows-scroll.is-fit .windows .meta,
+        .windows-scroll.is-fit .windows .card-meta {
+          margin-top: 0;
+          font-size: var(--hero-fit-detail-size);
+          line-height: 1.25;
+        }
+
+        .windows-scroll.is-fit .windows .card-meta strong {
+          font-size: var(--hero-fit-name-size);
+        }
+
+        .windows-scroll.is-fit .windows .card-meta .card-status {
+          font-size: var(--hero-fit-detail-size);
+          line-height: 1.25;
+        }
+
+        .windows-scroll.is-fit .windows input,
+        .windows-scroll.is-fit .windows .card,
+        .windows-scroll.is-fit .windows .meta,
+        .windows-scroll.is-fit .windows .card-meta {
+          transition:
+            font-size 0.35s ease,
+            padding 0.35s ease,
+            margin 0.35s ease,
+            gap 0.35s ease,
+            line-height 0.35s ease;
+        }
+
+        .windows-zoom-toggle {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          z-index: 3;
+          touch-action: manipulation;
+          pointer-events: auto;
+          width: 44px;
+          height: 44px;
+          margin-top: 12px;
+          margin-right: max(24px, calc((100vw - var(--flexcase-content-width, 88vw)) / 2));
+          margin-left: auto;
+          padding: 0;
+          border: 1px solid #d2d2d7;
+          border-radius: 10px;
+          background: #ffffff;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+
+        .windows-zoom-toggle:focus-visible {
+          outline: none;
+          border-color: var(--flexcase-focus, #b08d57);
+          box-shadow: 0 0 0 3px var(--flexcase-focus-ring, rgba(176, 141, 87, 0.18));
+        }
+
+        .windows-zoom-icon {
+          width: 22px;
+          height: 22px;
+          display: block;
+          pointer-events: none;
+        }
+
+        .windows-zoom-icon--expand {
+          filter: invert(1);
+        }
+
+        .windows-zoom-icon--collapse {
+          color: #1d1d1f;
         }
 
         .feature-block {
@@ -625,10 +779,6 @@
       }
 
       @media (max-width: 680px) {
-        .windows {
-          grid-template-columns: 1fr;
-        }
-
         .catalog-search {
           padding: 11px 14px;
         }
@@ -723,7 +873,9 @@
         <p>Display your personal collection with Flex Case.</p>
       </div>
 
-      <section class="windows" aria-live="polite">
+      <div class="windows-hero">
+      <div class="windows-scroll" id="windowsScroll">
+      <section class="windows" id="windowsHero" aria-live="polite">
         <div class="windows-flexgrid-backdrop" aria-hidden="true">
           <img
             class="windows-flexgrid-layer"
@@ -830,6 +982,41 @@
           </div>
         </article>
       </section>
+      </div>
+      <button
+        type="button"
+        class="windows-zoom-toggle"
+        id="windowsZoomToggle"
+        aria-label="Fit all cards on screen"
+        aria-pressed="false"
+      >
+        <img
+          class="windows-zoom-icon windows-zoom-icon--expand"
+          src="assets/hero-zoom-expand.png"
+          alt=""
+          width="22"
+          height="22"
+        />
+        <svg
+          class="windows-zoom-icon windows-zoom-icon--collapse"
+          width="22"
+          height="22"
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          aria-hidden="true"
+          hidden
+        >
+          <path
+            d="M8 4L4 8M4 8V5M4 8H7M16 20L20 16M20 16V19M20 16H17M20 8L16 4M16 4H19M16 4V7M4 16L8 20M8 20H5M8 20V17"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </svg>
+      </button>
+      </div>
 
       <section class="feature-block">
         <div class="feature-content">
@@ -1365,8 +1552,72 @@
         void loadDefaultHeroCards();
       }
 
+      function setupHeroZoomToggle() {
+        const scrollEl = document.getElementById("windowsScroll");
+        const toggleBtn = document.getElementById("windowsZoomToggle");
+        if (!scrollEl || !toggleBtn) {
+          return;
+        }
+
+        const expandIcon = toggleBtn.querySelector(".windows-zoom-icon--expand");
+        const collapseIcon = toggleBtn.querySelector(".windows-zoom-icon--collapse");
+        const heroScrollMq = window.matchMedia("(max-width: 980px)");
+
+        function updateToggleUi(fit) {
+          toggleBtn.setAttribute("aria-pressed", String(fit));
+          toggleBtn.setAttribute(
+            "aria-label",
+            fit ? "Zoom in to scroll cards" : "Fit all cards on screen"
+          );
+          if (expandIcon) expandIcon.hidden = fit;
+          if (collapseIcon) collapseIcon.hidden = !fit;
+        }
+
+        function setHeroFit(fit) {
+          if (!heroScrollMq.matches) {
+            scrollEl.classList.remove("is-fit");
+            scrollEl.style.overflowX = "";
+            updateToggleUi(false);
+            return;
+          }
+
+          scrollEl.classList.toggle("is-fit", fit);
+          scrollEl.style.overflowX = fit ? "hidden" : "";
+          if (fit) {
+            scrollEl.scrollLeft = 0;
+          }
+          updateToggleUi(fit);
+        }
+
+        function onHeroBreakpointChange() {
+          if (!heroScrollMq.matches) {
+            setHeroFit(false);
+          }
+        }
+
+        if (toggleBtn.dataset.bound !== "1") {
+          toggleBtn.dataset.bound = "1";
+          toggleBtn.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (!heroScrollMq.matches) {
+              return;
+            }
+            setHeroFit(!scrollEl.classList.contains("is-fit"));
+          });
+          heroScrollMq.addEventListener("change", onHeroBreakpointChange);
+        }
+
+        onHeroBreakpointChange();
+        updateToggleUi(scrollEl.classList.contains("is-fit"));
+      }
+
+      setupHeroZoomToggle();
       initHomepageHero();
-      window.addEventListener("flexcase:navigate", initHomepageHero);
+      window.addEventListener("flexcase:navigate", () => {
+        setupHeroZoomToggle();
+        initHomepageHero();
+      });
 
       window.addEventListener("resize", () => {
         managedInputs.forEach((input) => {
