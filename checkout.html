@@ -120,6 +120,10 @@
         box-shadow: 0 6px 18px rgba(0, 0, 0, 0.05);
       }
 
+      #checkout-step-panel {
+        scroll-margin-top: calc(var(--flexcase-site-header-offset, 98px) + 12px);
+      }
+
       .panel h1 {
         margin: 0 0 6px;
         font-size: 1.45rem;
@@ -830,7 +834,7 @@
       </div>
 
       <div class="layout">
-        <section class="panel" aria-live="polite">
+        <section id="checkout-step-panel" class="panel" aria-live="polite">
           <form id="checkout-form" novalidate>
             <!-- Step 1 -->
             <div id="step-contact">
@@ -1712,8 +1716,11 @@
         }
       }
 
-      function scrollCheckoutToTop() {
-        window.scrollTo({ top: 0, behavior: "smooth" });
+      function scrollCheckoutToStepPanel() {
+        document.getElementById("checkout-step-panel")?.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
       }
 
       function setStep(step) {
@@ -1737,7 +1744,7 @@
           void loadShippingRates();
         }
         if (step !== previousStep && step > previousStep) {
-          scrollCheckoutToTop();
+          scrollCheckoutToStepPanel();
         }
       }
 
