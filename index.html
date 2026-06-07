@@ -243,6 +243,47 @@
         pointer-events: none;
       }
 
+      @keyframes hero-flexcase-fade-in {
+        from {
+          opacity: 0;
+        }
+
+        to {
+          opacity: 1;
+        }
+      }
+
+      .windows > article > .card .card-visual {
+        opacity: 0;
+      }
+
+      #windowsHero.hero-cards-animate > article:nth-of-type(1) > .card .card-visual {
+        animation: hero-flexcase-fade-in 0.55s ease forwards;
+        animation-delay: 0.1s;
+      }
+
+      #windowsHero.hero-cards-animate > article:nth-of-type(2) > .card .card-visual {
+        animation: hero-flexcase-fade-in 0.55s ease forwards;
+        animation-delay: 0.35s;
+      }
+
+      #windowsHero.hero-cards-animate > article:nth-of-type(3) > .card .card-visual {
+        animation: hero-flexcase-fade-in 0.55s ease forwards;
+        animation-delay: 0.6s;
+      }
+
+      .card-visual.hero-flexcase-enter {
+        animation: hero-flexcase-fade-in 0.45s ease forwards;
+        animation-delay: 0s;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .windows > article > .card .card-visual {
+          opacity: 1 !important;
+          animation: none !important;
+        }
+      }
+
       .meta {
         margin-top: 8px;
         font-size: 0.96rem;
@@ -1133,6 +1174,10 @@
 
       const FLEXCASE_CARD_OVERLAY_SRC = "assets/flexcase_front_homepage.png";
       const FLEXGRID_LAYER_SRC = "assets/flexgrid-front-home.png";
+      const HERO_FLEXCASE_FADE_MS = 550;
+      const HERO_FLEXCASE_STAGGER_DELAYS = [100, 350, 600];
+      let heroInitialEnterDone = false;
+      let heroInitialEnterTimer = null;
       const presentationReloadToken = { shared: 0, 1: 0, 2: 0, 3: 0 };
 
       function tokenizeInput(rawInput) {
@@ -1240,6 +1285,81 @@
         flexgrid.src = `${FLEXGRID_LAYER_SRC}?r=${presentationReloadToken.shared}`;
       }
 
+      function resetHeroFlexcaseEnterState() {
+        heroInitialEnterDone = false;
+        if (heroInitialEnterTimer) {
+          clearTimeout(heroInitialEnterTimer);
+          heroInitialEnterTimer = null;
+        }
+        const hero = document.getElementById("windowsHero");
+        hero?.classList.remove("hero-cards-animate");
+        document.querySelectorAll(".windows > article > .card .card-visual").forEach((el) => {
+          el.classList.remove("hero-flexcase-enter");
+          el.style.opacity = "";
+          el.style.animation = "";
+        });
+      }
+
+      function finishHeroFlexcaseStaggerEnter() {
+        const hero = document.getElementById("windowsHero");
+        hero?.classList.remove("hero-cards-animate");
+        heroInitialEnterDone = true;
+        heroInitialEnterTimer = null;
+        document.querySelectorAll(".windows > article > .card .card-visual").forEach((el) => {
+          el.style.opacity = "1";
+        });
+      }
+
+      function startHeroFlexcaseStaggerEnter() {
+        if (heroInitialEnterDone) return;
+        const hero = document.getElementById("windowsHero");
+        if (!hero) return;
+
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          finishHeroFlexcaseStaggerEnter();
+          return;
+        }
+
+        hero.classList.add("hero-cards-animate");
+        const lastDelay = HERO_FLEXCASE_STAGGER_DELAYS[HERO_FLEXCASE_STAGGER_DELAYS.length - 1];
+        heroInitialEnterTimer = setTimeout(finishHeroFlexcaseStaggerEnter, lastDelay + HERO_FLEXCASE_FADE_MS + 50);
+      }
+
+      function scheduleHeroFlexcaseStaggerEnter() {
+        resetHeroFlexcaseEnterState();
+        const flexgrid = document.querySelector(".windows-flexgrid-layer");
+        const run = () => requestAnimationFrame(startHeroFlexcaseStaggerEnter);
+        if (!flexgrid || flexgrid.complete) {
+          run();
+        } else {
+          flexgrid.addEventListener("load", run, { once: true });
+        }
+      }
+
+      function triggerHeroFlexcaseFadeIn(windowId) {
+        if (!heroInitialEnterDone) return;
+        const visual = document.getElementById(`cardResult${windowId}`)?.querySelector(".card-visual");
+        if (!visual) return;
+
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          visual.style.opacity = "1";
+          return;
+        }
+
+        visual.style.opacity = "0";
+        visual.classList.remove("hero-flexcase-enter");
+        void visual.offsetWidth;
+        visual.classList.add("hero-flexcase-enter");
+        visual.addEventListener(
+          "animationend",
+          () => {
+            visual.classList.remove("hero-flexcase-enter");
+            visual.style.opacity = "1";
+          },
+          { once: true }
+        );
+      }
+
       function ensureCardFrameLayer(windowId) {
         const visual = document.getElementById(`cardResult${windowId}`)?.querySelector(".card-visual");
         if (!visual) return null;
@@ -1323,6 +1443,9 @@
         const { slotEl } = ensureCardFrame(windowId);
         if (slotEl) slotEl.innerHTML = html;
         reloadCardPresentationLayers(windowId);
+        if (html.includes("card-art")) {
+          requestAnimationFrame(() => triggerHeroFlexcaseFadeIn(windowId));
+        }
       }
 
       function setCardMeta(windowId, card) {
@@ -1554,6 +1677,7 @@
           ensureDefaultHeroMeta(windowId);
           setupWindow(windowId, { runInitialSearch: false });
         });
+        scheduleHeroFlexcaseStaggerEnter();
         void loadDefaultHeroCards();
       }
 
