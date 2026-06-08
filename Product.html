@@ -1418,6 +1418,7 @@
         }
         const product = payload.product;
         product.reviews = null;
+        let reviewsLoadStarted = false;
 
         const variants = product.variants?.nodes || [];
         let selectedOptionValues = {};
@@ -1494,7 +1495,6 @@
         );
 
         renderProductCore();
-        void loadProductReviews();
 
         const reviewPhotoGalleries = {};
         let reviewsShowAll = false;
@@ -1827,8 +1827,6 @@
             if (event.key === "ArrowRight") stepReviewPhotoLightbox(1);
           });
         }
-
-        let reviewsLoadStarted = false;
 
         async function loadProductReviews() {
           if (reviewsLoadStarted) return;
@@ -2187,6 +2185,8 @@
           if (formEl) formEl.dataset.bound = "1";
           maybeOpenReviewFromQuery();
         }
+
+        void loadProductReviews();
 
         function deriveOptionsFromVariants(vs) {
           const map = new Map();
