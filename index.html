@@ -34,7 +34,7 @@
       :root {
         color-scheme: light;
         /* Pokémon TCG API hires images are 600×825px */
-        --flexcase-homepage-card-aspect: 600 / 825;
+        --flexcase-homepage-card-aspect: 690 / 911;
         --flexcase-hero-column-width: 240px;
         --flexcase-hero-case-height: calc(var(--flexcase-hero-column-width) * 825 / 600);
       }
@@ -105,9 +105,8 @@
         width: 100%;
         margin-top: 10px;
         height: auto;
-        aspect-ratio: 1800 / 825;
+        aspect-ratio: 2070 / 911;
         pointer-events: none;
-        border-radius: 2%;
         overflow: hidden;
       }
 
@@ -203,7 +202,7 @@
 
       .card-visual .card-slot {
         position: absolute;
-        inset: 5%;
+        inset: 4%;
         z-index: 1;
         display: flex;
         align-items: center;
@@ -333,6 +332,115 @@
       .feature-image {
         width: min(100%, 360px);
         height: auto;
+      }
+
+      .feature-image-wrap--grid {
+        width: min(100%, 360px);
+        align-items: stretch;
+        align-self: center;
+        margin-inline: auto;
+      }
+
+      .feature-grid-display {
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+
+      .feature-grid-row {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-rows: auto;
+        position: relative;
+        width: 100%;
+      }
+
+      .feature-grid-backdrop {
+        grid-column: 1 / -1;
+        grid-row: 1;
+        align-self: start;
+        justify-self: stretch;
+        z-index: 0;
+        width: 100%;
+        height: auto;
+        aspect-ratio: 2070 / 911;
+        overflow: hidden;
+        pointer-events: none;
+      }
+
+      .feature-grid-backdrop-layer {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: fill;
+        object-position: center;
+        opacity: 0;
+      }
+
+      .feature-grid-card {
+        grid-row: 1;
+        position: relative;
+        z-index: 1;
+        min-width: 0;
+        margin: 0;
+      }
+
+      .feature-grid-card:nth-child(2) {
+        grid-column: 1;
+      }
+
+      .feature-grid-card:nth-child(3) {
+        grid-column: 2;
+      }
+
+      .feature-grid-card:nth-child(4) {
+        grid-column: 3;
+      }
+
+      .feature-grid-card .card-visual {
+        width: 100%;
+        margin: 0;
+        aspect-ratio: var(--flexcase-homepage-card-aspect);
+        height: auto;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: hidden;
+        opacity: 0;
+      }
+
+      .feature-grid-card:nth-child(3) .card-visual {
+        border-radius: 0;
+      }
+
+      .feature-grid-card:nth-child(4) .card-visual {
+        border-radius: 0 14px 14px 0;
+      }
+
+      .feature-grid-display.feature-grid-animate .feature-grid-row:nth-child(1) .feature-grid-backdrop-layer,
+      .feature-grid-display.feature-grid-animate .feature-grid-row:nth-child(1) .feature-grid-card .card-visual {
+        animation: hero-flexcase-fade-in 0.55s ease forwards;
+        animation-delay: 0.08s;
+      }
+
+      .feature-grid-display.feature-grid-animate .feature-grid-row:nth-child(2) .feature-grid-backdrop-layer,
+      .feature-grid-display.feature-grid-animate .feature-grid-row:nth-child(2) .feature-grid-card .card-visual {
+        animation: hero-flexcase-fade-in 0.55s ease forwards;
+        animation-delay: 0.42s;
+      }
+
+      .feature-grid-display.feature-grid-animate .feature-grid-row:nth-child(3) .feature-grid-backdrop-layer,
+      .feature-grid-display.feature-grid-animate .feature-grid-row:nth-child(3) .feature-grid-card .card-visual {
+        animation: hero-flexcase-fade-in 0.55s ease forwards;
+        animation-delay: 0.76s;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .feature-grid-backdrop-layer,
+        .feature-grid-card .card-visual {
+          opacity: 1 !important;
+          animation: none !important;
+        }
       }
 
       .catalog-section {
@@ -1102,10 +1210,47 @@
         <div class="feature-image-wrap">
           <img
             class="feature-image"
-            src="assets/flexcase-front.png"
+            src="assets/anti-uv.png"
             alt="Flex Case clear face for UV-protected display"
             loading="lazy"
           />
+        </div>
+      </section>
+
+      <section class="feature-block">
+        <div class="feature-content">
+          <h2>Easy to Mount with Magnets</h2>
+          <p>
+            Built-in magnets let you snap Flex Case onto Flexgrid in seconds — no tools, no
+            fuss. Mount your display on a wall or shelf and reposition cases whenever your
+            collection changes.
+          </p>
+        </div>
+        <div class="feature-image-wrap">
+          <img
+            class="feature-image"
+            src="assets/flex-bundle-dimetric.png"
+            alt="Flex Case and Flexgrid magnetic mounting system"
+            loading="lazy"
+          />
+        </div>
+      </section>
+
+      <section class="feature-block">
+        <div class="feature-content">
+          <h2>Simple and Neat Grid Arrangement</h2>
+          <p>
+            Flexgrid keeps every case aligned in a clean, uniform layout. Line up singles or
+            build a full wall display — your collection stays straight, spaced, and easy to
+            admire at a glance.
+          </p>
+        </div>
+        <div class="feature-image-wrap feature-image-wrap--grid">
+          <div
+            class="feature-grid-display"
+            id="featureGridDisplay"
+            aria-hidden="true"
+          ></div>
         </div>
       </section>
       </main>
@@ -1781,11 +1926,88 @@
         updateToggleUi(scrollEl.classList.contains("is-fit"));
       }
 
+      function initFeatureGridDemo() {
+        const root = document.getElementById("featureGridDisplay");
+        if (!root || root.dataset.initialized === "1") return;
+
+        const cardImages = [
+          "https://images.scrydex.com/pokemon/me4-88/large",
+          "https://images.scrydex.com/pokemon/me4-89/large",
+          "https://images.scrydex.com/pokemon/me4-116/large",
+        ];
+        const flexgridSrc = "assets/flexgrid-front-home.png";
+        const caseOverlaySrc = "assets/flexcase_front_homepage.png";
+
+        function buildFeatureGridRow() {
+          const cardsHtml = cardImages
+            .map(
+              (src) =>
+                '<div class="feature-grid-card"><div class="card-visual"><div class="card-slot">' +
+                '<img class="card-art" src="' +
+                src +
+                '" alt="" loading="lazy" decoding="async" />' +
+                "</div>" +
+                '<img class="card-case-overlay" src="' +
+                caseOverlaySrc +
+                '" alt="" aria-hidden="true" />' +
+                "</div></div>"
+            )
+            .join("");
+          return (
+            '<div class="feature-grid-row">' +
+            '<div class="feature-grid-backdrop" aria-hidden="true">' +
+            '<img class="feature-grid-backdrop-layer" src="' +
+            flexgridSrc +
+            '" alt="" loading="lazy" decoding="async" />' +
+            "</div>" +
+            cardsHtml +
+            "</div>"
+          );
+        }
+
+        root.innerHTML = buildFeatureGridRow() + buildFeatureGridRow() + buildFeatureGridRow();
+        root.dataset.initialized = "1";
+
+        function revealFeatureGrid() {
+          root.classList.add("feature-grid-animate");
+          root.removeAttribute("aria-hidden");
+        }
+
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          revealFeatureGrid();
+          return;
+        }
+
+        if (!("IntersectionObserver" in window)) {
+          revealFeatureGrid();
+          return;
+        }
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            revealFeatureGrid();
+            observer.disconnect();
+          },
+          { threshold: 0.15, rootMargin: "0px 0px 0px 0px" }
+        );
+        observer.observe(root);
+        requestAnimationFrame(() => {
+          const rect = root.getBoundingClientRect();
+          if (rect.top < window.innerHeight * 0.9 && rect.bottom > window.innerHeight * 0.1) {
+            revealFeatureGrid();
+            observer.disconnect();
+          }
+        });
+      }
+
       setupHeroZoomToggle();
       initHomepageHero();
+      initFeatureGridDemo();
       window.addEventListener("flexcase:navigate", () => {
         setupHeroZoomToggle();
         initHomepageHero();
+        initFeatureGridDemo();
       });
 
       window.addEventListener("resize", () => {
