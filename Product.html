@@ -1605,6 +1605,17 @@
             return;
           }
 
+          if (bundle.loadError) {
+            summaryEl.textContent = "—";
+            if (starsEl) starsEl.textContent = "";
+            if (countEl) countEl.textContent = "Reviews unavailable";
+            if (barsEl) barsEl.innerHTML = "";
+            gridEl.innerHTML =
+              '<div class="review-empty">' + escapeGalleryText(bundle.loadError) + "</div>";
+            if (writeToggleEl) writeToggleEl.hidden = true;
+            return;
+          }
+
           summaryEl.textContent = count && average != null ? String(average) : "—";
           if (starsEl) {
             const filled = count && average != null ? Math.round(average) : 0;
@@ -1823,18 +1834,33 @@
           if (reviewsLoadStarted) return;
           reviewsLoadStarted = true;
           try {
-            const res = await fetchApiWithFallback(
-              `/api/product/${encodeURIComponent(handle)}/reviews`
-            );
+            let res;
+            try {
+              res = await fetchWithTimeout(
+                apiUrl(`/api/product/${encodeURIComponent(handle)}/reviews`),
+                { credentials: "include" },
+                20000
+              );
+            } catch (_) {
+              res = await fetchWithTimeout(
+                localApiUrl(`/api/product/${encodeURIComponent(handle)}/reviews`),
+                { credentials: "include" },
+                20000
+              );
+            }
             const data = await res.json();
             if (!res.ok) throw new Error(data.error || "Could not load reviews.");
             product.reviews = data.reviews;
           } catch (error) {
             console.warn("Product reviews:", error);
+            const timedOut = String(error?.name || "") === "AbortError";
             product.reviews = {
-              configured: false,
+              configured: true,
               count: 0,
               items: [],
+              loadError: timedOut
+                ? "Reviews are taking longer than usual. Please refresh in a moment."
+                : "Could not load reviews right now.",
             };
           }
           renderProductReviews(product.reviews);
