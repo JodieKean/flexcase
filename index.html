@@ -117,6 +117,7 @@
         height: 100%;
         object-fit: fill;
         object-position: center;
+        opacity: 0;
       }
 
       .windows > article:nth-of-type(1) > input {
@@ -257,6 +258,11 @@
         opacity: 0;
       }
 
+      #windowsHero.hero-cards-animate .windows-flexgrid-layer {
+        animation: hero-flexcase-fade-in 0.55s ease forwards;
+        animation-delay: 0s;
+      }
+
       #windowsHero.hero-cards-animate > article:nth-of-type(1) > .card .card-visual {
         animation: hero-flexcase-fade-in 0.55s ease forwards;
         animation-delay: 0.1s;
@@ -278,6 +284,7 @@
       }
 
       @media (prefers-reduced-motion: reduce) {
+        .windows-flexgrid-layer,
         .windows > article > .card .card-visual {
           opacity: 1 !important;
           animation: none !important;
@@ -1178,7 +1185,24 @@
       const HERO_FLEXCASE_STAGGER_DELAYS = [100, 350, 600];
       let heroInitialEnterDone = false;
       let heroInitialEnterTimer = null;
+      const heroEnterDoneQueue = [];
       const presentationReloadToken = { shared: 0, 1: 0, 2: 0, 3: 0 };
+
+      function onHeroEnterDone(callback) {
+        if (heroInitialEnterDone) callback();
+        else heroEnterDoneQueue.push(callback);
+      }
+
+      function flushHeroEnterDoneQueue() {
+        while (heroEnterDoneQueue.length) {
+          const callback = heroEnterDoneQueue.shift();
+          try {
+            callback();
+          } catch (error) {
+            console.warn("Hero enter callback failed:", error);
+          }
+        }
+      }
 
       function tokenizeInput(rawInput) {
         return rawInput
@@ -1287,12 +1311,18 @@
 
       function resetHeroFlexcaseEnterState() {
         heroInitialEnterDone = false;
+        heroEnterDoneQueue.length = 0;
         if (heroInitialEnterTimer) {
           clearTimeout(heroInitialEnterTimer);
           heroInitialEnterTimer = null;
         }
         const hero = document.getElementById("windowsHero");
         hero?.classList.remove("hero-cards-animate");
+        const flexgrid = document.querySelector(".windows-flexgrid-layer");
+        if (flexgrid) {
+          flexgrid.style.opacity = "";
+          flexgrid.style.animation = "";
+        }
         document.querySelectorAll(".windows > article > .card .card-visual").forEach((el) => {
           el.classList.remove("hero-flexcase-enter");
           el.style.opacity = "";
@@ -1305,9 +1335,12 @@
         hero?.classList.remove("hero-cards-animate");
         heroInitialEnterDone = true;
         heroInitialEnterTimer = null;
+        const flexgrid = document.querySelector(".windows-flexgrid-layer");
+        if (flexgrid) flexgrid.style.opacity = "1";
         document.querySelectorAll(".windows > article > .card .card-visual").forEach((el) => {
           el.style.opacity = "1";
         });
+        flushHeroEnterDoneQueue();
       }
 
       function startHeroFlexcaseStaggerEnter() {
@@ -1382,7 +1415,7 @@
         frame.src = `${FLEXCASE_CARD_OVERLAY_SRC}?${bust}`;
       }
 
-      function reloadCardPresentationLayers(windowId) {
+      function syncHeroPresentationAfterCardChange(windowId) {
         reloadSharedFlexgrid();
         reloadCardFrameLayer(windowId);
       }
@@ -1398,6 +1431,11 @@
 
       function hasHeroCardArt(windowId) {
         return Boolean(getCardFrameElements(windowId).slotEl?.querySelector(".card-art"));
+      }
+
+      function getCurrentCardArtUrl(windowId) {
+        const src = getCardFrameElements(windowId).slotEl?.querySelector(".card-art")?.getAttribute("src");
+        return String(src || "").trim();
       }
 
       function ensureDefaultHeroImage(windowId) {
@@ -1435,14 +1473,14 @@
           </div>
           <div class="meta card-meta" hidden></div>
         `;
-        reloadCardPresentationLayers(windowId);
         return getCardFrameElements(windowId);
       }
 
-      function setCardSlot(windowId, html) {
+      function setCardSlot(windowId, html, options = {}) {
+        const { syncPresentation = false } = options;
         const { slotEl } = ensureCardFrame(windowId);
         if (slotEl) slotEl.innerHTML = html;
-        reloadCardPresentationLayers(windowId);
+        if (syncPresentation) syncHeroPresentationAfterCardChange(windowId);
         if (html.includes("card-art")) {
           requestAnimationFrame(() => triggerHeroFlexcaseFadeIn(windowId));
         }
@@ -1470,7 +1508,6 @@
           metaEl.hidden = false;
           metaEl.innerHTML = `<span class="card-status${isError ? " error" : ""}">${escapeHtml(message)}</span>`;
         }
-        reloadCardPresentationLayers(windowId);
       }
 
       function normalizeCardNumber(value) {
@@ -1493,7 +1530,8 @@
           : ' loading="lazy" decoding="async"';
         setCardSlot(
           windowId,
-          `<img class="card-art" src="${imageUrl}" alt="${escapeHtml(card.name)}"${priorityAttrs} />`
+          `<img class="card-art" src="${imageUrl}" alt="${escapeHtml(card.name)}"${priorityAttrs} />`,
+          { syncPresentation: Boolean(options.syncPresentation) }
         );
         setCardMeta(windowId, card);
       }
@@ -1544,6 +1582,11 @@
               continue;
             }
             const imageUrl = card.images?.large || card.images?.small;
+            const currentArtUrl = getCurrentCardArtUrl(windowId);
+            if (currentArtUrl && imageUrl && currentArtUrl === imageUrl) {
+              setCardMeta(windowId, card);
+              continue;
+            }
             preloadImageUrl(imageUrl);
             renderCard(windowId, card, { priority: true });
           }
@@ -1608,7 +1651,7 @@
           const rankedCards = [...cards].sort(
             (a, b) => scoreCard(b, tokens) - scoreCard(a, tokens)
           );
-          renderCard(windowId, rankedCards[0]);
+          renderCard(windowId, rankedCards[0], { syncPresentation: true });
         } catch (error) {
           clearTimeout(timeoutId);
           if (currentRequest !== windowState[windowId].requestSequence) {
@@ -1678,7 +1721,7 @@
           setupWindow(windowId, { runInitialSearch: false });
         });
         scheduleHeroFlexcaseStaggerEnter();
-        void loadDefaultHeroCards();
+        onHeroEnterDone(() => void loadDefaultHeroCards());
       }
 
       function setupHeroZoomToggle() {

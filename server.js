@@ -2200,8 +2200,21 @@ async function handleProduct(req, res, handle) {
     }
     const product = mapProduct(node, discountMap);
     product.mediaGallery = mapProductMediaToGallery(node);
-    product.reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
     json(res, 200, { product });
+  } catch (error) {
+    json(res, 500, { error: error.message });
+  }
+}
+
+async function handleProductReviewsGet(req, res, handle) {
+  try {
+    const node = await resolveActiveProductNodeByHandle(handle);
+    if (!node) {
+      json(res, 404, { error: "Product not found." });
+      return;
+    }
+    const reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
+    json(res, 200, { reviews });
   } catch (error) {
     json(res, 500, { error: error.message });
   }
@@ -4966,10 +4979,16 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   const productReviewMatch = reqUrl.pathname.match(/^\/api\/product\/([^/]+)\/reviews$/);
-  if (req.method === "POST" && productReviewMatch) {
+  if (productReviewMatch) {
     const handle = decodeURIComponent(productReviewMatch[1] || "").trim();
-    await handleProductReviewSubmit(req, res, handle);
-    return;
+    if (req.method === "POST") {
+      await handleProductReviewSubmit(req, res, handle);
+      return;
+    }
+    if (req.method === "GET") {
+      await handleProductReviewsGet(req, res, handle);
+      return;
+    }
   }
 
   if (req.method !== "GET") {

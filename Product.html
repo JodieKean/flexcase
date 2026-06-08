@@ -1417,6 +1417,17 @@
           return;
         }
         const product = payload.product;
+        product.reviews = null;
+
+        const variants = product.variants?.nodes || [];
+        let selectedOptionValues = {};
+        let selectedVariant = variants[0] || null;
+        let quantity = 1;
+        let addToCartInFlight = false;
+        let galleryItems = [];
+        let galleryActiveIndex = 0;
+        let galleryDeferVideos = true;
+        const mobileGalleryMq = window.matchMedia("(max-width: 640px)");
 
         titleEl.textContent = product.title;
         const productType = String(product.productType || "").trim();
@@ -1481,6 +1492,9 @@
         setProductDescription(
           product.descriptionHtml || product.description || "<p>No product description yet.</p>"
         );
+
+        renderProductCore();
+        void loadProductReviews();
 
         const reviewPhotoGalleries = {};
         let reviewsShowAll = false;
@@ -1803,15 +1817,38 @@
           });
         }
 
-        renderProductReviews(product.reviews);
-        initReviewPhotoLightbox();
+        let reviewsLoadStarted = false;
+
+        async function loadProductReviews() {
+          if (reviewsLoadStarted) return;
+          reviewsLoadStarted = true;
+          try {
+            const res = await fetchApiWithFallback(
+              `/api/product/${encodeURIComponent(handle)}/reviews`
+            );
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error || "Could not load reviews.");
+            product.reviews = data.reviews;
+          } catch (error) {
+            console.warn("Product reviews:", error);
+            product.reviews = {
+              configured: false,
+              count: 0,
+              items: [],
+            };
+          }
+          renderProductReviews(product.reviews);
+          initReviewPhotoLightbox();
+          initReviewCompose();
+        }
 
         function initReviewCompose() {
           if (!product.reviews?.configured) return;
+          const formEl = document.getElementById("review-compose-form");
+          if (formEl?.dataset.bound === "1") return;
 
           const panelEl = document.getElementById("review-compose-panel");
           const toggleEl = document.getElementById("write-review-toggle");
-          const formEl = document.getElementById("review-compose-form");
           const ratingEl = document.getElementById("review-rating-input");
           const messageEl = document.getElementById("review-compose-message");
           const submitEl = document.getElementById("review-compose-submit");
@@ -2121,16 +2158,9 @@
               }
             }
           });
+          if (formEl) formEl.dataset.bound = "1";
           maybeOpenReviewFromQuery();
         }
-
-        initReviewCompose();
-
-        const variants = product.variants?.nodes || [];
-        let selectedOptionValues = {};
-        let selectedVariant = variants[0] || null;
-        let quantity = 1;
-        let addToCartInFlight = false;
 
         function deriveOptionsFromVariants(vs) {
           const map = new Map();
@@ -2484,10 +2514,6 @@
             .slice(0, maxGalleryItems);
         }
 
-        let galleryItems = [];
-        let galleryActiveIndex = 0;
-        const mobileGalleryMq = window.matchMedia("(max-width: 640px)");
-
         function isMobileGalleryView() {
           return mobileGalleryMq.matches;
         }
@@ -2499,51 +2525,62 @@
           });
         }
 
-        function setGalleryMain(index) {
+        function setGalleryMain(index, options = {}) {
           const item = galleryItems[index];
           if (!item) return;
           galleryActiveIndex = index;
+          const deferVideo = options.deferVideo ?? galleryDeferVideos;
           const alt = escapeGalleryText(item.altText || product.title);
           const videoUrl = String(item.videoUrl || "").trim();
           const poster = String(item.poster || item.url || "").trim();
           const embedUrl = String(item.embedUrl || "").trim();
 
           if (item.kind === "video" && videoUrl) {
-            const src = escapeGalleryText(videoUrl);
             const posterEsc = escapeGalleryText(poster);
-            const mobileView = isMobileGalleryView();
-            const videoClass =
-              "gallery-video" + (mobileView ? " gallery-video--chromeless" : "");
-            const controlsAttr = mobileView ? "" : " controls";
-            galleryMain.innerHTML =
-              '<video class="' +
-              videoClass +
-              '" src="' +
-              src +
-              '" poster="' +
-              posterEsc +
-              '" playsinline autoplay loop muted' +
-              controlsAttr +
-              ' preload="metadata" disablepictureinpicture disableremoteplayback aria-label="' +
-              alt +
-              '"></video>';
-            const vidEl = galleryMain.querySelector("video");
-            if (vidEl) {
-              vidEl.controls = !mobileView;
-              vidEl.muted = true;
-              void vidEl.play?.().catch(() => {});
+            if (deferVideo && poster) {
+              galleryMain.innerHTML = '<img src="' + posterEsc + '" alt="' + alt + '" />';
+              galleryMain.classList.remove("gallery-main--fill-media");
+            } else {
+              const src = escapeGalleryText(videoUrl);
+              const mobileView = isMobileGalleryView();
+              const videoClass =
+                "gallery-video" + (mobileView ? " gallery-video--chromeless" : "");
+              const controlsAttr = mobileView ? "" : " controls";
+              galleryMain.innerHTML =
+                '<video class="' +
+                videoClass +
+                '" src="' +
+                src +
+                '" poster="' +
+                posterEsc +
+                '" playsinline autoplay loop muted' +
+                controlsAttr +
+                ' preload="metadata" disablepictureinpicture disableremoteplayback aria-label="' +
+                alt +
+                '"></video>';
+              const vidEl = galleryMain.querySelector("video");
+              if (vidEl) {
+                vidEl.controls = !mobileView;
+                vidEl.muted = true;
+                void vidEl.play?.().catch(() => {});
+              }
             }
           } else if (item.kind === "video" && poster) {
             const src = escapeGalleryText(poster);
             galleryMain.innerHTML = '<img src="' + src + '" alt="' + alt + '" />';
           } else if (item.kind === "external_video" && embedUrl) {
-            const src = escapeGalleryText(embedUrl);
-            galleryMain.innerHTML =
-              '<iframe class="gallery-iframe" src="' +
-              src +
-              '" title="' +
-              alt +
-              '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>';
+            if (deferVideo && poster) {
+              galleryMain.innerHTML = '<img src="' + escapeGalleryText(poster) + '" alt="' + alt + '" />';
+              galleryMain.classList.remove("gallery-main--fill-media");
+            } else {
+              const src = escapeGalleryText(embedUrl);
+              galleryMain.innerHTML =
+                '<iframe class="gallery-iframe" src="' +
+                src +
+                '" title="' +
+                alt +
+                '" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen loading="lazy"></iframe>';
+            }
           } else {
             const src = escapeGalleryText(String(item.url || "").trim());
             galleryMain.innerHTML = '<img src="' + src + '" alt="' + alt + '" />';
@@ -2617,8 +2654,38 @@
             if (!thumb) return;
             const i = Number(thumb.dataset.thumbIndex || "0");
             if (Number.isNaN(i) || i === galleryActiveIndex) return;
-            setGalleryMain(i);
+            setGalleryMain(i, { deferVideo: false });
           };
+        }
+
+        function scheduleDeferredGalleryVideo() {
+          const upgrade = () => {
+            if (!galleryDeferVideos) return;
+            galleryDeferVideos = false;
+            const active = galleryItems[galleryActiveIndex];
+            const hasDeferredVideo =
+              (active?.kind === "video" && String(active.videoUrl || "").trim()) ||
+              (active?.kind === "external_video" && String(active.embedUrl || "").trim());
+            if (hasDeferredVideo) {
+              setGalleryMain(galleryActiveIndex, { deferVideo: false });
+            }
+          };
+          if ("requestIdleCallback" in window) {
+            requestIdleCallback(upgrade, { timeout: 1200 });
+          } else {
+            window.setTimeout(upgrade, 600);
+          }
+        }
+
+        function renderProductCore() {
+          initSelectedOptions();
+          selectedVariant = findVariantByOptions(selectedOptionValues) || selectedVariant;
+          renderGallery();
+          renderVariants();
+          updatePriceBlock(selectedVariant);
+          updateStock(selectedVariant);
+          syncProductAccordions();
+          scheduleDeferredGalleryVideo();
         }
 
         function renderVariants() {
@@ -2677,15 +2744,6 @@
           };
         }
 
-        initSelectedOptions();
-        selectedVariant = findVariantByOptions(selectedOptionValues) || selectedVariant;
-
-        renderGallery();
-        renderVariants();
-        updatePriceBlock(selectedVariant);
-        updateStock(selectedVariant);
-        syncProductAccordions();
-
         let galleryLayoutTimer;
         window.addEventListener("resize", () => {
           clearTimeout(galleryLayoutTimer);
@@ -2720,10 +2778,10 @@
           }
         }
 
-        await renderRelatedProducts();
+        void renderRelatedProducts();
 
         if (typeof window.flexcaseEnsureCartReady === "function") {
-          await window.flexcaseEnsureCartReady().catch(() => {});
+          void window.flexcaseEnsureCartReady().catch(() => {});
         }
 
         const qtyContainer = qtyValueEl?.closest(".qty");
