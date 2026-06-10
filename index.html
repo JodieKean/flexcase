@@ -1930,22 +1930,36 @@
         const root = document.getElementById("featureGridDisplay");
         if (!root || root.dataset.initialized === "1") return;
 
-        const cardImages = [
-          "https://images.scrydex.com/pokemon/me4-88/large",
-          "https://images.scrydex.com/pokemon/me4-89/large",
-          "https://images.scrydex.com/pokemon/me4-116/large",
+        const featureGridCardRows = [
+          [
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-199/large", alt: "Charizard ex" },
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-170/large", alt: "Squirtle" },
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-198/large", alt: "Venusaur ex" },
+          ],
+          [
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-169/large", alt: "Charmeleon" },
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-171/large", alt: "Wartortle" },
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-167/large", alt: "Ivysaur" },
+          ],
+          [
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-168/large", alt: "Charmander" },
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-200/large", alt: "Blastoise ex" },
+            { src: "https://images.scrydex.com/pokemon/sv3pt5-166/large", alt: "Bulbasaur" },
+          ],
         ];
         const flexgridSrc = "assets/flexgrid-front-home.png";
         const caseOverlaySrc = "assets/flexcase_front_homepage.png";
 
-        function buildFeatureGridRow() {
-          const cardsHtml = cardImages
+        function buildFeatureGridRow(cards) {
+          const cardsHtml = cards
             .map(
-              (src) =>
+              (card) =>
                 '<div class="feature-grid-card"><div class="card-visual"><div class="card-slot">' +
                 '<img class="card-art" src="' +
-                src +
-                '" alt="" loading="lazy" decoding="async" />' +
+                card.src +
+                '" alt="' +
+                card.alt +
+                '" loading="lazy" decoding="async" />' +
                 "</div>" +
                 '<img class="card-case-overlay" src="' +
                 caseOverlaySrc +
@@ -1965,7 +1979,7 @@
           );
         }
 
-        root.innerHTML = buildFeatureGridRow() + buildFeatureGridRow() + buildFeatureGridRow();
+        root.innerHTML = featureGridCardRows.map((row) => buildFeatureGridRow(row)).join("");
         root.dataset.initialized = "1";
 
         function revealFeatureGrid() {
