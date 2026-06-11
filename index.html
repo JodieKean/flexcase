@@ -46,7 +46,7 @@
         background: #f5f5f7;
         color: #1d1d1f;
         padding: 40px 0;
-        padding-top: calc(var(--flexcase-site-header-offset, 98px) + 40px);
+        padding-top: 0;
         max-width: 100vw;
         overscroll-behavior-x: none;
       }
@@ -264,17 +264,17 @@
 
       #windowsHero.hero-cards-animate > article:nth-of-type(1) > .card .card-visual {
         animation: hero-flexcase-fade-in 0.55s ease forwards;
-        animation-delay: 0.1s;
+        animation-delay: 0.15s;
       }
 
       #windowsHero.hero-cards-animate > article:nth-of-type(2) > .card .card-visual {
         animation: hero-flexcase-fade-in 0.55s ease forwards;
-        animation-delay: 0.35s;
+        animation-delay: 0.6s;
       }
 
       #windowsHero.hero-cards-animate > article:nth-of-type(3) > .card .card-visual {
         animation: hero-flexcase-fade-in 0.55s ease forwards;
-        animation-delay: 0.6s;
+        animation-delay: 1.05s;
       }
 
       .card-visual.hero-flexcase-enter {
@@ -297,8 +297,96 @@
         color: #424245;
       }
 
+      .binder-flex-cinema {
+        width: 100%;
+        max-width: 100vw;
+        margin: 0;
+        margin-top: var(--flexcase-promo-banner-height, 40px);
+        margin-bottom: clamp(40px, 5vw, 64px);
+        height: 100vh;
+        min-height: 100vh;
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .binder-flex-cinema__video {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+        pointer-events: none;
+      }
+
+      .binder-flex-cinema__overlay {
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(
+          180deg,
+          rgba(0, 0, 0, 0.42) 0%,
+          rgba(0, 0, 0, 0.28) 45%,
+          rgba(0, 0, 0, 0.5) 100%
+        );
+        pointer-events: none;
+      }
+
+      .binder-flex-cinema__copy {
+        position: relative;
+        z-index: 1;
+        margin: 0;
+        padding: 0 24px;
+        max-width: min(92vw, 1100px);
+        text-align: center;
+        font-size: clamp(2rem, 6.5vw, 4.75rem);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        color: #fff;
+        text-shadow: 0 2px 28px rgba(0, 0, 0, 0.45);
+      }
+
+      .binder-flex-cinema__char {
+        display: inline-block;
+        opacity: 0;
+        transform: translateY(0.3em);
+      }
+
+      .binder-flex-cinema__text.is-entering .binder-flex-cinema__char {
+        animation: binder-flex-char-in 0.42s ease forwards;
+      }
+
+      .binder-flex-cinema__text.is-exiting .binder-flex-cinema__char {
+        opacity: 0;
+        transform: translateY(-0.18em);
+        transition: opacity 0.34s ease, transform 0.34s ease;
+      }
+
+      @keyframes binder-flex-char-in {
+        from {
+          opacity: 0;
+          transform: translateY(0.3em);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .binder-flex-cinema__char {
+          opacity: 1;
+          transform: none;
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+
       .feature-block {
-        margin-top: 44px;
+        margin-top: clamp(72px, 9vw, 112px);
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 28px;
@@ -329,9 +417,59 @@
         justify-content: center;
       }
 
+      .feature-image-wrap:has(.feature-video) {
+        width: 100%;
+        overflow: hidden;
+        border-radius: 12px;
+      }
+
       .feature-image {
         width: min(100%, 360px);
         height: auto;
+        display: block;
+      }
+
+      .feature-video {
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: cover;
+        object-position: center;
+        aspect-ratio: 4 / 3;
+        background: transparent;
+        transform: scale(1.06);
+      }
+
+      .feature-video--portrait {
+        aspect-ratio: 3 / 4;
+      }
+
+      .feature-block--wide-video > .feature-image-wrap {
+        aspect-ratio: 16 / 10;
+      }
+
+      .feature-block--wide-video .feature-video {
+        aspect-ratio: auto;
+        height: 100%;
+      }
+
+      @media (min-width: 981px) {
+        .feature-block--wide-video {
+          grid-template-rows: auto auto;
+          align-items: start;
+        }
+
+        .feature-block--wide-video .feature-content {
+          grid-column: 1 / -1;
+          grid-row: 1;
+        }
+
+        .feature-block--wide-video > .feature-image-wrap {
+          grid-column: 1 / -1;
+          grid-row: 2;
+          width: 100%;
+        }
       }
 
       .feature-image-wrap--grid {
@@ -407,14 +545,6 @@
         box-shadow: none;
         overflow: hidden;
         opacity: 0;
-      }
-
-      .feature-grid-card:nth-child(3) .card-visual {
-        border-radius: 0;
-      }
-
-      .feature-grid-card:nth-child(4) .card-visual {
-        border-radius: 0 14px 14px 0;
       }
 
       .feature-grid-display.feature-grid-animate .feature-grid-row:nth-child(1) .feature-grid-backdrop-layer,
@@ -867,7 +997,8 @@
 
         .feature-block {
           grid-template-columns: 1fr;
-          gap: 18px;
+          gap: 24px;
+          margin-top: clamp(64px, 14vw, 88px);
         }
 
         .catalog-grid {
@@ -1017,6 +1148,23 @@
       </div>
       </nav>
     </header>
+
+    <section class="binder-flex-cinema" id="binderFlexCinema" aria-label="From binder to flexing">
+      <video
+        class="binder-flex-cinema__video"
+        src="assets/flexbundlex3-fast.mp4"
+        autoplay
+        loop
+        muted
+        playsinline
+        preload="metadata"
+        aria-hidden="true"
+      ></video>
+      <div class="binder-flex-cinema__overlay" aria-hidden="true"></div>
+      <p class="binder-flex-cinema__copy">
+        <span class="binder-flex-cinema__text" id="binderFlexCinemaText" aria-live="polite"></span>
+      </p>
+    </section>
 
     <div class="page-top">
       <main>
@@ -1179,25 +1327,53 @@
       </button>
       </div>
 
-      <section class="feature-block">
+      <section class="feature-block feature-block--wide-video">
         <div class="feature-content">
-          <h2>Flexible Bezel Protection</h2>
+          <h2>Multi-layer Protection</h2>
           <p>
-            Flex Case uses a flexible bezel that cushions card edges during handling while
-            keeping installation quick and smooth. Insert or remove your card with less force
-            and better edge protection.
+            Flex Case layers work together to shield your cards — a UV-resistant hard case,
+            flexible bezel, and back plate with raised edges to keep your card cushioned and
+            surfaces protected from handling and long-term display.
           </p>
         </div>
         <div class="feature-image-wrap">
-          <img
-            class="feature-image"
-            src="assets/flexcase-dimetric.png"
-            alt="Flex Case angled view showing protective bezel"
-            loading="lazy"
-          />
+          <video
+            class="feature-video"
+            src="assets/flexcase-insert.mp4"
+            autoplay
+            loop
+            muted
+            playsinline
+            preload="metadata"
+            aria-label="Inserting a card into Flex Case multi-layer protection"
+          ></video>
         </div>
       </section>
 
+      <section class="feature-block">
+        <div class="feature-content">
+          <h2>Slim Flexible Bezel</h2>
+          <p>
+            Flex Case uses a flexible bezel that cushions edges and corners of the acrylic case
+            during handling while keeping installation quick and smooth. Insert or remove your
+            card with less force and better edge protection.
+          </p>
+        </div>
+        <div class="feature-image-wrap">
+          <video
+            class="feature-video"
+            src="assets/flexband-flexi.mp4"
+            autoplay
+            loop
+            muted
+            playsinline
+            preload="metadata"
+            aria-label="Flex Case flexible bezel protection demonstration"
+          ></video>
+        </div>
+      </section>
+
+      <!-- UV Protection section — hidden for now
       <section class="feature-block">
         <div class="feature-content">
           <h2>UV Protection, Ultra Clear Display</h2>
@@ -1216,31 +1392,36 @@
           />
         </div>
       </section>
+      -->
 
       <section class="feature-block">
         <div class="feature-content">
-          <h2>Easy to Mount with Magnets</h2>
+          <h2>Easy Magnetic Mounting</h2>
           <p>
-            Built-in magnets let you snap Flex Case onto Flexgrid in seconds — no tools, no
+            Built-in magnets let you snap Flex Case onto Flex Grid in seconds — no tools, no
             fuss. Mount your display on a wall or shelf and reposition cases whenever your
             collection changes.
           </p>
         </div>
         <div class="feature-image-wrap">
-          <img
-            class="feature-image"
-            src="assets/flex-bundle-dimetric.png"
-            alt="Flex Case and Flexgrid magnetic mounting system"
-            loading="lazy"
-          />
+          <video
+            class="feature-video feature-video--portrait"
+            src="assets/flexbundlex3-fast-34.mp4"
+            autoplay
+            loop
+            muted
+            playsinline
+            preload="metadata"
+            aria-label="Snapping Flex Case onto Flex Grid with magnets"
+          ></video>
         </div>
       </section>
 
       <section class="feature-block">
         <div class="feature-content">
-          <h2>Simple and Neat Grid Arrangement</h2>
+          <h2>Modular and Neat Grid Arrangement</h2>
           <p>
-            Flexgrid keeps every case aligned in a clean, uniform layout. Line up singles or
+            Flex Grid keeps every case aligned in a clean, uniform layout. Line up singles or
             build a full wall display — your collection stays straight, spaced, and easy to
             admire at a glance.
           </p>
@@ -1327,7 +1508,25 @@
       const FLEXCASE_CARD_OVERLAY_SRC = "assets/flexcase_front_homepage.png";
       const FLEXGRID_LAYER_SRC = "assets/flexgrid-front-home.png";
       const HERO_FLEXCASE_FADE_MS = 550;
-      const HERO_FLEXCASE_STAGGER_DELAYS = [100, 350, 600];
+      const HERO_FLEXCASE_STAGGER_DELAYS = [150, 600, 1050];
+      const HERO_SCROLL_REVEAL_DELAY_MS = 200;
+      const FEATURE_GRID_CARD_ROWS = [
+        [
+          { id: "sv3pt5-199", alt: "Charizard ex" },
+          { id: "sv3pt5-170", alt: "Squirtle" },
+          { id: "sv3pt5-198", alt: "Venusaur ex" },
+        ],
+        [
+          { id: "sv3pt5-169", alt: "Charmeleon" },
+          { id: "sv3pt5-171", alt: "Wartortle" },
+          { id: "sv3pt5-167", alt: "Ivysaur" },
+        ],
+        [
+          { id: "sv3pt5-168", alt: "Charmander" },
+          { id: "sv3pt5-200", alt: "Blastoise ex" },
+          { id: "sv3pt5-166", alt: "Bulbasaur" },
+        ],
+      ];
       let heroInitialEnterDone = false;
       let heroInitialEnterTimer = null;
       const heroEnterDoneQueue = [];
@@ -1512,6 +1711,56 @@
         } else {
           flexgrid.addEventListener("load", run, { once: true });
         }
+      }
+
+      let heroScrollRevealObserver = null;
+      let heroScrollRevealTriggered = false;
+      let heroScrollRevealTimer = null;
+
+      function setupHeroScrollReveal() {
+        const trigger = document.querySelector(".hero-text");
+        if (!trigger) return;
+
+        resetHeroFlexcaseEnterState();
+        heroScrollRevealTriggered = false;
+        if (heroScrollRevealTimer) {
+          clearTimeout(heroScrollRevealTimer);
+          heroScrollRevealTimer = null;
+        }
+        heroScrollRevealObserver?.disconnect();
+        heroScrollRevealObserver = null;
+
+        function revealHero() {
+          if (heroScrollRevealTriggered) return;
+          heroScrollRevealTriggered = true;
+          heroScrollRevealObserver?.disconnect();
+          heroScrollRevealObserver = null;
+          heroScrollRevealTimer = setTimeout(() => {
+            heroScrollRevealTimer = null;
+            scheduleHeroFlexcaseStaggerEnter();
+          }, HERO_SCROLL_REVEAL_DELAY_MS);
+        }
+
+        if (!("IntersectionObserver" in window)) {
+          revealHero();
+          return;
+        }
+
+        heroScrollRevealObserver = new IntersectionObserver(
+          (entries) => {
+            if (!entries.some((entry) => entry.isIntersecting)) return;
+            revealHero();
+          },
+          { threshold: 0.2 }
+        );
+        heroScrollRevealObserver.observe(trigger);
+
+        requestAnimationFrame(() => {
+          const rect = trigger.getBoundingClientRect();
+          if (rect.top < window.innerHeight * 0.85 && rect.bottom > window.innerHeight * 0.15) {
+            revealHero();
+          }
+        });
       }
 
       function triggerHeroFlexcaseFadeIn(windowId) {
@@ -1865,7 +2114,7 @@
           ensureDefaultHeroMeta(windowId);
           setupWindow(windowId, { runInitialSearch: false });
         });
-        scheduleHeroFlexcaseStaggerEnter();
+        setupHeroScrollReveal();
         onHeroEnterDone(() => void loadDefaultHeroCards());
       }
 
@@ -1926,101 +2175,312 @@
         updateToggleUi(scrollEl.classList.contains("is-fit"));
       }
 
+      function initBinderFlexCinema() {
+        const root = document.getElementById("binderFlexCinema");
+        const textEl = document.getElementById("binderFlexCinemaText");
+        if (!root || !textEl || root.dataset.initialized === "1") return;
+        root.dataset.initialized = "1";
+
+        const CHAR_STAGGER_MS = 55;
+        const CHAR_FADE_MS = 420;
+        const HOLD_MS = 2200;
+        const PHRASE_A = "From Binder to ...";
+        const PHRASE_B = "Flexing";
+
+        function wait(ms) {
+          return new Promise((resolve) => setTimeout(resolve, ms));
+        }
+
+        function clearText() {
+          textEl.innerHTML = "";
+          textEl.classList.remove("is-entering", "is-exiting");
+        }
+
+        function buildChars(phrase) {
+          clearText();
+          const spans = [];
+          [...phrase].forEach((char, index) => {
+            const span = document.createElement("span");
+            span.className = "binder-flex-cinema__char";
+            span.textContent = char === " " ? "\u00a0" : char;
+            span.style.animationDelay = `${index * CHAR_STAGGER_MS}ms`;
+            textEl.appendChild(span);
+            spans.push(span);
+          });
+          textEl.classList.add("is-entering");
+          return spans;
+        }
+
+        async function exitChars(spans) {
+          textEl.classList.remove("is-entering");
+          textEl.classList.add("is-exiting");
+          spans.forEach((span, index) => {
+            span.style.transitionDelay = `${index * 28}ms`;
+          });
+          await wait(CHAR_FADE_MS + spans.length * 28);
+          clearText();
+        }
+
+        async function runSequence() {
+          while (true) {
+            const spansA = buildChars(PHRASE_A);
+            await wait(PHRASE_A.length * CHAR_STAGGER_MS + CHAR_FADE_MS + HOLD_MS);
+            await exitChars(spansA);
+            await wait(200);
+
+            const spansB = buildChars(PHRASE_B);
+            await wait(PHRASE_B.length * CHAR_STAGGER_MS + CHAR_FADE_MS + HOLD_MS);
+            await exitChars(spansB);
+            await wait(320);
+          }
+        }
+
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+          textEl.textContent = "From Binder to Flexing";
+          return;
+        }
+
+        let started = false;
+        const observer = new IntersectionObserver(
+          (entries) => {
+            if (started || !entries.some((entry) => entry.isIntersecting)) return;
+            started = true;
+            observer.disconnect();
+            void runSequence();
+          },
+          { threshold: 0.3 }
+        );
+        observer.observe(root);
+        requestAnimationFrame(() => {
+          const rect = root.getBoundingClientRect();
+          if (rect.top < window.innerHeight * 0.85 && rect.bottom > window.innerHeight * 0.15) {
+            started = true;
+            observer.disconnect();
+            void runSequence();
+          }
+        });
+      }
+
+      function scrydexCardImageUrl(cardId, size) {
+        return `https://images.scrydex.com/pokemon/${cardId}/${size}`;
+      }
+
+      function buildFeatureGridImageSources(cardId, apiCard) {
+        return [
+          scrydexCardImageUrl(cardId, "large"),
+          apiCard?.images?.large,
+          apiCard?.images?.small,
+          scrydexCardImageUrl(cardId, "small"),
+        ].filter((url, index, list) => Boolean(url) && list.indexOf(url) === index);
+      }
+
+      function loadResilientImage(img, sources) {
+        const list = sources.filter(Boolean);
+        if (!list.length) return Promise.resolve(false);
+
+        let sourceIndex = 0;
+        let retryPass = 0;
+
+        return new Promise((resolve) => {
+          function attempt() {
+            if (sourceIndex >= list.length) {
+              if (retryPass < 1) {
+                retryPass += 1;
+                sourceIndex = 0;
+              } else {
+                resolve(false);
+                return;
+              }
+            }
+
+            const baseUrl = list[sourceIndex];
+            sourceIndex += 1;
+            const url =
+              retryPass === 0
+                ? baseUrl
+                : `${baseUrl}${baseUrl.includes("?") ? "&" : "?"}r=${Date.now()}`;
+
+            const probe = new Image();
+            probe.decoding = "async";
+            probe.onload = () => {
+              img.src = url;
+              resolve(true);
+            };
+            probe.onerror = () => {
+              setTimeout(attempt, 160);
+            };
+            probe.src = url;
+          }
+
+          attempt();
+        });
+      }
+
+      async function fetchFeatureGridApiCards(cardIds) {
+        const apiById = new Map();
+        if (!cardIds.length) return apiById;
+
+        const query = cardIds.map((id) => `id:${id}`).join(" OR ");
+        try {
+          const response = await fetch(`${API_URL}?q=${encodeURIComponent(query)}&pageSize=20`);
+          if (response.ok) {
+            const payload = await response.json();
+            for (const card of payload?.data || []) {
+              apiById.set(card.id, card);
+            }
+          }
+        } catch (_) {}
+
+        return apiById;
+      }
+
+      async function hydrateFeatureGridCardImages(root) {
+        const entries = FEATURE_GRID_CARD_ROWS.flat();
+        const apiById = await fetchFeatureGridApiCards(entries.map((entry) => entry.id));
+        const images = root.querySelectorAll(".feature-grid-card .card-art");
+
+        await Promise.all(
+          Array.from(images).map(async (img, index) => {
+            const entry = entries[index];
+            if (!entry) return;
+
+            img.loading = "eager";
+            img.decoding = "async";
+            img.alt = entry.alt;
+
+            let sources = buildFeatureGridImageSources(entry.id, apiById.get(entry.id));
+            let loaded = await loadResilientImage(img, sources);
+
+            if (loaded) return;
+
+            try {
+              const response = await fetch(
+                `${API_URL}?q=${encodeURIComponent(`id:${entry.id}`)}&pageSize=1`
+              );
+              if (response.ok) {
+                const card = (await response.json())?.data?.[0];
+                if (card) {
+                  sources = buildFeatureGridImageSources(entry.id, card);
+                  loaded = await loadResilientImage(img, sources);
+                }
+              }
+            } catch (_) {}
+
+            if (!loaded && sources.length) {
+              img.src = sources[0];
+            }
+          })
+        );
+      }
+
       function initFeatureGridDemo() {
         const root = document.getElementById("featureGridDisplay");
         if (!root || root.dataset.initialized === "1") return;
 
-        const featureGridCardRows = [
-          [
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-199/large", alt: "Charizard ex" },
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-170/large", alt: "Squirtle" },
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-198/large", alt: "Venusaur ex" },
-          ],
-          [
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-169/large", alt: "Charmeleon" },
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-171/large", alt: "Wartortle" },
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-167/large", alt: "Ivysaur" },
-          ],
-          [
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-168/large", alt: "Charmander" },
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-200/large", alt: "Blastoise ex" },
-            { src: "https://images.scrydex.com/pokemon/sv3pt5-166/large", alt: "Bulbasaur" },
-          ],
-        ];
         const flexgridSrc = "assets/flexgrid-front-home.png";
         const caseOverlaySrc = "assets/flexcase_front_homepage.png";
 
         function buildFeatureGridRow(cards) {
           const cardsHtml = cards
-            .map(
-              (card) =>
+            .map((card) => {
+              const initialSrc = scrydexCardImageUrl(card.id, "large");
+              return (
                 '<div class="feature-grid-card"><div class="card-visual"><div class="card-slot">' +
-                '<img class="card-art" src="' +
-                card.src +
+                '<img class="card-art" data-card-id="' +
+                escapeHtml(card.id) +
+                '" src="' +
+                initialSrc +
                 '" alt="' +
-                card.alt +
-                '" loading="lazy" decoding="async" />' +
+                escapeHtml(card.alt) +
+                '" loading="eager" decoding="async" />' +
                 "</div>" +
                 '<img class="card-case-overlay" src="' +
                 caseOverlaySrc +
                 '" alt="" aria-hidden="true" />' +
                 "</div></div>"
-            )
+              );
+            })
             .join("");
           return (
             '<div class="feature-grid-row">' +
             '<div class="feature-grid-backdrop" aria-hidden="true">' +
             '<img class="feature-grid-backdrop-layer" src="' +
             flexgridSrc +
-            '" alt="" loading="lazy" decoding="async" />' +
+            '" alt="" loading="eager" decoding="async" />' +
             "</div>" +
             cardsHtml +
             "</div>"
           );
         }
 
-        root.innerHTML = featureGridCardRows.map((row) => buildFeatureGridRow(row)).join("");
+        root.innerHTML = FEATURE_GRID_CARD_ROWS.map((row) => buildFeatureGridRow(row)).join("");
         root.dataset.initialized = "1";
+        void hydrateFeatureGridCardImages(root);
+        setupFeatureGridScrollReveal(root);
+      }
+
+      let featureGridScrollRevealObserver = null;
+      let featureGridScrollRevealTriggered = false;
+      let featureGridScrollRevealTimer = null;
+
+      function setupFeatureGridScrollReveal(root) {
+        const trigger = root.closest(".feature-block")?.querySelector(".feature-content");
+        if (!trigger) return;
+
+        featureGridScrollRevealTriggered = false;
+        if (featureGridScrollRevealTimer) {
+          clearTimeout(featureGridScrollRevealTimer);
+          featureGridScrollRevealTimer = null;
+        }
+        featureGridScrollRevealObserver?.disconnect();
+        featureGridScrollRevealObserver = null;
 
         function revealFeatureGrid() {
           root.classList.add("feature-grid-animate");
           root.removeAttribute("aria-hidden");
         }
 
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-          revealFeatureGrid();
-          return;
+        function reveal() {
+          if (featureGridScrollRevealTriggered) return;
+          featureGridScrollRevealTriggered = true;
+          featureGridScrollRevealObserver?.disconnect();
+          featureGridScrollRevealObserver = null;
+          featureGridScrollRevealTimer = setTimeout(() => {
+            featureGridScrollRevealTimer = null;
+            revealFeatureGrid();
+          }, HERO_SCROLL_REVEAL_DELAY_MS);
         }
 
         if (!("IntersectionObserver" in window)) {
-          revealFeatureGrid();
+          reveal();
           return;
         }
 
-        const observer = new IntersectionObserver(
+        featureGridScrollRevealObserver = new IntersectionObserver(
           (entries) => {
             if (!entries.some((entry) => entry.isIntersecting)) return;
-            revealFeatureGrid();
-            observer.disconnect();
+            reveal();
           },
-          { threshold: 0.15, rootMargin: "0px 0px 0px 0px" }
+          { threshold: 0.2 }
         );
-        observer.observe(root);
+        featureGridScrollRevealObserver.observe(trigger);
+
         requestAnimationFrame(() => {
-          const rect = root.getBoundingClientRect();
-          if (rect.top < window.innerHeight * 0.9 && rect.bottom > window.innerHeight * 0.1) {
-            revealFeatureGrid();
-            observer.disconnect();
+          const rect = trigger.getBoundingClientRect();
+          if (rect.top < window.innerHeight * 0.85 && rect.bottom > window.innerHeight * 0.15) {
+            reveal();
           }
         });
       }
 
       setupHeroZoomToggle();
       initHomepageHero();
+      initBinderFlexCinema();
       initFeatureGridDemo();
       window.addEventListener("flexcase:navigate", () => {
         setupHeroZoomToggle();
         initHomepageHero();
+        initBinderFlexCinema();
         initFeatureGridDemo();
       });
 

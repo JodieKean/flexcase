@@ -30,6 +30,9 @@
   function updateStickyOffsets() {
     const hidden = header.classList.contains("is-hidden");
     const offset = hidden ? 0 : header.offsetHeight;
+    const promo = header.querySelector(".site-promo-banner");
+    const promoHeight = promo ? promo.offsetHeight : 0;
+    document.documentElement.style.setProperty("--flexcase-promo-banner-height", `${promoHeight}px`);
     document.documentElement.style.setProperty("--catalog-sticky-top", `${offset}px`);
     document.documentElement.style.setProperty("--flexcase-site-header-offset", `${offset || header.offsetHeight}px`);
   }
