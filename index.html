@@ -455,32 +455,117 @@
       }
 
       @media (min-width: 981px) {
-        .feature-block--wide-video {
+        .feature-block--stacked {
           grid-template-rows: auto auto;
           align-items: start;
         }
 
-        .feature-block--wide-video .feature-content {
+        .feature-block--stacked .feature-content {
           grid-column: 1 / -1;
           grid-row: 1;
         }
 
-        .feature-block--wide-video > .feature-image-wrap {
+        .feature-block--stacked > .feature-image-wrap {
           grid-column: 1 / -1;
           grid-row: 2;
           width: 100%;
         }
+
+        .feature-block--stacked .feature-image-wrap--grid {
+          width: 100vw;
+          max-width: 100vw;
+          margin-left: calc(50% - 50vw);
+          margin-right: calc(50% - 50vw);
+        }
       }
 
       .feature-image-wrap--grid {
-        width: min(100%, 360px);
+        width: 100vw;
+        max-width: 100vw;
+        margin-left: calc(50% - 50vw);
+        margin-right: calc(50% - 50vw);
         align-items: stretch;
         align-self: center;
-        margin-inline: auto;
+        overflow: hidden;
+      }
+
+      .feature-grid-scroll {
+        width: 100%;
+        overflow: hidden;
+        touch-action: pan-y pinch-zoom;
+        position: relative;
+      }
+
+      .feature-grid-scroll.is-scrolling {
+        touch-action: pan-y pinch-zoom;
+        cursor: grab;
+      }
+
+      .feature-grid-scroll.is-scrolling.is-grabbing {
+        cursor: grabbing;
+      }
+
+      .feature-grid-stage {
+        position: relative;
+        width: 100%;
+        overflow: hidden;
+      }
+
+      .feature-grid-strip {
+        display: flex;
+        flex-direction: row;
+        align-items: flex-start;
+        gap: 0;
+        width: max-content;
+        position: relative;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      #featureGridDisplayFarLeft,
+      #featureGridDisplayLeft,
+      #featureGridDisplayRight,
+      #featureGridDisplayFarRight {
+        width: 0;
+        flex: 0 0 0;
+        overflow: hidden;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .feature-grid-scroll.feature-grid-inner-reveal #featureGridDisplayLeft,
+      .feature-grid-scroll.feature-grid-inner-reveal #featureGridDisplayRight {
+        width: 360px;
+        flex: 0 0 360px;
+        max-width: 100%;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .feature-grid-scroll.feature-grid-outer-reveal #featureGridDisplayFarLeft,
+      .feature-grid-scroll.feature-grid-outer-reveal #featureGridDisplayFarRight {
+        width: 360px;
+        flex: 0 0 360px;
+        max-width: 100%;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .feature-grid-scroll.is-scrolling .feature-grid-strip {
+        left: 0;
+        will-change: transform;
+      }
+
+      .feature-grid-scroll.feature-grid-live .feature-grid-display .feature-grid-card .card-visual,
+      .feature-grid-scroll.feature-grid-live .feature-grid-display .feature-grid-backdrop-layer {
+        opacity: 1;
+        animation: none;
       }
 
       .feature-grid-display {
-        width: 100%;
+        width: 360px;
+        flex: 0 0 360px;
+        max-width: 100%;
         display: flex;
         flex-direction: column;
         gap: 0;
@@ -565,11 +650,57 @@
         animation-delay: 0.76s;
       }
 
+      @media (max-width: 980px) {
+        .feature-block--stacked .feature-image-wrap--grid,
+        .feature-image-wrap--grid {
+          width: 100vw;
+          max-width: 100vw;
+          margin-left: calc(50% - 50vw);
+          margin-right: calc(50% - 50vw);
+        }
+
+        .feature-grid-scroll {
+          width: 100vw;
+          max-width: 100vw;
+        }
+
+        #featureGridDisplayFarLeft,
+        #featureGridDisplayFarRight {
+          display: none;
+        }
+
+        #featureGridDisplay,
+        .feature-grid-display {
+          width: 360px;
+          flex: 0 0 360px;
+          max-width: 360px;
+        }
+
+        .feature-grid-scroll.feature-grid-inner-reveal #featureGridDisplayLeft,
+        .feature-grid-scroll.feature-grid-inner-reveal #featureGridDisplayRight {
+          width: 360px;
+          flex: 0 0 360px;
+          max-width: 360px;
+          visibility: visible;
+          pointer-events: auto;
+        }
+      }
+
       @media (prefers-reduced-motion: reduce) {
         .feature-grid-backdrop-layer,
         .feature-grid-card .card-visual {
           opacity: 1 !important;
           animation: none !important;
+        }
+
+        #featureGridDisplayFarLeft,
+        #featureGridDisplayLeft,
+        #featureGridDisplayRight,
+        #featureGridDisplayFarRight {
+          width: 360px;
+          flex: 0 0 360px;
+          max-width: 100%;
+          visibility: visible;
         }
       }
 
@@ -1327,7 +1458,7 @@
       </button>
       </div>
 
-      <section class="feature-block feature-block--wide-video">
+      <section class="feature-block feature-block--stacked feature-block--wide-video">
         <div class="feature-content">
           <h2>Multi-layer Protection</h2>
           <p>
@@ -1355,8 +1486,8 @@
           <h2>Slim Flexible Bezel</h2>
           <p>
             Flex Case uses a flexible bezel that cushions edges and corners of the acrylic case
-            during handling while keeping installation quick and smooth. Insert or remove your
-            card with less force and better edge protection.
+            during handling while keeping installation quick and smooth. Slim 2.5mm 95A TPU —
+            strong yet sleek, keeping the spotlight on your card.
           </p>
         </div>
         <div class="feature-image-wrap">
@@ -1417,7 +1548,7 @@
         </div>
       </section>
 
-      <section class="feature-block">
+      <section class="feature-block feature-block--stacked">
         <div class="feature-content">
           <h2>Modular and Neat Grid Arrangement</h2>
           <p>
@@ -1427,11 +1558,33 @@
           </p>
         </div>
         <div class="feature-image-wrap feature-image-wrap--grid">
-          <div
-            class="feature-grid-display"
-            id="featureGridDisplay"
-            aria-hidden="true"
-          ></div>
+          <div class="feature-grid-scroll" id="featureGridScroll">
+            <div class="feature-grid-stage" id="featureGridStage">
+              <div class="feature-grid-strip">
+                <div
+                  class="feature-grid-display"
+                  id="featureGridDisplayFarLeft"
+                  aria-hidden="true"
+                ></div>
+                <div
+                  class="feature-grid-display"
+                  id="featureGridDisplayLeft"
+                  aria-hidden="true"
+                ></div>
+                <div class="feature-grid-display" id="featureGridDisplay" aria-hidden="true"></div>
+                <div
+                  class="feature-grid-display"
+                  id="featureGridDisplayRight"
+                  aria-hidden="true"
+                ></div>
+                <div
+                  class="feature-grid-display"
+                  id="featureGridDisplayFarRight"
+                  aria-hidden="true"
+                ></div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
       </main>
@@ -2334,8 +2487,44 @@
         return apiById;
       }
 
-      async function hydrateFeatureGridCardImages(root) {
-        const entries = FEATURE_GRID_CARD_ROWS.flat();
+      const FEATURE_GRID_ROW_ANIMATION_MS = 760 + 550;
+      const FEATURE_GRID_STAGE_GAP_MS = 200;
+      const FEATURE_GRID_AUTO_SCROLL_PX = 0.4;
+      const FEATURE_GRID_BOOST_DECAY = 0.94;
+      const FEATURE_GRID_WHEEL_BOOST = 0.08;
+      const FEATURE_GRID_TOUCH_AXIS_THRESHOLD_PX = 10;
+      let featureGridLoopController = null;
+
+      function isFeatureGridMobile() {
+        return window.matchMedia("(max-width: 980px)").matches;
+      }
+
+      function getFeatureGridPanelWidth(panel) {
+        const measured = panel?.offsetWidth;
+        if (measured > 0) return measured;
+        return 360;
+      }
+
+      const FEATURE_GRID_PANEL_IDS = [
+        "featureGridDisplayFarLeft",
+        "featureGridDisplayLeft",
+        "featureGridDisplay",
+        "featureGridDisplayRight",
+        "featureGridDisplayFarRight",
+      ];
+
+      const FEATURE_GRID_MOBILE_PANEL_IDS = [
+        "featureGridDisplayLeft",
+        "featureGridDisplay",
+        "featureGridDisplayRight",
+      ];
+
+      function getActiveFeatureGridPanelIds() {
+        return isFeatureGridMobile() ? FEATURE_GRID_MOBILE_PANEL_IDS : FEATURE_GRID_PANEL_IDS;
+      }
+
+      async function hydrateFeatureGridCardImages(root, cardRows) {
+        const entries = cardRows.flat();
         const apiById = await fetchFeatureGridApiCards(entries.map((entry) => entry.id));
         const images = root.querySelectorAll(".feature-grid-card .card-art");
 
@@ -2373,9 +2562,178 @@
         );
       }
 
+      function stopFeatureGridLoop(clearTransform = true) {
+        featureGridLoopController?.stop(clearTransform);
+        featureGridLoopController = null;
+      }
+
+      function startFeatureGridStripScroll() {
+        const scrollEl = document.getElementById("featureGridScroll");
+        const stage = document.getElementById("featureGridStage");
+        const strip = scrollEl?.querySelector(".feature-grid-strip");
+        if (!scrollEl || !stage || !strip) return;
+        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+        if (featureGridLoopController) {
+          featureGridLoopController.stop(false);
+        }
+
+        const panelIds = getActiveFeatureGridPanelIds();
+        const panels = panelIds.map((id) => document.getElementById(id)).filter(Boolean);
+        if (panels.length !== panelIds.length) return;
+
+        scrollEl.classList.add("feature-grid-live");
+        panels.forEach((panel) => panel.classList.add("feature-grid-animate"));
+
+        strip.querySelectorAll(".feature-grid-clone").forEach((node) => node.remove());
+
+        const panelWidth = getFeatureGridPanelWidth(panels[0]);
+        const loopWidth = panelWidth * panels.length;
+        const stageRect = stage.getBoundingClientRect();
+        const stripRect = strip.getBoundingClientRect();
+        let scrollX = stripRect.left - stageRect.left;
+        let userBoost = 0;
+        let rafId = 0;
+
+        scrollEl.classList.add("is-scrolling");
+        strip.style.left = "0";
+        strip.style.transform = `translate3d(${scrollX}px, 0, 0)`;
+
+        const beforeFrag = document.createDocumentFragment();
+        panels.forEach((panel) => {
+          const clone = panel.cloneNode(true);
+          clone.classList.add("feature-grid-clone");
+          clone.removeAttribute("id");
+          clone.setAttribute("aria-hidden", "true");
+          beforeFrag.appendChild(clone);
+        });
+        strip.insertBefore(beforeFrag, strip.firstChild);
+        scrollX -= loopWidth;
+
+        panels.forEach((panel) => {
+          const clone = panel.cloneNode(true);
+          clone.classList.add("feature-grid-clone");
+          clone.removeAttribute("id");
+          clone.setAttribute("aria-hidden", "true");
+          strip.appendChild(clone);
+        });
+
+        const homeScrollX = scrollX;
+
+        function applyTransform() {
+          strip.style.transform = `translate3d(${scrollX}px, 0, 0)`;
+        }
+
+        function wrapScrollX() {
+          while (scrollX <= homeScrollX - loopWidth) {
+            scrollX += loopWidth;
+          }
+          while (scrollX >= homeScrollX + loopWidth) {
+            scrollX -= loopWidth;
+          }
+        }
+
+        function tick() {
+          scrollX -= FEATURE_GRID_AUTO_SCROLL_PX + userBoost;
+          userBoost *= FEATURE_GRID_BOOST_DECAY;
+          if (Math.abs(userBoost) < 0.01) userBoost = 0;
+          wrapScrollX();
+          applyTransform();
+          rafId = requestAnimationFrame(tick);
+        }
+
+        function onWheel(event) {
+          if (!scrollEl.classList.contains("is-scrolling")) return;
+          const { deltaX, deltaY } = event;
+          if (!deltaX && !deltaY) return;
+          if (Math.abs(deltaX) <= Math.abs(deltaY)) return;
+          userBoost += deltaX * FEATURE_GRID_WHEEL_BOOST;
+          event.preventDefault();
+        }
+
+        let touchAxis = null;
+        let touchStartX = 0;
+        let touchStartY = 0;
+        let lastTouchX = 0;
+
+        function onTouchStart(event) {
+          if (event.touches.length !== 1) return;
+          touchAxis = null;
+          touchStartX = event.touches[0].clientX;
+          touchStartY = event.touches[0].clientY;
+          lastTouchX = touchStartX;
+        }
+
+        function onTouchMove(event) {
+          if (!scrollEl.classList.contains("is-scrolling") || event.touches.length !== 1) return;
+
+          const touch = event.touches[0];
+          const deltaX = touch.clientX - lastTouchX;
+
+          if (!touchAxis) {
+            const totalDeltaX = touch.clientX - touchStartX;
+            const totalDeltaY = touch.clientY - touchStartY;
+            if (
+              Math.abs(totalDeltaX) < FEATURE_GRID_TOUCH_AXIS_THRESHOLD_PX &&
+              Math.abs(totalDeltaY) < FEATURE_GRID_TOUCH_AXIS_THRESHOLD_PX
+            ) {
+              return;
+            }
+            touchAxis = Math.abs(totalDeltaX) > Math.abs(totalDeltaY) ? "x" : "y";
+          }
+
+          if (touchAxis === "y") return;
+
+          scrollX += deltaX;
+          lastTouchX = touch.clientX;
+          wrapScrollX();
+          applyTransform();
+          event.preventDefault();
+        }
+
+        function onTouchEnd() {
+          touchAxis = null;
+        }
+
+        applyTransform();
+        scrollEl.addEventListener("wheel", onWheel, { passive: false });
+        scrollEl.addEventListener("touchstart", onTouchStart, { passive: true });
+        scrollEl.addEventListener("touchmove", onTouchMove, { passive: false });
+        scrollEl.addEventListener("touchend", onTouchEnd, { passive: true });
+        scrollEl.addEventListener("touchcancel", onTouchEnd, { passive: true });
+        rafId = requestAnimationFrame(tick);
+
+        featureGridLoopController = {
+          stop(clearTransform = true) {
+            cancelAnimationFrame(rafId);
+            scrollEl.removeEventListener("wheel", onWheel);
+            scrollEl.removeEventListener("touchstart", onTouchStart);
+            scrollEl.removeEventListener("touchmove", onTouchMove);
+            scrollEl.removeEventListener("touchend", onTouchEnd);
+            scrollEl.removeEventListener("touchcancel", onTouchEnd);
+            scrollEl.classList.remove("is-scrolling", "is-grabbing", "feature-grid-live");
+            strip.querySelectorAll(".feature-grid-clone").forEach((node) => node.remove());
+            if (clearTransform) {
+              strip.style.left = "";
+              strip.style.transform = "";
+            }
+          },
+        };
+      }
+
       function initFeatureGridDemo() {
-        const root = document.getElementById("featureGridDisplay");
-        if (!root || root.dataset.initialized === "1") return;
+        stopFeatureGridLoop();
+        const scrollEl = document.getElementById("featureGridScroll");
+        const center = document.getElementById("featureGridDisplay");
+        const left = document.getElementById("featureGridDisplayLeft");
+        const right = document.getElementById("featureGridDisplayRight");
+        const farLeft = document.getElementById("featureGridDisplayFarLeft");
+        const farRight = document.getElementById("featureGridDisplayFarRight");
+        if (!scrollEl || !center || !left || !right || !farLeft || !farRight) return;
+        if (scrollEl.dataset.initialized === "1") {
+          setupFeatureGridScrollReveal();
+          return;
+        }
 
         const flexgridSrc = "assets/flexgrid-front-home.png";
         const caseOverlaySrc = "assets/flexcase_front_homepage.png";
@@ -2413,19 +2771,38 @@
           );
         }
 
-        root.innerHTML = FEATURE_GRID_CARD_ROWS.map((row) => buildFeatureGridRow(row)).join("");
-        root.dataset.initialized = "1";
-        void hydrateFeatureGridCardImages(root);
-        setupFeatureGridScrollReveal(root);
+        function buildFeatureGridPanel(cardRows) {
+          return cardRows.map((row) => buildFeatureGridRow(row)).join("");
+        }
+
+        const panels = [farLeft, left, center, right, farRight];
+        panels.forEach((panel) => {
+          panel.innerHTML = buildFeatureGridPanel(FEATURE_GRID_CARD_ROWS);
+        });
+        scrollEl.dataset.initialized = "1";
+        scrollEl.classList.remove("feature-grid-inner-reveal", "feature-grid-outer-reveal", "is-scrolling", "feature-grid-live");
+
+        void Promise.all(
+          panels.map((panel) => hydrateFeatureGridCardImages(panel, FEATURE_GRID_CARD_ROWS))
+        );
+        setupFeatureGridScrollReveal();
       }
 
       let featureGridScrollRevealObserver = null;
       let featureGridScrollRevealTriggered = false;
       let featureGridScrollRevealTimer = null;
 
-      function setupFeatureGridScrollReveal(root) {
-        const trigger = root.closest(".feature-block")?.querySelector(".feature-content");
-        if (!trigger) return;
+      function setupFeatureGridScrollReveal() {
+        const scrollEl = document.getElementById("featureGridScroll");
+        const center = document.getElementById("featureGridDisplay");
+        const left = document.getElementById("featureGridDisplayLeft");
+        const right = document.getElementById("featureGridDisplayRight");
+        const farLeft = document.getElementById("featureGridDisplayFarLeft");
+        const farRight = document.getElementById("featureGridDisplayFarRight");
+        const trigger =
+          scrollEl.closest(".feature-image-wrap") ||
+          center?.closest(".feature-block")?.querySelector(".feature-content");
+        if (!trigger || !scrollEl || !center) return;
 
         featureGridScrollRevealTriggered = false;
         if (featureGridScrollRevealTimer) {
@@ -2434,10 +2811,61 @@
         }
         featureGridScrollRevealObserver?.disconnect();
         featureGridScrollRevealObserver = null;
+        stopFeatureGridLoop();
+        scrollEl.classList.remove("feature-grid-inner-reveal", "feature-grid-outer-reveal", "is-scrolling", "feature-grid-live");
+
+        const innerPanels = [left, right];
+        const outerPanels = [farLeft, farRight];
+
+        center.classList.remove("feature-grid-animate");
+        innerPanels.forEach((panel) => panel?.classList.remove("feature-grid-animate"));
+        outerPanels.forEach((panel) => panel?.classList.remove("feature-grid-animate"));
+
+        function animatePanels(panels) {
+          panels.forEach((panel) => {
+            panel?.classList.add("feature-grid-animate");
+          });
+        }
+
+        function afterStage(callback, delayMs = FEATURE_GRID_ROW_ANIMATION_MS + FEATURE_GRID_STAGE_GAP_MS) {
+          window.setTimeout(callback, delayMs);
+        }
+
+        function revealOuterColumns() {
+          if (isFeatureGridMobile()) return;
+          scrollEl.classList.add("feature-grid-outer-reveal");
+          outerPanels.forEach((panel) => panel?.removeAttribute("aria-hidden"));
+          requestAnimationFrame(() => animatePanels(outerPanels));
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+          afterStage(startFeatureGridStripScroll);
+        }
+
+        function revealInnerColumns() {
+          scrollEl.classList.add("feature-grid-inner-reveal");
+          innerPanels.forEach((panel) => panel?.removeAttribute("aria-hidden"));
+          requestAnimationFrame(() => animatePanels(innerPanels));
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            if (!isFeatureGridMobile()) {
+              scrollEl.classList.add("feature-grid-outer-reveal");
+              outerPanels.forEach((panel) => panel?.removeAttribute("aria-hidden"));
+            }
+            return;
+          }
+          if (isFeatureGridMobile()) {
+            afterStage(startFeatureGridStripScroll);
+            return;
+          }
+          afterStage(revealOuterColumns);
+        }
 
         function revealFeatureGrid() {
-          root.classList.add("feature-grid-animate");
-          root.removeAttribute("aria-hidden");
+          center.classList.add("feature-grid-animate");
+          center.removeAttribute("aria-hidden");
+          if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+            revealInnerColumns();
+            return;
+          }
+          afterStage(revealInnerColumns);
         }
 
         function reveal() {
