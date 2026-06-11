@@ -1283,7 +1283,7 @@
     <section class="binder-flex-cinema" id="binderFlexCinema" aria-label="From binder to flexing">
       <video
         class="binder-flex-cinema__video"
-        src="assets/flexbundlex3-fast.mp4"
+        src="assets/flex-homepage-ray.mp4"
         autoplay
         loop
         muted
@@ -2410,9 +2410,13 @@
         if (!root || !textEl || root.dataset.initialized === "1") return;
         root.dataset.initialized = "1";
 
-        const CHAR_STAGGER_MS = 55;
+        const CHAR_STAGGER_MS = 32;
         const CHAR_FADE_MS = 420;
-        const HOLD_MS = 2200;
+        const CHAR_EXIT_STAGGER_MS = 28;
+        const CINEMA_LOOP_MS = 11000;
+        const PHRASE_A_EXIT_END_MS = 1900;
+        const PHRASE_B_START_MS = 6000;
+        const PHRASE_B_EXIT_END_MS = 10700;
         const PHRASE_A = "From Binder to ...";
         const PHRASE_B = "Flexing";
 
@@ -2423,6 +2427,14 @@
         function clearText() {
           textEl.innerHTML = "";
           textEl.classList.remove("is-entering", "is-exiting");
+        }
+
+        function enterDurationMs(spanCount) {
+          return Math.max(0, spanCount - 1) * CHAR_STAGGER_MS + CHAR_FADE_MS;
+        }
+
+        function exitDurationMs(spanCount) {
+          return CHAR_FADE_MS + spanCount * CHAR_EXIT_STAGGER_MS;
         }
 
         function buildChars(phrase) {
@@ -2444,23 +2456,35 @@
           textEl.classList.remove("is-entering");
           textEl.classList.add("is-exiting");
           spans.forEach((span, index) => {
-            span.style.transitionDelay = `${index * 28}ms`;
+            span.style.transitionDelay = `${index * CHAR_EXIT_STAGGER_MS}ms`;
           });
-          await wait(CHAR_FADE_MS + spans.length * 28);
+          await wait(exitDurationMs(spans.length));
           clearText();
+        }
+
+        async function runCycle(cycleStartMs) {
+          const spansA = buildChars(PHRASE_A);
+          const exitAStartAt = PHRASE_A_EXIT_END_MS - exitDurationMs(spansA.length);
+          const holdAfterEnterA = exitAStartAt - enterDurationMs(spansA.length);
+          await wait(Math.max(0, holdAfterEnterA));
+          await exitChars(spansA);
+
+          const elapsedBeforeB = performance.now() - cycleStartMs;
+          await wait(Math.max(0, PHRASE_B_START_MS - elapsedBeforeB));
+
+          const spansB = buildChars(PHRASE_B);
+          const exitBStartAt = PHRASE_B_EXIT_END_MS - exitDurationMs(spansB.length);
+          const holdAfterEnterB = exitBStartAt - enterDurationMs(spansB.length);
+          await wait(Math.max(0, holdAfterEnterB));
+          await exitChars(spansB);
+
+          const elapsed = performance.now() - cycleStartMs;
+          await wait(Math.max(0, CINEMA_LOOP_MS - elapsed));
         }
 
         async function runSequence() {
           while (true) {
-            const spansA = buildChars(PHRASE_A);
-            await wait(PHRASE_A.length * CHAR_STAGGER_MS + CHAR_FADE_MS + HOLD_MS);
-            await exitChars(spansA);
-            await wait(200);
-
-            const spansB = buildChars(PHRASE_B);
-            await wait(PHRASE_B.length * CHAR_STAGGER_MS + CHAR_FADE_MS + HOLD_MS);
-            await exitChars(spansB);
-            await wait(320);
+            await runCycle(performance.now());
           }
         }
 
