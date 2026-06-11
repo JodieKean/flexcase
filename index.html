@@ -1680,6 +1680,82 @@
           { id: "sv3pt5-166", alt: "Bulbasaur" },
         ],
       ];
+      const FEATURE_GRID_FAR_LEFT_CARD_ROWS = [
+        [
+          { id: "sv8-204", alt: "Mesprit" },
+          { id: "sv8-203", alt: "Latios" },
+          { id: "sv8-239", alt: "Latias ex" },
+        ],
+        [
+          { id: "sv7-143", alt: "Bulbasaur" },
+          { id: "svp-44", alt: "Charmander" },
+          { id: "sv7-148", alt: "Squirtle" },
+        ],
+        [
+          { id: "me1-133", alt: "Bulbasaur" },
+          { id: "me1-134", alt: "Ivysaur" },
+          { id: "me1-177", alt: "Mega Venusaur ex" },
+        ],
+      ];
+      const FEATURE_GRID_LEFT_CARD_ROWS = [
+        [
+          { id: "swsh12pt5gg-GG26", alt: "Riolu" },
+          { id: "swsh12pt5gg-GG27", alt: "Swablu" },
+          { id: "swsh12pt5gg-GG28", alt: "Duskull" },
+        ],
+        [
+          { id: "swsh12pt5gg-GG29", alt: "Bidoof" },
+          { id: "swsh12pt5gg-GG30", alt: "Pikachu" },
+          { id: "swsh12pt5gg-GG31", alt: "Turtwig" },
+        ],
+        [
+          { id: "swsh12pt5gg-GG32", alt: "Paras" },
+          { id: "swsh12pt5gg-GG33", alt: "Poochyena" },
+          { id: "swsh12pt5gg-GG34", alt: "Mareep" },
+        ],
+      ];
+      const FEATURE_GRID_RIGHT_CARD_ROWS = [
+        [
+          { id: "sv8pt5-149", alt: "Vaporeon ex" },
+          { id: "sv8pt5-146", alt: "Flareon ex" },
+          { id: "sv8pt5-153", alt: "Jolteon ex" },
+        ],
+        [
+          { id: "sv8pt5-155", alt: "Espeon ex" },
+          { id: "sv8pt5-167", alt: "Eevee ex" },
+          { id: "sv8pt5-161", alt: "Umbreon ex" },
+        ],
+        [
+          { id: "sv8pt5-144", alt: "Leafeon ex" },
+          { id: "sv8pt5-150", alt: "Glaceon ex" },
+          { id: "sv8pt5-156", alt: "Sylveon ex" },
+        ],
+      ];
+      const FEATURE_GRID_FAR_RIGHT_CARD_ROWS = [
+        [
+          { id: "ex8-107", alt: "Rayquaza Gold Star" },
+          { id: "ex15-100", alt: "Charizard Gold Star" },
+          { id: "pop5-17", alt: "Umbreon Gold Star" },
+        ],
+        [
+          { id: "ex10-113", alt: "Entei Gold Star" },
+          { id: "ex10-114", alt: "Raikou Gold Star" },
+          { id: "ex10-115", alt: "Suicune Gold Star" },
+        ],
+        [
+          { id: "ex13-102", alt: "Gyarados Gold Star" },
+          { id: "ex13-103", alt: "Mewtwo Gold Star" },
+          { id: "ex15-101", alt: "Mew Gold Star" },
+        ],
+      ];
+
+      function getFeatureGridCardRowsForPanel(panel) {
+        if (panel?.id === "featureGridDisplayFarLeft") return FEATURE_GRID_FAR_LEFT_CARD_ROWS;
+        if (panel?.id === "featureGridDisplayLeft") return FEATURE_GRID_LEFT_CARD_ROWS;
+        if (panel?.id === "featureGridDisplayRight") return FEATURE_GRID_RIGHT_CARD_ROWS;
+        if (panel?.id === "featureGridDisplayFarRight") return FEATURE_GRID_FAR_RIGHT_CARD_ROWS;
+        return FEATURE_GRID_CARD_ROWS;
+      }
       let heroInitialEnterDone = false;
       let heroInitialEnterTimer = null;
       const heroEnterDoneQueue = [];
@@ -2777,13 +2853,13 @@
 
         const panels = [farLeft, left, center, right, farRight];
         panels.forEach((panel) => {
-          panel.innerHTML = buildFeatureGridPanel(FEATURE_GRID_CARD_ROWS);
+          panel.innerHTML = buildFeatureGridPanel(getFeatureGridCardRowsForPanel(panel));
         });
         scrollEl.dataset.initialized = "1";
         scrollEl.classList.remove("feature-grid-inner-reveal", "feature-grid-outer-reveal", "is-scrolling", "feature-grid-live");
 
         void Promise.all(
-          panels.map((panel) => hydrateFeatureGridCardImages(panel, FEATURE_GRID_CARD_ROWS))
+          panels.map((panel) => hydrateFeatureGridCardImages(panel, getFeatureGridCardRowsForPanel(panel)))
         );
         setupFeatureGridScrollReveal();
       }
