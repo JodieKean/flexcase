@@ -2444,6 +2444,9 @@
       const FEATURE_GRID_BOOST_DECAY = 0.94;
       const FEATURE_GRID_WHEEL_BOOST = 0.08;
       const FEATURE_GRID_TOUCH_AXIS_THRESHOLD_PX = 10;
+      const FEATURE_GRID_THROW_DECAY = 0.92;
+      const FEATURE_GRID_THROW_MULTIPLIER = 1.15;
+      const FEATURE_GRID_THROW_MAX_PX = 36;
       let featureGridLoopController = null;
 
       function isFeatureGridMobile() {
@@ -2544,6 +2547,7 @@
         const stripRect = strip.getBoundingClientRect();
         let scrollX = stripRect.left - stageRect.left;
         let userBoost = 0;
+        let touchMomentum = 0;
         let rafId = 0;
 
         scrollEl.classList.add("is-scrolling");
@@ -2586,8 +2590,11 @@
 
         function tick() {
           scrollX -= FEATURE_GRID_AUTO_SCROLL_PX + userBoost;
+          scrollX += touchMomentum;
           userBoost *= FEATURE_GRID_BOOST_DECAY;
+          touchMomentum *= FEATURE_GRID_THROW_DECAY;
           if (Math.abs(userBoost) < 0.01) userBoost = 0;
+          if (Math.abs(touchMomentum) < 0.05) touchMomentum = 0;
           wrapScrollX();
           applyTransform();
           rafId = requestAnimationFrame(tick);
@@ -2606,6 +2613,8 @@
         let touchStartX = 0;
         let touchStartY = 0;
         let lastTouchX = 0;
+        let lastTouchTime = 0;
+        let touchVelocityX = 0;
 
         function onTouchStart(event) {
           if (event.touches.length !== 1) return;
@@ -2613,6 +2622,9 @@
           touchStartX = event.touches[0].clientX;
           touchStartY = event.touches[0].clientY;
           lastTouchX = touchStartX;
+          lastTouchTime = performance.now();
+          touchVelocityX = 0;
+          touchMomentum = 0;
         }
 
         function onTouchMove(event) {
@@ -2620,6 +2632,8 @@
 
           const touch = event.touches[0];
           const deltaX = touch.clientX - lastTouchX;
+          const now = performance.now();
+          const dt = now - lastTouchTime;
 
           if (!touchAxis) {
             const totalDeltaX = touch.clientX - touchStartX;
@@ -2635,15 +2649,30 @@
 
           if (touchAxis === "y") return;
 
+          if (dt > 0 && dt < 120) {
+            touchVelocityX = deltaX * (16.67 / dt);
+          }
+
           scrollX += deltaX;
           lastTouchX = touch.clientX;
+          lastTouchTime = now;
           wrapScrollX();
           applyTransform();
           event.preventDefault();
         }
 
         function onTouchEnd() {
+          if (touchAxis === "x" && isFeatureGridMobile()) {
+            const throwPx = Math.max(
+              -FEATURE_GRID_THROW_MAX_PX,
+              Math.min(FEATURE_GRID_THROW_MAX_PX, touchVelocityX * FEATURE_GRID_THROW_MULTIPLIER)
+            );
+            if (Math.abs(throwPx) > 0.5) {
+              touchMomentum = throwPx;
+            }
+          }
           touchAxis = null;
+          touchVelocityX = 0;
         }
 
         applyTransform();
