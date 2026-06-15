@@ -322,69 +322,6 @@
         pointer-events: none;
       }
 
-      .binder-flex-cinema__overlay {
-        position: absolute;
-        inset: 0;
-        background: linear-gradient(
-          180deg,
-          rgba(0, 0, 0, 0.42) 0%,
-          rgba(0, 0, 0, 0.28) 45%,
-          rgba(0, 0, 0, 0.5) 100%
-        );
-        pointer-events: none;
-      }
-
-      .binder-flex-cinema__copy {
-        position: relative;
-        z-index: 1;
-        margin: 0;
-        padding: 0 24px;
-        max-width: min(92vw, 1100px);
-        text-align: center;
-        font-size: clamp(2rem, 6.5vw, 4.75rem);
-        font-weight: 700;
-        letter-spacing: -0.03em;
-        line-height: 1.1;
-        color: #fff;
-        text-shadow: 0 2px 28px rgba(0, 0, 0, 0.45);
-      }
-
-      .binder-flex-cinema__char {
-        display: inline-block;
-        opacity: 0;
-        transform: translateY(0.3em);
-      }
-
-      .binder-flex-cinema__text.is-entering .binder-flex-cinema__char {
-        animation: binder-flex-char-in 0.42s ease forwards;
-      }
-
-      .binder-flex-cinema__text.is-exiting .binder-flex-cinema__char {
-        opacity: 0;
-        transform: translateY(-0.18em);
-        transition: opacity 0.34s ease, transform 0.34s ease;
-      }
-
-      @keyframes binder-flex-char-in {
-        from {
-          opacity: 0;
-          transform: translateY(0.3em);
-        }
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
-      }
-
-      @media (prefers-reduced-motion: reduce) {
-        .binder-flex-cinema__char {
-          opacity: 1;
-          transform: none;
-          animation: none !important;
-          transition: none !important;
-        }
-      }
-
       .feature-block {
         margin-top: clamp(72px, 9vw, 112px);
         display: grid;
@@ -1280,7 +1217,7 @@
       </nav>
     </header>
 
-    <section class="binder-flex-cinema" id="binderFlexCinema" aria-label="From binder to flexing">
+    <section class="binder-flex-cinema" id="binderFlexCinema" aria-label="Flexcase showcase video">
       <video
         class="binder-flex-cinema__video"
         src="assets/flex-homepage-ray.mp4"
@@ -1291,10 +1228,6 @@
         preload="metadata"
         aria-hidden="true"
       ></video>
-      <div class="binder-flex-cinema__overlay" aria-hidden="true"></div>
-      <p class="binder-flex-cinema__copy">
-        <span class="binder-flex-cinema__text" id="binderFlexCinemaText" aria-live="polite"></span>
-      </p>
     </section>
 
     <div class="page-top">
@@ -2404,116 +2337,6 @@
         updateToggleUi(scrollEl.classList.contains("is-fit"));
       }
 
-      function initBinderFlexCinema() {
-        const root = document.getElementById("binderFlexCinema");
-        const textEl = document.getElementById("binderFlexCinemaText");
-        if (!root || !textEl || root.dataset.initialized === "1") return;
-        root.dataset.initialized = "1";
-
-        const CHAR_STAGGER_MS = 32;
-        const CHAR_FADE_MS = 420;
-        const CHAR_EXIT_STAGGER_MS = 28;
-        const CINEMA_LOOP_MS = 11000;
-        const PHRASE_A_EXIT_END_MS = 1900;
-        const PHRASE_B_START_MS = 6000;
-        const PHRASE_B_EXIT_END_MS = 10700;
-        const PHRASE_A = "From Binder to ...";
-        const PHRASE_B = "Flexing";
-
-        function wait(ms) {
-          return new Promise((resolve) => setTimeout(resolve, ms));
-        }
-
-        function clearText() {
-          textEl.innerHTML = "";
-          textEl.classList.remove("is-entering", "is-exiting");
-        }
-
-        function enterDurationMs(spanCount) {
-          return Math.max(0, spanCount - 1) * CHAR_STAGGER_MS + CHAR_FADE_MS;
-        }
-
-        function exitDurationMs(spanCount) {
-          return CHAR_FADE_MS + spanCount * CHAR_EXIT_STAGGER_MS;
-        }
-
-        function buildChars(phrase) {
-          clearText();
-          const spans = [];
-          [...phrase].forEach((char, index) => {
-            const span = document.createElement("span");
-            span.className = "binder-flex-cinema__char";
-            span.textContent = char === " " ? "\u00a0" : char;
-            span.style.animationDelay = `${index * CHAR_STAGGER_MS}ms`;
-            textEl.appendChild(span);
-            spans.push(span);
-          });
-          textEl.classList.add("is-entering");
-          return spans;
-        }
-
-        async function exitChars(spans) {
-          textEl.classList.remove("is-entering");
-          textEl.classList.add("is-exiting");
-          spans.forEach((span, index) => {
-            span.style.transitionDelay = `${index * CHAR_EXIT_STAGGER_MS}ms`;
-          });
-          await wait(exitDurationMs(spans.length));
-          clearText();
-        }
-
-        async function runCycle(cycleStartMs) {
-          const spansA = buildChars(PHRASE_A);
-          const exitAStartAt = PHRASE_A_EXIT_END_MS - exitDurationMs(spansA.length);
-          const holdAfterEnterA = exitAStartAt - enterDurationMs(spansA.length);
-          await wait(Math.max(0, holdAfterEnterA));
-          await exitChars(spansA);
-
-          const elapsedBeforeB = performance.now() - cycleStartMs;
-          await wait(Math.max(0, PHRASE_B_START_MS - elapsedBeforeB));
-
-          const spansB = buildChars(PHRASE_B);
-          const exitBStartAt = PHRASE_B_EXIT_END_MS - exitDurationMs(spansB.length);
-          const holdAfterEnterB = exitBStartAt - enterDurationMs(spansB.length);
-          await wait(Math.max(0, holdAfterEnterB));
-          await exitChars(spansB);
-
-          const elapsed = performance.now() - cycleStartMs;
-          await wait(Math.max(0, CINEMA_LOOP_MS - elapsed));
-        }
-
-        async function runSequence() {
-          while (true) {
-            await runCycle(performance.now());
-          }
-        }
-
-        if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-          textEl.textContent = "From Binder to Flexing";
-          return;
-        }
-
-        let started = false;
-        const observer = new IntersectionObserver(
-          (entries) => {
-            if (started || !entries.some((entry) => entry.isIntersecting)) return;
-            started = true;
-            observer.disconnect();
-            void runSequence();
-          },
-          { threshold: 0.3 }
-        );
-        observer.observe(root);
-        requestAnimationFrame(() => {
-          const rect = root.getBoundingClientRect();
-          if (rect.top < window.innerHeight * 0.85 && rect.bottom > window.innerHeight * 0.15) {
-            started = true;
-            observer.disconnect();
-            void runSequence();
-          }
-        });
-      }
-
       function scrydexCardImageUrl(cardId, size) {
         return `https://images.scrydex.com/pokemon/${cardId}/${size}`;
       }
@@ -3003,12 +2826,10 @@
 
       setupHeroZoomToggle();
       initHomepageHero();
-      initBinderFlexCinema();
       initFeatureGridDemo();
       window.addEventListener("flexcase:navigate", () => {
         setupHeroZoomToggle();
         initHomepageHero();
-        initBinderFlexCinema();
         initFeatureGridDemo();
       });
 
