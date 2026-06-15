@@ -100,7 +100,7 @@ const JUDGE_ME_SHOP_DOMAIN =
     : "");
 /** Optional: paste Judge.me → Collect reviews → Review link if auto URLs fail on headless. */
 const JUDGE_ME_REVIEW_LINK = String(process.env.JUDGE_ME_REVIEW_LINK || "").trim();
-const PRODUCT_REVIEWS_CACHE_TTL_MS = 5 * 60 * 1000;
+const PRODUCT_REVIEWS_CACHE_TTL_MS = 60 * 1000;
 const PRODUCT_REVIEWS_ENRICH_LIMIT = 12;
 const productReviewsCache = new Map();
 
@@ -895,9 +895,26 @@ function serveReviewMedia(req, res, pathname) {
   fs.createReadStream(filepath).pipe(res);
 }
 
+function isJudgeMeTruthy(value) {
+  if (value === true || value === 1) return true;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+function isJudgeMeFalsy(value) {
+  if (value === false || value === 0) return true;
+  const normalized = String(value ?? "").trim().toLowerCase();
+  return normalized === "false" || normalized === "0" || normalized === "no";
+}
+
 function isPublishedJudgeMeReview(review) {
-  if (!review || review.hidden) return false;
-  const curated = String(review.curated || "").toLowerCase();
+  if (!review) return false;
+  if (isJudgeMeTruthy(review.hidden)) return false;
+  if (isJudgeMeFalsy(review.published)) return false;
+  const curated = String(review.curated || "").trim().toLowerCase();
+  if (!curated || curated === "spam" || curated === "hidden" || curated === "archived") {
+    return false;
+  }
   return curated === "ok" || curated === "true";
 }
 
@@ -2249,7 +2266,7 @@ async function handleProductReviewsGet(req, res, handle) {
   try {
     const cached = getCachedProductReviews(safeHandle);
     if (cached) {
-      res.setHeader("Cache-Control", "public, max-age=60");
+      res.setHeader("Cache-Control", "private, no-cache");
       json(res, 200, { reviews: cached });
       return;
     }
@@ -2261,7 +2278,7 @@ async function handleProductReviewsGet(req, res, handle) {
     }
     const reviews = await fetchJudgeMeReviewsForProduct(node.handle, node.id);
     setCachedProductReviews(node.handle, reviews);
-    res.setHeader("Cache-Control", "public, max-age=60");
+    res.setHeader("Cache-Control", "private, no-cache");
     json(res, 200, { reviews });
   } catch (error) {
     json(res, 500, { error: error.message });
