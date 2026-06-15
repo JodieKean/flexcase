@@ -326,6 +326,20 @@
         pointer-events: none;
       }
 
+      .binder-flex-cinema__video--mobile {
+        display: none;
+      }
+
+      @media (max-width: 980px) {
+        .binder-flex-cinema__video--desktop {
+          display: none;
+        }
+
+        .binder-flex-cinema__video--mobile {
+          display: block;
+        }
+      }
+
       .feature-block {
         margin-top: clamp(72px, 9vw, 112px);
         display: grid;
@@ -1223,8 +1237,18 @@
 
     <section class="binder-flex-cinema" id="binderFlexCinema" aria-label="Flexcase showcase video">
       <video
-        class="binder-flex-cinema__video"
+        class="binder-flex-cinema__video binder-flex-cinema__video--desktop"
         src="assets/flex-homepage-ray.mp4"
+        autoplay
+        loop
+        muted
+        playsinline
+        preload="metadata"
+        aria-hidden="true"
+      ></video>
+      <video
+        class="binder-flex-cinema__video binder-flex-cinema__video--mobile"
+        src="assets/flex-homepage-mobile.mp4"
         autoplay
         loop
         muted
