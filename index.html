@@ -626,11 +626,6 @@
           max-width: 100vw;
         }
 
-        #featureGridDisplayFarLeft,
-        #featureGridDisplayFarRight {
-          display: none;
-        }
-
         #featureGridDisplay,
         .feature-grid-display {
           width: 360px;
@@ -640,6 +635,15 @@
 
         .feature-grid-scroll.feature-grid-inner-reveal #featureGridDisplayLeft,
         .feature-grid-scroll.feature-grid-inner-reveal #featureGridDisplayRight {
+          width: 360px;
+          flex: 0 0 360px;
+          max-width: 360px;
+          visibility: visible;
+          pointer-events: auto;
+        }
+
+        .feature-grid-scroll.feature-grid-outer-reveal #featureGridDisplayFarLeft,
+        .feature-grid-scroll.feature-grid-outer-reveal #featureGridDisplayFarRight {
           width: 360px;
           flex: 0 0 360px;
           max-width: 360px;
@@ -2474,14 +2478,8 @@
         "featureGridDisplayFarRight",
       ];
 
-      const FEATURE_GRID_MOBILE_PANEL_IDS = [
-        "featureGridDisplayLeft",
-        "featureGridDisplay",
-        "featureGridDisplayRight",
-      ];
-
       function getActiveFeatureGridPanelIds() {
-        return isFeatureGridMobile() ? FEATURE_GRID_MOBILE_PANEL_IDS : FEATURE_GRID_PANEL_IDS;
+        return FEATURE_GRID_PANEL_IDS;
       }
 
       async function hydrateFeatureGridCardImages(root, cardRows) {
@@ -2819,7 +2817,6 @@
         }
 
         function revealOuterColumns() {
-          if (isFeatureGridMobile()) return;
           scrollEl.classList.add("feature-grid-outer-reveal");
           outerPanels.forEach((panel) => panel?.removeAttribute("aria-hidden"));
           requestAnimationFrame(() => animatePanels(outerPanels));
@@ -2832,14 +2829,8 @@
           innerPanels.forEach((panel) => panel?.removeAttribute("aria-hidden"));
           requestAnimationFrame(() => animatePanels(innerPanels));
           if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-            if (!isFeatureGridMobile()) {
-              scrollEl.classList.add("feature-grid-outer-reveal");
-              outerPanels.forEach((panel) => panel?.removeAttribute("aria-hidden"));
-            }
-            return;
-          }
-          if (isFeatureGridMobile()) {
-            afterStage(startFeatureGridStripScroll);
+            scrollEl.classList.add("feature-grid-outer-reveal");
+            outerPanels.forEach((panel) => panel?.removeAttribute("aria-hidden"));
             return;
           }
           afterStage(revealOuterColumns);
