@@ -990,9 +990,9 @@ function extractJudgeMePictures(review) {
 async function enrichSingleJudgeMeReview(review) {
   const reviewId = String(review?.id || "").trim();
   if (!reviewId) return review;
-  const hasPublicDisplayName = Boolean(extractJudgeMePublicDisplayName(review));
+  const hasDisplayName = Boolean(extractJudgeMeReviewDisplayName(review));
   const hasPictures = Array.isArray(review?.pictures) && review.pictures.length > 0;
-  if (hasPublicDisplayName && hasPictures) return review;
+  if (hasDisplayName && hasPictures) return review;
   try {
     const data = await judgeMeRequest(`reviews/${reviewId}`);
     const full = data?.review || data;
@@ -1069,6 +1069,23 @@ function extractJudgeMePublicDisplayName(review) {
     review?.reviewer?.display_name,
   ];
   for (const candidate of candidates) {
+    const name = stripJudgeMeHtml(candidate);
+    if (name && !/^anonymous$/i.test(name)) return name;
+  }
+  return "";
+}
+
+function isJudgeMeWebSubmittedReview(review) {
+  const source = String(review?.source || "").trim().toLowerCase();
+  return source === "web" || source === "widget" || source === "shopify";
+}
+
+function extractJudgeMeReviewDisplayName(review) {
+  const publicName = extractJudgeMePublicDisplayName(review);
+  if (publicName) return publicName;
+  if (isJudgeMeWebSubmittedReview(review)) return "";
+  const sourceCandidates = [review?.name, review?.reviewer_name, review?.reviewer?.name];
+  for (const candidate of sourceCandidates) {
     const name = stripJudgeMeHtml(candidate);
     if (name && !/^anonymous$/i.test(name)) return name;
   }
@@ -1385,8 +1402,8 @@ function resolveJudgeMeReviewAuthor(review, displayNamesByReviewId = {}, authorO
   const reviewId = String(review?.id || "").trim();
   const widgetName = reviewId ? stripJudgeMeHtml(displayNamesByReviewId[reviewId]) : "";
   const overrideName = reviewId ? stripJudgeMeHtml(authorOverrides[reviewId]) : "";
-  const publicDisplayName = extractJudgeMePublicDisplayName(review);
-  return widgetName || overrideName || publicDisplayName || "Customer";
+  const reviewDisplayName = extractJudgeMeReviewDisplayName(review);
+  return widgetName || overrideName || reviewDisplayName || "Customer";
 }
 
 function buildJudgeMeWriteReviewUrl(handle, shopifyProductGid) {
@@ -1549,6 +1566,12 @@ async function fetchJudgeMeReviewsForProduct(handle, shopifyProductGid) {
     ...buildJudgeMeDisplayNamesByReviewId(widgetNames),
     ...shopifyDisplayNames,
   };
+  enrichedReviews.forEach((review) => {
+    const reviewId = String(review?.id || "").trim();
+    if (!reviewId || mergedDisplayNames[reviewId]) return;
+    const reviewDisplayName = extractJudgeMeReviewDisplayName(review);
+    if (reviewDisplayName) mergedDisplayNames[reviewId] = reviewDisplayName;
+  });
   cacheReviewDisplayNames(mergedDisplayNames);
   return mapJudgeMeReviewBundle(enrichedReviews, handle, writeReviewUrl, mergedDisplayNames);
 }
