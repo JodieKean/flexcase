@@ -1440,6 +1440,12 @@
         return originalUnit * qty;
       }
 
+      function formatLineVariantMeta(variantTitle) {
+        const title = String(variantTitle || "").trim();
+        if (!title || /^default(\s+title)?$/i.test(title)) return "";
+        return title;
+      }
+
       function renderOrderLines(items) {
         if (!items.length) {
           orderLineItems.innerHTML = `
@@ -1461,6 +1467,7 @@
             const originalLineTotal = lineOriginalSubtotal(line);
             const priceInfo = getLineUnitPrices(line);
             const currency = line.currencyCode || SITE_CURRENCY;
+            const variantMeta = formatLineVariantMeta(line.variantTitle);
             const imageStyle = line.image
               ? `style="background-image:url('${line.image}');background-size:cover;background-position:center;"`
               : "";
@@ -1469,7 +1476,7 @@
                 <div class="thumb" aria-hidden="true" ${imageStyle}></div>
                 <div>
                   <div class="name">${line.productTitle || "Product"}</div>
-                  <div class="meta">${line.variantTitle || "Default"}</div>
+                  ${variantMeta ? `<div class="meta">${variantMeta}</div>` : ""}
                   <div class="line-qty">
                     <button type="button" class="qty-btn" data-qty-minus aria-label="Decrease quantity">−</button>
                     <span class="qty-value">${Number(line.quantity || 1)}</span>
